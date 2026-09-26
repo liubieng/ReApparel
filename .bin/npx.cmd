@@ -1,1 +1,0 @@
-@"C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" "C:\Users\Admin\AppData\Local\OpenAI\Codex\runtimes\cua_node\f53823cd54b14f45\bin\node_modules\corepack\dist\corepack.js" npx %*
