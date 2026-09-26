@@ -169,6 +169,14 @@ export const closetService = {
     return mockDatabase.finalizeDailyLog(logId);
   },
 
+  async deleteDailyLog(logId: number): Promise<boolean> {
+    return mockDatabase.deleteDailyLog(logId);
+  },
+
+  async simulateMidnightFinalization(): Promise<DailyClothingLog | null> {
+    return mockDatabase.simulateMidnightFinalization();
+  },
+
   // --- WARDROBE ANALYTICS ---
   calculateClosetAnalytics(items: ClothingItem[]) {
     const totalItems = items.length;

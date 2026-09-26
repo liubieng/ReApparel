@@ -275,3 +275,66 @@ CREATE POLICY "Borrow update by parties" ON borrow FOR UPDATE USING (
 -- Donation flags
 CREATE POLICY "Donation flags viewable by all" ON donation_flag FOR SELECT USING (true);
 CREATE POLICY "Donation flags insert by authenticated" ON donation_flag FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- --------------------------------------------------------------------
+-- Compatibility Views for Exact Spec Nomenclature
+-- --------------------------------------------------------------------
+CREATE OR REPLACE VIEW "USER" AS SELECT * FROM users;
+
+-- --------------------------------------------------------------------
+-- Seed Data: TAG Catalog (Categories & 14 Curated Core Color Families)
+-- --------------------------------------------------------------------
+INSERT INTO tag (tag_name, tag_type) VALUES
+    ('Tops', 'Category'),
+    ('Bottoms', 'Category'),
+    ('Outerwear', 'Category'),
+    ('Shoes', 'Category'),
+    ('Dresses', 'Category'),
+    ('Knitwear', 'Category'),
+    ('Accessories', 'Category'),
+    ('Shirt', 'Category'),
+    ('Pants', 'Category'),
+    ('Skirt', 'Category'),
+    ('Shorts', 'Category'),
+    ('One-Piece', 'Category'),
+    ('Black', 'Color'),
+    ('White', 'Color'),
+    ('Gray', 'Color'),
+    ('Navy', 'Color'),
+    ('Blue', 'Color'),
+    ('Red', 'Color'),
+    ('Burgundy', 'Color'),
+    ('Green', 'Color'),
+    ('Olive', 'Color'),
+    ('Brown', 'Color'),
+    ('Beige', 'Color'),
+    ('Yellow', 'Color'),
+    ('Pink', 'Color'),
+    ('Neutral', 'Color')
+ON CONFLICT (tag_name, tag_type) DO NOTHING;
+
+-- --------------------------------------------------------------------
+-- Seed Data: Sample Users, Garments & Donation Opportunities
+-- --------------------------------------------------------------------
+INSERT INTO users (user_id, email, first_name, last_name, friend_code) VALUES
+    ('a0000000-0000-0000-0000-000000000001', 'mario@example.com', 'Mario', 'Lee', 'RP-MARI-1024'),
+    ('a0000000-0000-0000-0000-000000000002', 'liu@example.com', 'Liu', 'Chen', 'RP-LIUC-2048')
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO clothing_item (item_id, user_id, name, image_url, addition_type, wear_count) VALUES
+    (1001, 'a0000000-0000-0000-0000-000000000001', 'Vintage Forest Cotton Shirt', '#3E6B45', 'Old', 8),
+    (1002, 'a0000000-0000-0000-0000-000000000001', 'Tailored Indigo Denim Pants', '#5B7FA6', 'Old', 5),
+    (1003, 'a0000000-0000-0000-0000-000000000001', 'Earthy Wool Knit Sweater', '#B98F5E', 'New', 0),
+    (2001, 'a0000000-0000-0000-0000-000000000002', 'Classic Linen Blazer', '#C7A06B', 'Old', 12),
+    (2002, 'a0000000-0000-0000-0000-000000000002', 'Midnight Chino Trousers', '#2A2A2E', 'Old', 7),
+    (2003, 'a0000000-0000-0000-0000-000000000002', 'Burgundy Silk Pleated Skirt', '#8B5E6B', 'New', 1)
+ON CONFLICT (item_id) DO NOTHING;
+
+INSERT INTO donation_opportunity (donation_id, name, address, latitude, longitude, hours, accepted_types) VALUES
+    (1, 'Bagumbayan Community Clothing Drop-off', 'Barangay Hall, Bagumbayan, Quezon City, NCR', 14.63050000, 121.05050000, 'Mon-Sun 8:00 AM - 6:00 PM', 'Shirts, Pants, Children Clothing, Everyday Wear'),
+    (2, 'Sustainable Manila Porch Collection Box', 'Calle Real, Bagumbayan, Quezon City, NCR', 14.62620000, 121.04780000, 'Flexible 24/7 bin access', 'Jackets, Shoes, Warm Clothing'),
+    (3, 'Caritas San Isidro Textile Bank', 'San Isidro Parish Hall, Antipolo, Region IV-A', 14.58800000, 121.17600000, 'Tue-Sat 9:00 AM - 4:00 PM', 'Formalwear, School Uniforms, Shoes'),
+    (4, 'Dumaguete Circular Hub Drop-off', 'Perdices St, Dumaguete City, Negros Oriental', 9.30680000, 123.30850000, 'Mon-Fri 10:00 AM - 5:00 PM', 'All Clean Clothing, Linens, Fabrics'),
+    (5, 'Cubao Green Recycle Station', 'Aurora Blvd, Cubao, Quezon City, NCR', 14.62000000, 121.05350000, 'Daily 7:00 AM - 8:00 PM', 'Shoes, Sneakers, Sports Gear')
+ON CONFLICT (donation_id) DO NOTHING;
+

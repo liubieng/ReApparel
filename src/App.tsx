@@ -46,16 +46,19 @@ import {
   FriendRequest, 
   Borrow, 
   DonationOpportunity, 
-  DonationFlagType 
+  DonationFlagType,
+  AppNotification,
+  AdditionType
 } from './types/database';
 
 /* ================= CONSTANTS & CONFIG ================= */
 const NAV_ITEMS = [
   { id: 'closet', label: 'Virtual Closet', icon: Shirt },
+  { id: 'daily-log', label: 'Daily Outfit Log', icon: Calendar },
   { id: 'recovery', label: 'Recovery Progress', icon: Leaf },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'friends', label: 'Friends', icon: Users },
-  { id: 'donations', label: 'Donation Options', icon: HeartHandshake },
+  { id: 'friends', label: 'Friends & Loans', icon: Users },
+  { id: 'donations', label: 'Donation Map', icon: HeartHandshake },
   { id: 'profile', label: 'Profile', icon: UserCircle },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -191,7 +194,7 @@ export default function App() {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [opportunities, setOpportunities] = useState<DonationOpportunity[]>([]);
   const [assessments, setAssessments] = useState<BSASAssessment[]>([]);
-  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; time: string; type: string; read?: boolean }>>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [todayLog, setTodayLog] = useState<DailyClothingLog>({
     log_id: 0,
     user_id: '',
@@ -201,9 +204,12 @@ export default function App() {
     items: []
   });
 
-  // Filter state for Virtual Closet
+  // Filter state for Virtual Closet (2.2 multi-attribute filtering)
   const [closetTypeSel, setClosetTypeSel] = useState<Set<string>>(new Set());
   const [closetColorSel, setClosetColorSel] = useState<Set<string>>(new Set());
+  const [closetAdditionTypeSel, setClosetAdditionTypeSel] = useState<'All' | 'Old' | 'New'>('All');
+  const [closetWearFilter, setClosetWearFilter] = useState<'all' | 'unworn' | 'low' | 'active'>('all');
+  const [closetSearchQuery, setClosetSearchQuery] = useState('');
 
   // FAB & Modals
   const [fabOpen, setFabOpen] = useState(false);
@@ -211,12 +217,16 @@ export default function App() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editImages, setEditImages] = useState<string[]>(['#3E6B45']);
   const [editColor, setEditColor] = useState<string>('#3E6B45');
+  const [editAdditionType, setEditAdditionType] = useState<AdditionType>('Old');
+  const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [deleteCascadeModalGarment, setDeleteCascadeModalGarment] = useState<ClothingItem | null>(null);
   const [editFormWarn, setEditFormWarn] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // BSAS Assessment State
+  // BSAS Assessment State & Cooldown test simulation offset
   const [bsasI, setBsasI] = useState<number>(0);
   const [bsasAns, setBsasAns] = useState<Record<number, number>>({});
+  const [simulatedDaysOffset, setSimulatedDaysOffset] = useState<number>(0);
 
   // Auth (Login / Register) state
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -307,18 +317,32 @@ export default function App() {
     return () => unsubscribe();
   }, [loadData]);
 
-  // Filtered Garments for Closet
+  // Filtered Garments for Closet (2.2 Multi-attribute filtering: Category, Color, Addition Type, Wear Count, Search)
   const filteredGarments = useMemo(() => {
     return garments.filter(g => {
       const type = g.type_tag || g.category || '';
       const color = g.color_tag || g.image_url || '';
+      const addition = g.addition_type || 'Old';
+      const wear = g.worn_count ?? g.wear_count ?? 0;
 
       const matchType = closetTypeSel.size === 0 || closetTypeSel.has(type);
       const matchColor = closetColorSel.size === 0 || closetColorSel.has(color);
+      const matchAddition = closetAdditionTypeSel === 'All' || addition === closetAdditionTypeSel;
 
-      return matchType && matchColor;
+      let matchWear = true;
+      if (closetWearFilter === 'unworn') matchWear = wear === 0;
+      else if (closetWearFilter === 'low') matchWear = wear >= 1 && wear <= 4;
+      else if (closetWearFilter === 'active') matchWear = wear >= 5;
+
+      let matchSearch = true;
+      if (closetSearchQuery.trim()) {
+        const q = closetSearchQuery.toLowerCase();
+        matchSearch = g.name.toLowerCase().includes(q) || type.toLowerCase().includes(q) || addition.toLowerCase().includes(q);
+      }
+
+      return matchType && matchColor && matchAddition && matchWear && matchSearch;
     });
-  }, [garments, closetTypeSel, closetColorSel]);
+  }, [garments, closetTypeSel, closetColorSel, closetAdditionTypeSel, closetWearFilter, closetSearchQuery]);
 
   // Environmental SDG 12 Analytics
   const analytics = useMemo(() => {
@@ -380,7 +404,7 @@ export default function App() {
     };
   }, [view, assessments]);
 
-  // Clothing Item Management Actions
+  // Clothing Item Management Actions (Module 2.0 Virtual Closet)
   const openGarmentForm = (id: number | null) => {
     setEditId(id);
     setEditFormWarn(null);
@@ -388,13 +412,19 @@ export default function App() {
       const g = garments.find(x => x.item_id === id);
       setEditImages(g?.images && g.images.length ? [...g.images] : [g?.color_tag || g?.image_url || '#3E6B45']);
       setEditColor(g?.color_tag || '#3E6B45');
+      setEditAdditionType(g?.addition_type || 'Old');
+      const cats = g?.tags ? g.tags.filter(t => t.tag_type === 'Category').map(t => t.tag_name) : [g?.type_tag || g?.category || 'Tops'];
+      setEditCategories(cats.length ? cats : ['Tops']);
     } else {
       setEditImages(['#3E6B45']);
       setEditColor('#3E6B45');
+      setEditAdditionType('Old');
+      setEditCategories(['Tops']);
     }
     setModal('garmentForm');
   };
 
+  // 2.1.1 Client/Edge background removal of uploaded photos before saving
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -412,22 +442,34 @@ export default function App() {
         return;
       }
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          setEditImages(prev => {
-            if (prev.length >= 3) return prev;
-            // If the only current image is the default placeholder palette color, replace it
-            if (prev.length === 1 && prev[0].startsWith('#')) {
-              return [result];
-            }
-            return [...prev, result];
-          });
+      reader.onload = async (event) => {
+        const rawResult = event.target?.result as string;
+        if (rawResult) {
+          toast('Removing image background (Edge canvas)...');
+          try {
+            const processedImg = await removeImageBackground(rawResult);
+            setEditImages(prev => {
+              if (prev.length >= 3) return prev;
+              if (prev.length === 1 && prev[0].startsWith('#')) {
+                return [processedImg];
+              }
+              return [...prev, processedImg];
+            });
+            toast('Background removed successfully!');
+          } catch {
+            setEditImages(prev => {
+              if (prev.length >= 3) return prev;
+              if (prev.length === 1 && prev[0].startsWith('#')) {
+                return [rawResult];
+              }
+              return [...prev, rawResult];
+            });
+          }
         }
       };
       reader.readAsDataURL(file);
     });
-    // Reset input so same file can be selected again if needed
+    // Reset input so same file can be reselected if needed
     e.target.value = '';
   };
 
@@ -449,11 +491,12 @@ export default function App() {
     setEditImages(updated);
   };
 
+  // 2.1.2 & 2.1.3 Save Garment with Baseline Tag ("Old" | "New") & Tag Catalog
   const saveGarmentForm = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const name = (fd.get('name') as string).trim();
-    const type = fd.get('type_tag') as string;
+    const type = (fd.get('type_tag') as string) || editCategories[0] || 'Tops';
 
     if (!editId && garments.length >= 100) {
       toast('Closet limit reached (100 clothing items).');
@@ -463,16 +506,30 @@ export default function App() {
     const chosenColor = (fd.get('color_tag') as string) || editColor || '#3E6B45';
     const primaryImg = editImages[0] || chosenColor;
 
+    // Build tags from available catalog
+    const allTags = mockDatabase.getTags();
+    const assignedTags: Tag[] = [];
+    editCategories.forEach(catName => {
+      const match = allTags.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === catName.toLowerCase());
+      if (match) assignedTags.push(match);
+      else assignedTags.push({ tag_id: Date.now() + Math.floor(Math.random() * 1000), tag_name: catName, tag_type: 'Category' });
+    });
+    const colorTagMatch = allTags.find(t => t.tag_type === 'Color' && t.tag_name.toLowerCase() === chosenColor.toLowerCase());
+    if (colorTagMatch) assignedTags.push(colorTagMatch);
+
     if (editId) {
       await closetService.updateItem(editId, {
         name,
         type_tag: type,
+        category: editCategories[0] || type,
         length_tag: null,
         color_tag: chosenColor,
         image_url: primaryImg,
-        images: [...editImages]
+        addition_type: editAdditionType,
+        images: [...editImages],
+        tags: assignedTags
       });
-      toast('Clothing item updated');
+      toast(`Clothing item updated (${editAdditionType} purchase)`);
     } else {
       if (!currentUser) {
         toast('Please log in or register first.');
@@ -482,13 +539,15 @@ export default function App() {
         user_id: currentUser.user_id,
         name,
         type_tag: type,
+        category: editCategories[0] || type,
         length_tag: null,
         color_tag: chosenColor,
         image_url: primaryImg,
-        addition_type: 'Old',
-        images: [...editImages]
+        addition_type: editAdditionType,
+        images: [...editImages],
+        tags: assignedTags
       });
-      toast('Clothing item added to closet');
+      toast(`Added ${editAdditionType === 'New' ? 'new purchase' : 'pre-existing'} garment to closet`);
     }
 
     setModal(null);
@@ -501,13 +560,13 @@ export default function App() {
       r => r.item_id === id && (r.status === 'Accepted' || (r.status as string) === 'approved')
     );
     if (activeBorrow) {
-      toast("Can't delete — this item is currently borrowed.");
+      toast("Can't delete — this item is currently borrowed by a friend.");
       return;
     }
     await closetService.deleteItem(id);
     setModal(null);
     setEditId(null);
-    toast('Clothing item removed from closet');
+    toast('Clothing item removed from closet with cascade protection');
     await loadData();
   };
 
@@ -612,7 +671,7 @@ export default function App() {
     }
   };
 
-  const handleRespondBorrow = (borrowId: number, newStatus: 'Accepted' | 'Rejected') => {
+  const handleRespondBorrow = (borrowId: number, newStatus: 'Accepted' | 'Rejected' | 'Returned') => {
     if (newStatus === 'Accepted') {
       const targetBorrow = borrows.find(b => b.borrow_id === borrowId);
       if (targetBorrow) {
@@ -629,7 +688,14 @@ export default function App() {
       }
     }
     friendsService.updateBorrowStatus(borrowId, newStatus);
-    toast(newStatus === 'Accepted' ? 'Request accepted' : 'Request declined');
+    if (newStatus === 'Accepted') {
+      toast('Borrow request accepted! Loan schedule active.');
+    } else if (newStatus === 'Returned') {
+      toast('Item marked as returned! Garment is now back in your closet.');
+    } else {
+      toast('Borrow request declined.');
+    }
+    loadData();
   };
 
   // Flag donation opportunity
@@ -680,6 +746,32 @@ export default function App() {
     await closetService.finalizeDailyLog(todayLog.log_id);
     await loadData();
     toast("Outfit logged! Clothing item wear counts updated.");
+  };
+
+  // 3.2 Update & Delete Daily Wear Log (Free edits throughout calendar day until finalized)
+  const handleDeleteTodayLog = async () => {
+    if (todayLog.is_finalized) {
+      toast("Today's log is already finalized and locked at midnight.");
+      return;
+    }
+    await closetService.deleteDailyLog(todayLog.log_id);
+    await loadData();
+    toast("Today's daily clothing log cleared / deleted.");
+  };
+
+  // 3.3 Midnight Finalization (pg_cron / edge trigger 00:00 locking & wear count increment)
+  const handleSimulateMidnight = async () => {
+    if (todayLog.is_finalized) {
+      toast("Daily log is already locked and finalized for today.");
+      return;
+    }
+    if (!todayLog.items || todayLog.items.length === 0) {
+      toast('Select at least one garment worn today before triggering finalization.');
+      return;
+    }
+    await closetService.simulateMidnightFinalization();
+    await loadData();
+    toast("🕛 00:00 Midnight Job Simulated: Outfit log locked, wear counts incremented, edits frozen!");
   };
 
   /* ================= SUBVIEWS ================= */
@@ -953,6 +1045,49 @@ export default function App() {
           </div>
           <h3 style={{ margin: '10px 0 16px', fontSize: 17, lineHeight: 1.4 }}>{text}</h3>
           
+          {/* 1.1 Clean, supportive slider interface (0-7 scoring) */}
+          <div style={{ background: 'var(--surface-2)', padding: '14px 16px', borderRadius: 10, border: '1px solid var(--border)', marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Response Slider:</span>
+              <strong style={{ fontSize: 14, color: (sel ?? 0) >= 4 ? 'var(--danger)' : 'var(--primary)' }}>
+                {sel !== undefined ? `Selected Score: ${sel} / 7` : 'Slide or tap to score'}
+              </strong>
+            </div>
+            <input 
+              type="range"
+              min="0"
+              max="7"
+              step="1"
+              value={sel ?? 0}
+              onChange={(e) => setBsasAns(prev => ({ ...prev, [bsasI]: parseInt(e.target.value, 10) }))}
+              style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
+              <span>0 (Never)</span>
+              <span>1</span>
+              <span>2</span>
+              <span>3</span>
+              <span style={{ color: 'var(--danger)', fontWeight: 700 }}>4 (Criterion)</span>
+              <span>5</span>
+              <span>6</span>
+              <span>7 (Always)</span>
+            </div>
+            {sel !== undefined && (
+              <button 
+                type="button" 
+                className="btn btn-p" 
+                style={{ width: '100%', justifyContent: 'center', marginTop: 10, fontSize: 12.5 }}
+                onClick={() => handleBsasAnswerSelect(bsasI, sel)}
+              >
+                Confirm Score ({sel}) &amp; {bsasI < 6 ? 'Next Dimension →' : 'Calculate BSAS Results'}
+              </button>
+            )}
+          </div>
+
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>
+            Or choose a supportive radio option:
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {SCORING_LEVELS.map(({ val, label }) => {
               const isSelected = sel === val;
@@ -971,6 +1106,16 @@ export default function App() {
                   }}
                   onClick={() => handleBsasAnswerSelect(bsasI, val)}
                 >
+                  <span style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    border: isSelected ? '5px solid #ffffff' : '2px solid var(--border)',
+                    background: isSelected ? 'var(--primary)' : 'transparent',
+                    display: 'inline-block',
+                    marginRight: 8,
+                    flexShrink: 0
+                  }} />
                   <span className="w-6 font-mono font-bold" style={{ opacity: isSelected ? 1 : 0.7 }}>
                     {val}
                   </span>
@@ -1003,20 +1148,107 @@ export default function App() {
       // -----------------------------------------------------------------------
       // CLOSET
       // -----------------------------------------------------------------------
+      // CLOSET (Module 2.0 Virtual Closet)
+      // -----------------------------------------------------------------------
       case 'closet':
         return (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2>My Closet</h2>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {garments.length}/100 clothing items
-              </span>
+              <div>
+                <h2 style={{ margin: 0 }}>My Closet</h2>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {filteredGarments.length} shown of {garments.length} total garments (Max 100)
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button 
+                  className="btn btn-g"
+                  style={{ padding: '6px 12px', fontSize: 12 }}
+                  onClick={() => setView('daily-log')}
+                  title="Compose today's outfit wear log"
+                >
+                  <Calendar className="ico" style={{ width: 14, height: 14 }} /> Outfit Builder
+                </button>
+                <button 
+                  className="btn btn-p" 
+                  style={{ padding: '6px 14px', fontSize: 12 }}
+                  onClick={() => openGarmentForm(null)}
+                >
+                  <Plus className="ico" style={{ width: 14, height: 14 }} /> Add Garment
+                </button>
+              </div>
             </div>
 
-            {/* Type filter accordion */}
-            <details className="acc" open>
-              <summary>Type</summary>
-              <div style={{ paddingTop: 4 }}>
+            {/* 2.2 Search Bar */}
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+              <Search className="ico" style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)', width: 16, height: 16 }} />
+              <input 
+                type="text"
+                placeholder="Search garments by name, category, or baseline addition type..."
+                value={closetSearchQuery}
+                onChange={(e) => setClosetSearchQuery(e.target.value)}
+                style={{ width: '100%', paddingLeft: 34, fontSize: 13, borderRadius: 8, margin: 0 }}
+              />
+              {closetSearchQuery && (
+                <button 
+                  type="button" 
+                  onClick={() => setClosetSearchQuery('')}
+                  style={{ position: 'absolute', right: 10, top: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* 2.2 Multi-attribute filters: Baseline Addition Type ("Old" vs "New") & Wear Count */}
+            <div className="card" style={{ padding: '10px 14px', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', minWidth: 90 }}>Baseline Tag:</span>
+                {(['All', 'Old', 'New'] as const).map(atype => {
+                  const on = closetAdditionTypeSel === atype;
+                  const count = atype === 'All' ? garments.length : garments.filter(g => g.addition_type === atype).length;
+                  return (
+                    <button
+                      key={atype}
+                      type="button"
+                      className={`pill ${on ? 'on' : ''}`}
+                      style={{ cursor: 'pointer', padding: '3px 10px', fontSize: 11.5, border: 'none' }}
+                      onClick={() => setClosetAdditionTypeSel(atype)}
+                    >
+                      {atype === 'All' ? 'All Items' : atype === 'Old' ? '🌿 Old (Pre-existing)' : '✨ New (Recent Purchase)'} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', minWidth: 90 }}>Wear Rotation:</span>
+                {[
+                  { id: 'all', label: 'All Rotation Levels' },
+                  { id: 'unworn', label: '⚠️ Unworn (0 wears)' },
+                  { id: 'low', label: '🌱 Low (1–4 wears)' },
+                  { id: 'active', label: '🔥 Active (5+ wears)' }
+                ].map(wf => {
+                  const on = closetWearFilter === wf.id;
+                  return (
+                    <button
+                      key={wf.id}
+                      type="button"
+                      className={`pill ${on ? 'on' : ''}`}
+                      style={{ cursor: 'pointer', padding: '3px 10px', fontSize: 11.5, border: 'none' }}
+                      onClick={() => setClosetWearFilter(wf.id as any)}
+                    >
+                      {wf.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Type / Category filter accordion */}
+            <details className="acc">
+              <summary>Categories &amp; Garment Types ({closetTypeSel.size > 0 ? `${closetTypeSel.size} selected` : 'All'})</summary>
+              <div style={{ paddingTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {TYPES.map(t => {
                   const on = closetTypeSel.has(t);
                   return (
@@ -1034,13 +1266,22 @@ export default function App() {
                     </span>
                   );
                 })}
+                {closetTypeSel.size > 0 && (
+                  <button 
+                    className="btn btn-g" 
+                    style={{ padding: '2px 8px', fontSize: 11 }}
+                    onClick={() => setClosetTypeSel(new Set())}
+                  >
+                    Reset Categories
+                  </button>
+                )}
               </div>
             </details>
 
-            {/* Color filter accordion */}
+            {/* Curated Color Families filter accordion */}
             <details className="acc">
-              <summary>Color</summary>
-              <div style={{ paddingTop: 4, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <summary>Curated Color Families ({closetColorSel.size > 0 ? `${closetColorSel.size} selected` : 'All'})</summary>
+              <div style={{ paddingTop: 6, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                 {PALETTE.map(c => {
                   const on = closetColorSel.has(c);
                   return (
@@ -1056,6 +1297,7 @@ export default function App() {
                         padding: 0,
                         border: on ? '2px solid var(--text)' : '1px solid var(--border)'
                       }}
+                      title={c}
                       onClick={() => {
                         const s = new Set(closetColorSel);
                         s.has(c) ? s.delete(c) : s.add(c);
@@ -1127,16 +1369,30 @@ export default function App() {
                     </button>
 
                     <div className="gbody">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
                         <strong style={{ fontSize: 13.5 }}>{g.name}</strong>
+                        {g.addition_type === 'New' ? (
+                          <span className="pill" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontSize: 10.5, flexShrink: 0 }}>
+                            ✨ New
+                          </span>
+                        ) : (
+                          <span className="pill" style={{ background: 'var(--surface-3)', fontSize: 10.5, flexShrink: 0 }}>
+                            🌿 Old
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
                         {g.worn_count ?? g.wear_count ?? 0}× worn
                       </div>
                       
-                      <div style={{ marginTop: 4 }}>
+                      <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {[g.type_tag || g.category].filter(Boolean).map(t => (
-                          <span key={t} className="pill">{t}</span>
+                          <span key={t} className="pill" style={{ fontSize: 10.5 }}>{t}</span>
+                        ))}
+                        {g.tags && g.tags.filter(t => t.tag_type === 'Color').map(ct => (
+                          <span key={ct.tag_id} className="pill" style={{ fontSize: 10.5, opacity: 0.85 }}>
+                            🎨 {ct.tag_name}
+                          </span>
                         ))}
                       </div>
 
@@ -1214,9 +1470,10 @@ export default function App() {
       case 'analytics':
         const actuallyWornItems = analytics.mostWorn.filter(i => (i.worn_count ?? i.wear_count ?? 0) > 0);
         const latestAssessment = assessments[0] || null;
-        const daysSinceAssessment = latestAssessment ? Math.floor((Date.now() - new Date(latestAssessment.taken_at).getTime()) / (1000 * 3600 * 24)) : null;
+        const rawDaysSinceAssessment = latestAssessment ? Math.floor((Date.now() - new Date(latestAssessment.taken_at).getTime()) / (1000 * 3600 * 24)) : null;
+        const daysSinceAssessment = rawDaysSinceAssessment !== null ? (rawDaysSinceAssessment + simulatedDaysOffset) : null;
         const isCooldownActive = daysSinceAssessment !== null && daysSinceAssessment < 30;
-        const daysRemaining = daysSinceAssessment !== null ? (30 - daysSinceAssessment) : 0;
+        const daysRemaining = daysSinceAssessment !== null ? Math.max(0, 30 - daysSinceAssessment) : 0;
         const isMonthlyDue = daysSinceAssessment !== null && daysSinceAssessment >= 30;
 
         return (
@@ -1327,7 +1584,7 @@ export default function App() {
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                     <button 
                       className={`btn ${isCooldownActive ? 'btn-g' : 'btn-p'}`} 
                       disabled={isCooldownActive}
@@ -1339,6 +1596,17 @@ export default function App() {
                       }}
                     >
                       {isCooldownActive ? `Retake BSAS (${daysRemaining}d Cooldown)` : 'Retake Monthly BSAS Reflection'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-g"
+                      style={{ fontSize: 11, padding: '6px 10px' }}
+                      onClick={() => {
+                        setSimulatedDaysOffset(prev => prev >= 30 ? 0 : 31);
+                        toast(simulatedDaysOffset >= 30 ? 'Cooldown simulation reset to real dates' : 'Fast-forwarded 31 days: Monthly retake is now due!');
+                      }}
+                    >
+                      {simulatedDaysOffset >= 30 ? '↺ Reset Real Cooldown' : '⏩ Simulate 30d Elapsed (Test Monthly Retake)'}
                     </button>
                   </div>
                 </div>
@@ -1976,7 +2244,22 @@ export default function App() {
                           </button>
                         </div>
                       ) : (
-                        <span className="pill on">{r.status}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span className={`pill ${r.status === 'Accepted' ? 'on' : r.status === 'Returned' ? 'on' : ''}`}>
+                            {r.status === 'Returned' ? '✓ Returned' : r.status}
+                          </span>
+                          {r.status === 'Accepted' && (
+                            <button
+                              type="button"
+                              className="btn btn-g"
+                              style={{ padding: '4px 10px', fontSize: 11 }}
+                              onClick={() => handleRespondBorrow(r.borrow_id, 'Returned')}
+                              title="Confirm borrower has returned the garment"
+                            >
+                              Mark as Returned
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -2214,14 +2497,21 @@ export default function App() {
         );
 
       // -----------------------------------------------------------------------
-      // DAILY LOG (Mark What You Wore Today - Established Feature)
+      // DAILY LOG (Module 3.0 Daily Clothing Usage)
       // -----------------------------------------------------------------------
       case 'daily-log':
         const selectedToday = todayLog.items || [];
+        const pastLogs = mockDatabase.getDailyLogs().filter(l => l.log_date !== todayLog.log_date);
+
         return (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2>Mark What You Wore Today</h2>
+              <div>
+                <h2 style={{ margin: 0 }}>Daily Clothing Usage &amp; Outfit Builder</h2>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Log what you wear daily &middot; Automated midnight finalization at 00:00
+                </span>
+              </div>
               <button 
                 className="btn btn-g" 
                 onClick={() => setView('closet')}
@@ -2230,45 +2520,106 @@ export default function App() {
               </button>
             </div>
 
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Daily Wear Status Card */}
+            <div className="card" style={{ 
+              border: todayLog.is_finalized ? '1px solid var(--border)' : '1px solid var(--primary)', 
+              background: todayLog.is_finalized ? 'var(--surface-2)' : 'var(--surface)' 
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
                 <div>
-                  <strong style={{ fontSize: 14 }}>Today&apos;s Date: {todayLog.log_date}</strong>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {todayLog.is_finalized ? 'Finalized for today ✓' : 'Select items below that you wore today to update wear counts and maintain your streak.'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <strong style={{ fontSize: 15 }}>Today&apos;s Date: {todayLog.log_date}</strong>
+                    {todayLog.is_finalized ? (
+                      <span className="pill on" style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', fontWeight: 700 }}>
+                        🔒 Locked &amp; Finalized (Edits Frozen)
+                      </span>
+                    ) : (
+                      <span className="pill" style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', fontWeight: 700 }}>
+                        ✏️ Open for Edits (Calendar Day)
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {todayLog.is_finalized
+                      ? `Finalized at ${todayLog.finalized_at ? new Date(todayLog.finalized_at).toLocaleTimeString() : '00:00 midnight'}. Garment wear counts have been incremented.`
+                      : 'You can freely modify or delete your outfit throughout today. Automated midnight job locks log at 00:00.'}
                   </div>
                 </div>
-                {!todayLog.is_finalized && (
-                  <button 
-                    className="btn btn-p" 
-                    onClick={handleFinalizeTodayLog}
-                  >
-                    Save & Finalize Log
-                  </button>
-                )}
+
+                {/* 3.2 & 3.3 Daily Wear Action Buttons */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {!todayLog.is_finalized && (
+                    <>
+                      <button 
+                        type="button"
+                        className="btn btn-p" 
+                        onClick={handleFinalizeTodayLog}
+                        style={{ fontSize: 12, padding: '6px 12px' }}
+                      >
+                        ✓ Finalize Now
+                      </button>
+                      <button 
+                        type="button"
+                        className="btn btn-g" 
+                        onClick={handleDeleteTodayLog}
+                        disabled={selectedToday.length === 0}
+                        style={{ fontSize: 12, padding: '6px 12px' }}
+                        title="Delete / clear today's wear log"
+                      >
+                        ✕ Clear / Delete Log
+                      </button>
+                      <button 
+                        type="button"
+                        className="btn btn-g" 
+                        onClick={handleSimulateMidnight}
+                        style={{ fontSize: 12, padding: '6px 12px' }}
+                        title="Simulate 00:00 automated pg_cron job / edge trigger locking"
+                      >
+                        🕛 Simulate 00:00 Midnight Job
+                      </button>
+                    </>
+                  )}
+                  {todayLog.is_finalized && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', alignSelf: 'center' }}>
+                      Log locked for the day
+                    </span>
+                  )}
+                </div>
               </div>
 
+              {/* Selected Items Strip */}
               <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                <strong>Selected Today ({selectedToday.length}):</strong>
+                <strong>Garments in Today&apos;s Outfit ({selectedToday.length}):</strong>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                   {selectedToday.map(i => (
                     <span 
                       key={i.item_id} 
                       className="pill on"
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => handleToggleTodayOutfitItem(i)}
+                      style={{ 
+                        cursor: todayLog.is_finalized ? 'default' : 'pointer',
+                        padding: '4px 10px',
+                        fontSize: 12
+                      }}
+                      onClick={() => !todayLog.is_finalized && handleToggleTodayOutfitItem(i)}
+                      title={todayLog.is_finalized ? 'Finalized (Frozen)' : 'Click to remove'}
                     >
-                      {i.name} ✕
+                      {i.name} {!todayLog.is_finalized && '✕'}
                     </span>
                   ))}
                   {selectedToday.length === 0 && (
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>None selected yet. Click any clothing item below!</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                      No garments selected for today yet. Tap items from your closet below!
+                    </span>
                   )}
                 </div>
               </div>
             </div>
 
-            <h3 style={{ marginTop: 18 }}>Select from Your Closet</h3>
+            {/* 3.1 Visual Outfit Builder from Virtual Closet */}
+            <h3 style={{ marginTop: 20, marginBottom: 8 }}>
+              {todayLog.is_finalized ? "Today's Outfit (Edits Frozen)" : "Tap Garments to Compose Today's Outfit"}
+            </h3>
+            
             <div className="grid">
               {garments.map(g => {
                 const isSelected = selectedToday.some(i => i.item_id === g.item_id);
@@ -2277,8 +2628,13 @@ export default function App() {
                 return (
                   <div 
                     key={g.item_id} 
-                    className={`gcard ${isSelected ? 'border-2 border-emerald-600' : ''}`}
-                    style={{ cursor: 'pointer' }}
+                    className={`gcard ${isSelected ? 'border-2 border-emerald-600 shadow-md' : ''}`}
+                    style={{ 
+                      cursor: todayLog.is_finalized ? 'not-allowed' : 'pointer',
+                      opacity: todayLog.is_finalized && !isSelected ? 0.55 : 1.0,
+                      transform: isSelected ? 'scale(1.02)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
                     onClick={() => handleToggleTodayOutfitItem(g)}
                   >
                     <div style={{ 
@@ -2292,21 +2648,57 @@ export default function App() {
                       justifyContent: 'center', 
                       color: '#fff', 
                       fontSize: 12, 
-                      fontWeight: 600,
+                      fontWeight: 700,
                       textShadow: !isColor ? '0 1px 3px rgba(0,0,0,0.8)' : undefined
                     }}>
-                      {isSelected ? 'SELECTED ✓' : g.name}
+                      {isSelected ? '✓ IN TODAY\'S OUTFIT' : g.name}
                     </div>
                     <div className="gbody">
-                      <strong style={{ fontSize: 13 }}>{g.name}</strong>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {g.worn_count ?? g.wear_count ?? 0}× worn
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: 13 }}>{g.name}</strong>
+                        <span className="pill" style={{ fontSize: 10 }}>
+                          {g.addition_type}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {g.worn_count ?? g.wear_count ?? 0}× total wear{g.wear_count === 1 ? '' : 's'}
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {/* Past Daily Wear Logs History */}
+            {pastLogs.length > 0 && (
+              <div style={{ marginTop: 26 }}>
+                <h3>Past Daily Wear Logs ({pastLogs.length})</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pastLogs.map(pl => (
+                    <div key={pl.log_id} className="card" style={{ padding: '10px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong>{pl.log_date}</strong>
+                          <span className="pill on" style={{ marginLeft: 8, fontSize: 10.5 }}>✓ Finalized</span>
+                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {pl.items?.length || 0} items worn
+                        </span>
+                      </div>
+                      {pl.items && pl.items.length > 0 && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                          {pl.items.map(it => (
+                            <span key={it.item_id} className="pill" style={{ fontSize: 11 }}>
+                              {it.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -2483,39 +2875,122 @@ export default function App() {
                 />
               </div>
 
+              {/* 2.1.3 Baseline tag: Mark garment as "Old" (pre-existing) or "New" (recent purchase) */}
               <div className="field">
-                <label>Type</label>
-                <select 
-                  name="type_tag" 
-                  defaultValue={garments.find(x => x.item_id === editId)?.type_tag || TYPES[0]}
-                >
-                  {TYPES.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                <label>Baseline Addition Type (Requirement 2.1.3)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: editAdditionType === 'Old' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: editAdditionType === 'Old' ? 'rgba(62, 107, 69, 0.08)' : 'var(--surface)',
+                    cursor: 'pointer'
+                  }}>
+                    <input 
+                      type="radio" 
+                      name="addition_type_radio" 
+                      checked={editAdditionType === 'Old'} 
+                      onChange={() => setEditAdditionType('Old')} 
+                    />
+                    <div>
+                      <strong style={{ fontSize: 13, display: 'block' }}>🌿 Old Garment</strong>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pre-existing wardrobe</span>
+                    </div>
+                  </label>
+
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: editAdditionType === 'New' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: editAdditionType === 'New' ? 'rgba(62, 107, 69, 0.08)' : 'var(--surface)',
+                    cursor: 'pointer'
+                  }}>
+                    <input 
+                      type="radio" 
+                      name="addition_type_radio" 
+                      checked={editAdditionType === 'New'} 
+                      onChange={() => setEditAdditionType('New')} 
+                    />
+                    <div>
+                      <strong style={{ fontSize: 13, display: 'block' }}>✨ New Purchase</strong>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recent purchase</span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
-              {/* Tag what the color of the clothing is */}
+              {/* 2.1.2 Tagging workflow: Assign one or more categories */}
               <div className="field">
-                <label>Color Tag</label>
+                <label>Categories (Assign one or more from TAG catalog)</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear', 'Accessories'].map(cat => {
+                    const isSel = editCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        className={`pill ${isSel ? 'on' : ''}`}
+                        style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 12, border: 'none' }}
+                        onClick={() => {
+                          if (isSel) {
+                            if (editCategories.length > 1) {
+                              setEditCategories(editCategories.filter(c => c !== cat));
+                            }
+                          } else {
+                            setEditCategories([...editCategories, cat]);
+                          }
+                        }}
+                      >
+                        {cat} {isSel ? '✓' : '+'}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input type="hidden" name="type_tag" value={editCategories[0] || 'Tops'} />
+              </div>
+
+              {/* 2.1.2 Primary curated color family from the TAG catalog */}
+              <div className="field">
+                <label>Primary Curated Color Family</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                  {PALETTE.map(c => (
+                  {[
+                    { hex: '#000000', name: 'Black' },
+                    { hex: '#ffffff', name: 'White' },
+                    { hex: '#6b7280', name: 'Gray' },
+                    { hex: '#1e3a8a', name: 'Navy' },
+                    { hex: '#2563eb', name: 'Blue' },
+                    { hex: '#166534', name: 'Green' },
+                    { hex: '#65a30d', name: 'Olive' },
+                    { hex: '#dc2626', name: 'Red' },
+                    { hex: '#881337', name: 'Burgundy' },
+                    { hex: '#d97706', name: 'Amber' },
+                    { hex: '#b45309', name: 'Brown' },
+                    { hex: '#d4b996', name: 'Neutral' },
+                    { hex: '#a855f7', name: 'Purple' },
+                    { hex: '#ec4899', name: 'Pink' }
+                  ].map(cf => (
                     <button
-                      key={c}
+                      key={cf.hex}
                       type="button"
-                      onClick={() => setEditColor(c)}
+                      onClick={() => setEditColor(cf.hex)}
                       style={{
-                        background: c,
+                        background: cf.hex,
                         width: 28,
                         height: 28,
                         borderRadius: '50%',
-                        border: editColor === c ? '3px solid var(--text)' : '1px solid var(--border)',
+                        border: editColor === cf.hex ? '3px solid var(--text)' : '1px solid var(--border)',
                         cursor: 'pointer',
                         padding: 0,
-                        boxShadow: editColor === c ? '0 0 0 2px var(--primary)' : 'none',
+                        boxShadow: editColor === cf.hex ? '0 0 0 2px var(--primary)' : 'none',
                         transition: 'transform 0.1s'
                       }}
-                      title={c}
+                      title={cf.name}
                     />
                   ))}
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
@@ -2545,9 +3020,14 @@ export default function App() {
                   <button 
                     type="button" 
                     className="btn btn-d" 
-                    onClick={() => deleteGarment(editId)}
+                    onClick={() => {
+                      const target = garments.find(x => x.item_id === editId);
+                      if (target) {
+                        setDeleteCascadeModalGarment(target);
+                      }
+                    }}
                   >
-                    Delete
+                    Delete Item
                   </button>
                 )}
                 <button 
@@ -2555,10 +3035,60 @@ export default function App() {
                   className="btn btn-p" 
                   style={{ flex: 1, justifyContent: 'center' }}
                 >
-                  {editId ? 'Save' : 'Add to closet'}
+                  {editId ? 'Save Garment' : 'Add to Closet'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2.3 Deletion Modal with Cascade Protection */}
+      {deleteCascadeModalGarment && (
+        <div 
+          className="modalScrim" 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteCascadeModalGarment(null);
+          }}
+        >
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--danger)', marginBottom: 8 }}>
+              <ShieldCheck style={{ width: 22, height: 22 }} />
+              <h3 style={{ margin: 0, color: 'var(--text)' }}>Cascade Protection Notice</h3>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, margin: '8px 0 12px' }}>
+              Are you sure you want to delete <strong>{deleteCascadeModalGarment.name}</strong> from your closet?
+            </p>
+            <div className="warn" style={{ fontSize: 12, marginBottom: 14, textAlign: 'left' }}>
+              <strong>Cascade Integrity Protection:</strong>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.5 }}>
+                <li>Associated category and curated color tags will be safely unlinked.</li>
+                <li>Garment will be removed from today&apos;s unfinalized daily wear logs.</li>
+                <li>Any pending friend borrow requests on this garment will be cleanly cancelled.</li>
+              </ul>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button 
+                type="button" 
+                className="btn btn-g" 
+                style={{ flex: 1, justifyContent: 'center' }} 
+                onClick={() => setDeleteCascadeModalGarment(null)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-d" 
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={async () => {
+                  const id = deleteCascadeModalGarment.item_id;
+                  setDeleteCascadeModalGarment(null);
+                  await deleteGarment(id);
+                }}
+              >
+                Confirm Cascade Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

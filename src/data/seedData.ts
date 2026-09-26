@@ -82,14 +82,51 @@ export const INITIAL_USERS: User[] = [
   }
 ];
 
+// SVG Silhouette Helper for crisp vector garments
+const createGarmentSilhouette = (color: string, label: string, type: 'top' | 'bottom' | 'outerwear' | 'dress' | 'shoes' = 'top') => {
+  let path = 'M50 60 L75 40 L100 55 L125 40 L150 60 L135 85 L125 80 L125 160 L75 160 L75 80 L65 85 Z'; // top/shirt
+  if (type === 'bottom') {
+    path = 'M65 45 L135 45 L130 160 L105 160 L100 90 L95 160 L70 160 Z'; // pants
+  } else if (type === 'outerwear') {
+    path = 'M45 55 L75 35 L100 50 L125 35 L155 55 L140 90 L130 85 L130 165 L70 165 L70 85 L60 90 Z'; // jacket/coat
+  } else if (type === 'dress') {
+    path = 'M70 45 L100 55 L130 45 L120 85 L150 165 L50 165 L80 85 Z'; // dress
+  } else if (type === 'shoes') {
+    path = 'M40 120 L80 120 L95 90 L125 90 L135 120 L165 120 C165 145 150 155 125 155 L40 155 Z'; // shoes
+  }
+  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><rect width="200" height="200" fill="%23f8fafc" rx="16"/><path d="${path}" fill="${encodeURIComponent(color)}" stroke="%23334155" stroke-width="2.5" stroke-linejoin="round"/><text x="100" y="188" font-family="sans-serif" font-size="10" font-weight="700" fill="%2364748b" text-anchor="middle">${label}</text></svg>`;
+};
+
 export const INITIAL_TAGS: Tag[] = [
-  { tag_id: 1, tag_name: 'Shirt', tag_type: 'Category' },
-  { tag_id: 2, tag_name: 'Skirt', tag_type: 'Category' },
-  { tag_id: 3, tag_name: 'Pants', tag_type: 'Category' },
-  { tag_id: 4, tag_name: 'Dress', tag_type: 'Category' },
-  { tag_id: 5, tag_name: 'Shorts', tag_type: 'Category' },
-  { tag_id: 6, tag_name: 'One-Piece', tag_type: 'Category' },
-  { tag_id: 7, tag_name: 'Shoes', tag_type: 'Category' }
+  // Core Categories (Prompt Specification)
+  { tag_id: 1, tag_name: 'Tops', tag_type: 'Category' },
+  { tag_id: 2, tag_name: 'Bottoms', tag_type: 'Category' },
+  { tag_id: 3, tag_name: 'Outerwear', tag_type: 'Category' },
+  { tag_id: 4, tag_name: 'Shoes', tag_type: 'Category' },
+  { tag_id: 5, tag_name: 'Dresses', tag_type: 'Category' },
+  { tag_id: 6, tag_name: 'Knitwear', tag_type: 'Category' },
+  { tag_id: 7, tag_name: 'Accessories', tag_type: 'Category' },
+  { tag_id: 8, tag_name: 'Shirt', tag_type: 'Category' },
+  { tag_id: 9, tag_name: 'Pants', tag_type: 'Category' },
+  { tag_id: 10, tag_name: 'Skirt', tag_type: 'Category' },
+  { tag_id: 11, tag_name: 'Shorts', tag_type: 'Category' },
+  { tag_id: 12, tag_name: 'One-Piece', tag_type: 'Category' },
+
+  // 14 Curated Core Color Families (Prompt Specification)
+  { tag_id: 101, tag_name: 'Black', tag_type: 'Color', hex_color: '#18181b' },
+  { tag_id: 102, tag_name: 'White', tag_type: 'Color', hex_color: '#f8fafc' },
+  { tag_id: 103, tag_name: 'Gray', tag_type: 'Color', hex_color: '#64748b' },
+  { tag_id: 104, tag_name: 'Navy', tag_type: 'Color', hex_color: '#1e293b' },
+  { tag_id: 105, tag_name: 'Blue', tag_type: 'Color', hex_color: '#2563eb' },
+  { tag_id: 106, tag_name: 'Red', tag_type: 'Color', hex_color: '#dc2626' },
+  { tag_id: 107, tag_name: 'Burgundy', tag_type: 'Color', hex_color: '#881337' },
+  { tag_id: 108, tag_name: 'Green', tag_type: 'Color', hex_color: '#16a34a' },
+  { tag_id: 109, tag_name: 'Olive', tag_type: 'Color', hex_color: '#65a30d' },
+  { tag_id: 110, tag_name: 'Brown', tag_type: 'Color', hex_color: '#78350f' },
+  { tag_id: 111, tag_name: 'Beige', tag_type: 'Color', hex_color: '#d6c7a1' },
+  { tag_id: 112, tag_name: 'Yellow', tag_type: 'Color', hex_color: '#eab308' },
+  { tag_id: 113, tag_name: 'Pink', tag_type: 'Color', hex_color: '#ec4899' },
+  { tag_id: 114, tag_name: 'Neutral', tag_type: 'Color', hex_color: '#a8a29e' }
 ];
 
 export const INITIAL_CLOTHING_ITEMS: ClothingItem[] = [
@@ -98,78 +135,84 @@ export const INITIAL_CLOTHING_ITEMS: ClothingItem[] = [
     user_id: 'u-mario-01',
     name: 'Vintage Forest Cotton Shirt',
     type_tag: 'Shirt',
-    category: 'Shirt',
+    category: 'Tops',
+    color: 'Green',
     color_tag: '#3E6B45',
     addition_type: 'Old',
     wear_count: 8,
     date_added: '2026-08-15T00:00:00.000Z',
-    image_url: '#3E6B45',
-    images: ['#3E6B45']
+    image_url: createGarmentSilhouette('#3E6B45', 'Vintage Forest Shirt', 'top'),
+    images: [createGarmentSilhouette('#3E6B45', 'Vintage Forest Shirt', 'top')]
   },
   {
     item_id: 1002,
     user_id: 'u-mario-01',
     name: 'Tailored Indigo Denim Pants',
     type_tag: 'Pants',
-    category: 'Pants',
+    category: 'Bottoms',
+    color: 'Blue',
     color_tag: '#5B7FA6',
     addition_type: 'Old',
     wear_count: 5,
     date_added: '2026-08-20T00:00:00.000Z',
-    image_url: '#5B7FA6',
-    images: ['#5B7FA6']
+    image_url: createGarmentSilhouette('#5B7FA6', 'Tailored Indigo Denim', 'bottom'),
+    images: [createGarmentSilhouette('#5B7FA6', 'Tailored Indigo Denim', 'bottom')]
   },
   {
     item_id: 1003,
     user_id: 'u-mario-01',
     name: 'Earthy Wool Knit Sweater',
     type_tag: 'Shirt',
-    category: 'Shirt',
+    category: 'Knitwear',
+    color: 'Brown',
     color_tag: '#B98F5E',
     addition_type: 'New',
     wear_count: 0,
     date_added: '2026-09-10T00:00:00.000Z',
-    image_url: '#B98F5E',
-    images: ['#B98F5E']
+    image_url: createGarmentSilhouette('#B98F5E', 'Earthy Wool Knit', 'top'),
+    images: [createGarmentSilhouette('#B98F5E', 'Earthy Wool Knit', 'top')]
   },
   {
     item_id: 2001,
     user_id: 'u-liu-02',
     name: 'Classic Linen Blazer',
     type_tag: 'One-Piece',
-    category: 'One-Piece',
+    category: 'Outerwear',
+    color: 'Beige',
     color_tag: '#C7A06B',
     addition_type: 'Old',
     wear_count: 12,
     date_added: '2026-08-10T00:00:00.000Z',
-    image_url: '#C7A06B',
-    images: ['#C7A06B']
+    image_url: createGarmentSilhouette('#C7A06B', 'Classic Linen Blazer', 'outerwear'),
+    images: [createGarmentSilhouette('#C7A06B', 'Classic Linen Blazer', 'outerwear')]
   },
   {
     item_id: 2002,
     user_id: 'u-liu-02',
     name: 'Midnight Chino Trousers',
     type_tag: 'Pants',
-    category: 'Pants',
+    category: 'Bottoms',
+    color: 'Black',
     color_tag: '#2A2A2E',
     addition_type: 'Old',
     wear_count: 7,
     date_added: '2026-08-12T00:00:00.000Z',
-    image_url: '#2A2A2E',
-    images: ['#2A2A2E']
+    image_url: createGarmentSilhouette('#2A2A2E', 'Midnight Chino', 'bottom'),
+    images: [createGarmentSilhouette('#2A2A2E', 'Midnight Chino', 'bottom')]
   },
   {
     item_id: 2003,
     user_id: 'u-liu-02',
     name: 'Burgundy Silk Pleated Skirt',
     type_tag: 'Skirt',
-    category: 'Skirt',
+    category: 'Bottoms',
+    color: 'Burgundy',
     color_tag: '#8B5E6B',
     addition_type: 'New',
     wear_count: 1,
     date_added: '2026-09-14T00:00:00.000Z',
-    image_url: '#8B5E6B',
-    images: ['#8B5E6B']
+    image_url: createGarmentSilhouette('#8B5E6B', 'Burgundy Silk Skirt', 'bottom'),
+    images: [createGarmentSilhouette('#8B5E6B', 'Burgundy Silk Skirt', 'bottom')]
   }
 ];
 

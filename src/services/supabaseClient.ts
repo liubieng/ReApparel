@@ -18,7 +18,9 @@ import {
   FriendRequest, 
   Borrow, 
   DonationOpportunity, 
-  DonationFlag 
+  DonationFlag,
+  ItemTag,
+  AppNotification
 } from '../types/database';
 
 // Configuration keys
@@ -97,6 +99,7 @@ interface MockDatabaseState {
   users: User[];
   tags: Tag[];
   clothing_items: ClothingItem[];
+  item_tags: ItemTag[];
   bsas_assessments: BSASAssessment[];
   daily_clothing_logs: DailyClothingLog[];
   friend_requests: FriendRequest[];
@@ -112,6 +115,15 @@ function loadInitialMockState(): MockDatabaseState {
     try {
       const parsed = JSON.parse(stored);
       if (!parsed.notifications) parsed.notifications = [];
+      if (!parsed.item_tags) parsed.item_tags = [];
+      // Ensure tags include all seeded categories & 14 curated color families
+      if (parsed.tags) {
+        INITIAL_TAGS.forEach(initTag => {
+          if (!parsed.tags.some((t: Tag) => t.tag_name.toLowerCase() === initTag.tag_name.toLowerCase())) {
+            parsed.tags.push(initTag);
+          }
+        });
+      }
       return parsed;
     } catch {
       // fallback
@@ -125,10 +137,25 @@ function loadInitialMockState(): MockDatabaseState {
     }
   });
 
+  const initialItemTags: ItemTag[] = [];
+  let itemTagIdCounter = 1;
+  INITIAL_CLOTHING_ITEMS.forEach(item => {
+    if (item.tags) {
+      item.tags.forEach(t => {
+        initialItemTags.push({
+          item_tag_id: itemTagIdCounter++,
+          item_id: item.item_id,
+          tag_id: t.tag_id
+        });
+      });
+    }
+  });
+
   const state: MockDatabaseState = {
     users: INITIAL_USERS,
     tags: INITIAL_TAGS,
     clothing_items: INITIAL_CLOTHING_ITEMS,
+    item_tags: initialItemTags,
     bsas_assessments: INITIAL_ASSESSMENTS,
     daily_clothing_logs: INITIAL_DAILY_LOGS,
     friend_requests: INITIAL_FRIEND_REQUESTS,
@@ -237,14 +264,36 @@ class MockDatabaseEngine {
     return this.state.clothing_items.find(i => i.item_id === itemId);
   }
 
+  public getItemTags(itemId?: number): ItemTag[] {
+    if (!this.state.item_tags) return [];
+    if (itemId) {
+      return this.state.item_tags.filter(it => it.item_id === itemId);
+    }
+    return [...this.state.item_tags];
+  }
+
   public addClothingItem(item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>): ClothingItem {
     const newItem: ClothingItem = {
       ...item,
+      addition_type: item.addition_type || 'Old',
       item_id: Date.now() + Math.floor(Math.random() * 1000),
       wear_count: 0,
       date_added: new Date().toISOString()
     };
     this.state.clothing_items.unshift(newItem);
+
+    // Save item_tags
+    if (newItem.tags && newItem.tags.length > 0) {
+      if (!this.state.item_tags) this.state.item_tags = [];
+      newItem.tags.forEach(tag => {
+        this.state.item_tags.push({
+          item_tag_id: Date.now() + Math.floor(Math.random() * 10000),
+          item_id: newItem.item_id,
+          tag_id: tag.tag_id
+        });
+      });
+    }
+
     this.notify();
     return newItem;
   }
@@ -253,13 +302,31 @@ class MockDatabaseEngine {
     const idx = this.state.clothing_items.findIndex(i => i.item_id === itemId);
     if (idx === -1) return null;
     this.state.clothing_items[idx] = { ...this.state.clothing_items[idx], ...updates };
+
+    // Update item_tags if tags were modified
+    if (updates.tags) {
+      if (!this.state.item_tags) this.state.item_tags = [];
+      this.state.item_tags = this.state.item_tags.filter(it => it.item_id !== itemId);
+      updates.tags.forEach(tag => {
+        this.state.item_tags.push({
+          item_tag_id: Date.now() + Math.floor(Math.random() * 10000),
+          item_id: itemId,
+          tag_id: tag.tag_id
+        });
+      });
+    }
+
     this.notify();
     return this.state.clothing_items[idx];
   }
 
   public deleteClothingItem(itemId: number): boolean {
     this.state.clothing_items = this.state.clothing_items.filter(i => i.item_id !== itemId);
-    // cascade remove from daily logs and borrows
+    // Cascade remove from item_tags (ItemTag.item_id ON DELETE CASCADE)
+    if (this.state.item_tags) {
+      this.state.item_tags = this.state.item_tags.filter(it => it.item_id !== itemId);
+    }
+    // Cascade remove from daily logs and borrows
     this.state.daily_clothing_logs.forEach(log => {
       if (log.items) {
         log.items = log.items.filter(item => item.item_id !== itemId);
@@ -302,7 +369,32 @@ class MockDatabaseEngine {
       .sort((a, b) => b.log_date.localeCompare(a.log_date));
   }
 
+  // Automated locking (scheduled Supabase pg_cron job / edge trigger at 00:00 midnight)
+  public autoFinalizePastLogs(currentDateString: string) {
+    let changed = false;
+    this.state.daily_clothing_logs.forEach(log => {
+      if (log.log_date < currentDateString && !log.is_finalized) {
+        log.is_finalized = true;
+        log.finalized_at = `${log.log_date}T23:59:59.000Z`;
+        if (log.items) {
+          log.items.forEach(logItem => {
+            const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
+            if (closetItem) {
+              closetItem.wear_count = (closetItem.wear_count || 0) + 1;
+            }
+          });
+        }
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.notify();
+    }
+  }
+
   public getTodayLog(dateString: string): DailyClothingLog {
+    this.autoFinalizePastLogs(dateString);
+
     const targetUid = this.currentUserId || 'guest';
     let log = this.state.daily_clothing_logs.find(
       l => l.user_id === targetUid && l.log_date === dateString
@@ -327,6 +419,27 @@ class MockDatabaseEngine {
     if (!log || log.is_finalized) return null;
     log.items = items;
     this.notify();
+    return log;
+  }
+
+  // Delete daily wear log (3.2 Update & Delete Daily Wear Log)
+  public deleteDailyLog(logId: number): boolean {
+    const idx = this.state.daily_clothing_logs.findIndex(l => l.log_id === logId);
+    if (idx === -1) return false;
+    const log = this.state.daily_clothing_logs[idx];
+    if (log.is_finalized) return false; // Edits frozen once locked
+    this.state.daily_clothing_logs.splice(idx, 1);
+    this.notify();
+    return true;
+  }
+
+  // Simulate automated midnight finalization (3.3 Midnight Finalization)
+  public simulateMidnightFinalization(dateString?: string): DailyClothingLog | null {
+    const todayStr = dateString || new Date().toISOString().split('T')[0];
+    const log = this.getTodayLog(todayStr);
+    if (log && !log.is_finalized) {
+      return this.finalizeDailyLog(log.log_id);
+    }
     return log;
   }
 
@@ -495,6 +608,30 @@ class MockDatabaseEngine {
     const b = this.state.borrows.find(item => item.borrow_id === borrowId);
     if (b) {
       b.status = status;
+      const item = this.state.clothing_items.find(i => i.item_id === b.item_id);
+      const lender = this.getCurrentUser();
+      if (!this.state.notifications) this.state.notifications = [];
+      if (status === 'Accepted') {
+        this.state.notifications.unshift({
+          id: `notif-bw-${Date.now()}`,
+          user_id: b.borrower_id,
+          title: `Borrow request approved!`,
+          message: `${lender?.first_name || 'Your friend'} approved your request to borrow "${item?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
+          time: 'Just now',
+          type: 'borrow',
+          read: false
+        });
+      } else if (status === 'Returned') {
+        this.state.notifications.unshift({
+          id: `notif-rt-${Date.now()}`,
+          user_id: b.borrower_id,
+          title: `Item marked as returned`,
+          message: `"${item?.name || 'clothing item'}" has been marked as returned to ${lender?.first_name || 'owner'}. Thank you for mindful borrowing!`,
+          time: 'Just now',
+          type: 'borrow',
+          read: false
+        });
+      }
       this.notify();
     }
   }
