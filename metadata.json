@@ -1,0 +1,10 @@
+{
+  "name": "ReApparel",
+  "description": "Mindful closet utilization and shopping addiction recovery aligned with UN SDG 12.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
