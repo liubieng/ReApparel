@@ -47,7 +47,10 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
 
   const categories = useMemo(() => tags.filter(t => t.tag_type === 'Category'), [tags]);
-  const colors = useMemo(() => tags.filter(t => t.tag_type === 'Color'), [tags]);
+  const colors = useMemo(() => {
+    const itemColors = new Set(items.map(i => (i.color || '').toLowerCase()).filter(Boolean));
+    return tags.filter(t => t.tag_type === 'Color' && itemColors.has(t.tag_name.toLowerCase()));
+  }, [items, tags]);
 
   // Filtered and sorted garments
   const filteredItems = useMemo(() => {

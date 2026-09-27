@@ -34,7 +34,11 @@ export const closetService = {
           name: item.name,
           image_url: item.image_url,
           addition_type: item.addition_type,
-          wear_count: 0
+          wear_count: 0,
+          color: item.color,
+          color_tag: item.color_tag,
+          category: item.category,
+          type_tag: item.type_tag
         }])
         .select()
         .single();

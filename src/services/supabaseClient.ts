@@ -29,16 +29,42 @@ const STORAGE_KEY_SUPABASE_KEY = 'reapparel_supabase_key';
 const STORAGE_KEY_ACTIVE_USER = 'reapparel_active_user_id';
 const STORAGE_KEY_MOCK_DATA = 'reapparel_prod_database_v2';
 
+// Safe storage helper for SSR and headless execution
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key);
+      }
+    } catch {}
+    return null;
+  },
+  setItem: (key: string, val: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, val);
+      }
+    } catch {}
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
+    } catch {}
+  }
+};
+
 // Clean up legacy test database states from previous development sessions
 try {
-  localStorage.removeItem('reapparel_mock_database_v1');
-  localStorage.removeItem('reapparel_mock_database_v2');
-  localStorage.removeItem('reapparel_clean_database_v3');
-  localStorage.removeItem('reapparel_clean_database_v4');
-  localStorage.removeItem('reapparel_clean_database_v5');
-  localStorage.removeItem('reapparel_clean_database_v6');
-  localStorage.removeItem('reapparel_clean_database_v7');
-  localStorage.removeItem('reapparel_prod_database_v1');
+  safeStorage.removeItem('reapparel_mock_database_v1');
+  safeStorage.removeItem('reapparel_mock_database_v2');
+  safeStorage.removeItem('reapparel_clean_database_v3');
+  safeStorage.removeItem('reapparel_clean_database_v4');
+  safeStorage.removeItem('reapparel_clean_database_v5');
+  safeStorage.removeItem('reapparel_clean_database_v6');
+  safeStorage.removeItem('reapparel_clean_database_v7');
+  safeStorage.removeItem('reapparel_prod_database_v1');
 } catch (e) {
   // ignore
 }
@@ -52,8 +78,8 @@ export interface SupabaseConfig {
 export function getStoredSupabaseConfig(): SupabaseConfig {
   const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-  const storedUrl = localStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
-  const storedKey = localStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
+  const storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
+  const storedKey = safeStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
 
   return {
     url: storedUrl,
@@ -64,11 +90,11 @@ export function getStoredSupabaseConfig(): SupabaseConfig {
 
 export function saveStoredSupabaseConfig(url: string, key: string) {
   if (url && key) {
-    localStorage.setItem(STORAGE_KEY_SUPABASE_URL, url);
-    localStorage.setItem(STORAGE_KEY_SUPABASE_KEY, key);
+    safeStorage.setItem(STORAGE_KEY_SUPABASE_URL, url);
+    safeStorage.setItem(STORAGE_KEY_SUPABASE_KEY, key);
   } else {
-    localStorage.removeItem(STORAGE_KEY_SUPABASE_URL);
-    localStorage.removeItem(STORAGE_KEY_SUPABASE_KEY);
+    safeStorage.removeItem(STORAGE_KEY_SUPABASE_URL);
+    safeStorage.removeItem(STORAGE_KEY_SUPABASE_KEY);
   }
 }
 
@@ -110,7 +136,7 @@ interface MockDatabaseState {
 }
 
 function loadInitialMockState(): MockDatabaseState {
-  const stored = localStorage.getItem(STORAGE_KEY_MOCK_DATA);
+  const stored = safeStorage.getItem(STORAGE_KEY_MOCK_DATA);
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
@@ -168,7 +194,7 @@ function loadInitialMockState(): MockDatabaseState {
     notifications: []
   };
 
-  localStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(state));
+  safeStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(state));
   return state;
 }
 
@@ -179,7 +205,7 @@ class MockDatabaseEngine {
 
   constructor() {
     this.state = loadInitialMockState();
-    this.currentUserId = localStorage.getItem(STORAGE_KEY_ACTIVE_USER) || null;
+    this.currentUserId = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER) || null;
   }
 
   public subscribe(listener: () => void): () => void {
@@ -188,7 +214,7 @@ class MockDatabaseEngine {
   }
 
   private notify() {
-    localStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(this.state));
+    safeStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(this.state));
     this.listeners.forEach(fn => fn());
   }
 
@@ -201,9 +227,9 @@ class MockDatabaseEngine {
   public setCurrentUserId(userId: string | null) {
     this.currentUserId = userId;
     if (userId) {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_USER, userId);
+      safeStorage.setItem(STORAGE_KEY_ACTIVE_USER, userId);
     } else {
-      localStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
+      safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
     }
     this.notify();
   }
@@ -715,7 +741,7 @@ class MockDatabaseEngine {
   }
 
   public resetToFactorySeeds() {
-    localStorage.removeItem(STORAGE_KEY_MOCK_DATA);
+    safeStorage.removeItem(STORAGE_KEY_MOCK_DATA);
     this.state = loadInitialMockState();
     this.notify();
   }

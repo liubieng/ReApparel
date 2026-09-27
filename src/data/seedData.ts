@@ -82,8 +82,31 @@ export const INITIAL_USERS: User[] = [
   }
 ];
 
+// Curated Core Color Families specification
+export interface CuratedColorFamily {
+  name: string;
+  hex: string;
+}
+
+export const CURATED_COLOR_FAMILIES: CuratedColorFamily[] = [
+  { name: 'Black', hex: '#18181b' },
+  { name: 'White', hex: '#f8fafc' },
+  { name: 'Gray', hex: '#64748b' },
+  { name: 'Navy', hex: '#1e293b' },
+  { name: 'Blue', hex: '#2563eb' },
+  { name: 'Red', hex: '#dc2626' },
+  { name: 'Burgundy', hex: '#881337' },
+  { name: 'Green', hex: '#16a34a' },
+  { name: 'Olive', hex: '#65a30d' },
+  { name: 'Brown', hex: '#78350f' },
+  { name: 'Beige', hex: '#d6c7a1' },
+  { name: 'Yellow', hex: '#eab308' },
+  { name: 'Pink', hex: '#ec4899' },
+  { name: 'Neutral', hex: '#a8a29e' }
+];
+
 // SVG Silhouette Helper for crisp vector garments
-const createGarmentSilhouette = (color: string, label: string, type: 'top' | 'bottom' | 'outerwear' | 'dress' | 'shoes' = 'top') => {
+export const createGarmentSilhouette = (color: string, label: string, type: 'top' | 'bottom' | 'outerwear' | 'dress' | 'shoes' = 'top') => {
   let path = 'M50 60 L75 40 L100 55 L125 40 L150 60 L135 85 L125 80 L125 160 L75 160 L75 80 L65 85 Z'; // top/shirt
   if (type === 'bottom') {
     path = 'M65 45 L135 45 L130 160 L105 160 L100 90 L95 160 L70 160 Z'; // pants

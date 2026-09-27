@@ -50,6 +50,10 @@ import {
   AppNotification,
   AdditionType
 } from './types/database';
+import { 
+  CURATED_COLOR_FAMILIES, 
+  createGarmentSilhouette 
+} from './data/seedData';
 
 /* ================= CONSTANTS & CONFIG ================= */
 const NAV_ITEMS = [
@@ -215,8 +219,9 @@ export default function App() {
   const [fabOpen, setFabOpen] = useState(false);
   const [modal, setModal] = useState<string | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
-  const [editImages, setEditImages] = useState<string[]>(['#3E6B45']);
-  const [editColor, setEditColor] = useState<string>('#3E6B45');
+  const [editImages, setEditImages] = useState<string[]>([]);
+  const [editColor, setEditColor] = useState<string>('');
+  const [editColorName, setEditColorName] = useState<string>('');
   const [editAdditionType, setEditAdditionType] = useState<AdditionType>('Old');
   const [editCategories, setEditCategories] = useState<string[]>([]);
   const [deleteCascadeModalGarment, setDeleteCascadeModalGarment] = useState<ClothingItem | null>(null);
@@ -317,16 +322,59 @@ export default function App() {
     return () => unsubscribe();
   }, [loadData]);
 
+  // Active Curated Color Families that the user has specifically put in their wardrobe
+  const wardrobeColorFamilies = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; hex: string; count: number }>();
+
+    garments.forEach(g => {
+      const gName = (g.color || '').trim();
+      const gHex = (g.color_tag || (g.image_url?.startsWith('#') ? g.image_url : '')).trim();
+
+      // Find matching curated family by name, hex, or color_tag
+      const matched = CURATED_COLOR_FAMILIES.find(f => 
+        (gName && f.name.toLowerCase() === gName.toLowerCase()) ||
+        (gHex && f.hex.toLowerCase() === gHex.toLowerCase())
+      );
+
+      const key = matched ? matched.name : (gName || gHex);
+      if (!key) return; // Skip if no color defined
+
+      const familyName = matched ? matched.name : (gName || 'Custom');
+      const familyHex = gHex || matched?.hex || '#64748b';
+
+      if (map.has(key)) {
+        map.get(key)!.count += 1;
+      } else {
+        map.set(key, {
+          id: key,
+          name: familyName,
+          hex: familyHex,
+          count: 1
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [garments]);
+
   // Filtered Garments for Closet (2.2 Multi-attribute filtering: Category, Color, Addition Type, Wear Count, Search)
   const filteredGarments = useMemo(() => {
     return garments.filter(g => {
       const type = g.type_tag || g.category || '';
-      const color = g.color_tag || g.image_url || '';
       const addition = g.addition_type || 'Old';
       const wear = g.worn_count ?? g.wear_count ?? 0;
 
       const matchType = closetTypeSel.size === 0 || closetTypeSel.has(type);
-      const matchColor = closetColorSel.size === 0 || closetColorSel.has(color);
+      const matchColor = closetColorSel.size === 0 || Array.from(closetColorSel).some(sel => {
+        const s = sel.toLowerCase();
+        const gName = (g.color || '').toLowerCase();
+        const gTag = (g.color_tag || '').toLowerCase();
+        const matched = CURATED_COLOR_FAMILIES.find(f => f.name.toLowerCase() === s || f.hex.toLowerCase() === s);
+        if (matched) {
+          return gName === matched.name.toLowerCase() || gTag === matched.hex.toLowerCase() || gTag === s;
+        }
+        return gName === s || gTag === s;
+      });
       const matchAddition = closetAdditionTypeSel === 'All' || addition === closetAdditionTypeSel;
 
       let matchWear = true;
@@ -410,14 +458,16 @@ export default function App() {
     setEditFormWarn(null);
     if (id) {
       const g = garments.find(x => x.item_id === id);
-      setEditImages(g?.images && g.images.length ? [...g.images] : [g?.color_tag || g?.image_url || '#3E6B45']);
-      setEditColor(g?.color_tag || '#3E6B45');
+      setEditImages(g?.images && g.images.length ? [...g.images] : [g?.color_tag || g?.image_url || '']);
+      setEditColor(g?.color_tag || '');
+      setEditColorName(g?.color || '');
       setEditAdditionType(g?.addition_type || 'Old');
       const cats = g?.tags ? g.tags.filter(t => t.tag_type === 'Category').map(t => t.tag_name) : [g?.type_tag || g?.category || 'Tops'];
       setEditCategories(cats.length ? cats : ['Tops']);
     } else {
-      setEditImages(['#3E6B45']);
-      setEditColor('#3E6B45');
+      setEditImages([]);
+      setEditColor('');
+      setEditColorName('');
       setEditAdditionType('Old');
       setEditCategories(['Tops']);
     }
@@ -478,7 +528,8 @@ export default function App() {
       toast('Max 3 images per clothing item');
       return;
     }
-    setEditImages([...editImages, PALETTE[editImages.length % PALETTE.length]]);
+    const fallbackColor = editColor || '#3E6B45';
+    setEditImages([...editImages, fallbackColor]);
   };
 
   const removePreviewImage = (index: number) => {
@@ -498,13 +549,35 @@ export default function App() {
     const name = (fd.get('name') as string).trim();
     const type = (fd.get('type_tag') as string) || editCategories[0] || 'Tops';
 
+    if (!name) {
+      setEditFormWarn('Please enter a garment name.');
+      return;
+    }
+
     if (!editId && garments.length >= 100) {
       toast('Closet limit reached (100 clothing items).');
       return;
     }
 
-    const chosenColor = (fd.get('color_tag') as string) || editColor || '#3E6B45';
-    const primaryImg = editImages[0] || chosenColor;
+    // Color is required for the submission of new clothing items
+    const chosenColor = (fd.get('color_tag') as string) || editColor;
+    if (!chosenColor || !chosenColor.trim()) {
+      setEditFormWarn('Color is required for clothing item submission. Please choose a color family.');
+      toast('Color is required for clothing item submission.');
+      return;
+    }
+
+    const resolvedColorName = editColorName.trim() || 
+      CURATED_COLOR_FAMILIES.find(f => f.hex.toLowerCase() === chosenColor.toLowerCase())?.name || 
+      'Custom';
+
+    // Primary image: if no photo uploaded, generate a crisp silhouette with the required chosen color
+    let finalImages = [...editImages];
+    if (finalImages.length === 0 || (finalImages.length === 1 && finalImages[0].startsWith('#'))) {
+      const silhouette = createGarmentSilhouette(chosenColor, name, (editCategories[0]?.toLowerCase() as any) || 'top');
+      finalImages = [silhouette];
+    }
+    const primaryImg = finalImages[0];
 
     // Build tags from available catalog
     const allTags = mockDatabase.getTags();
@@ -514,8 +587,21 @@ export default function App() {
       if (match) assignedTags.push(match);
       else assignedTags.push({ tag_id: Date.now() + Math.floor(Math.random() * 1000), tag_name: catName, tag_type: 'Category' });
     });
-    const colorTagMatch = allTags.find(t => t.tag_type === 'Color' && t.tag_name.toLowerCase() === chosenColor.toLowerCase());
-    if (colorTagMatch) assignedTags.push(colorTagMatch);
+
+    const colorTagMatch = allTags.find(t => t.tag_type === 'Color' && (
+      t.tag_name.toLowerCase() === resolvedColorName.toLowerCase() ||
+      (t.hex_color && t.hex_color.toLowerCase() === chosenColor.toLowerCase())
+    ));
+    if (colorTagMatch) {
+      assignedTags.push(colorTagMatch);
+    } else {
+      assignedTags.push({
+        tag_id: Date.now() + Math.floor(Math.random() * 1000),
+        tag_name: resolvedColorName,
+        tag_type: 'Color',
+        hex_color: chosenColor
+      });
+    }
 
     if (editId) {
       await closetService.updateItem(editId, {
@@ -523,10 +609,11 @@ export default function App() {
         type_tag: type,
         category: editCategories[0] || type,
         length_tag: null,
+        color: resolvedColorName,
         color_tag: chosenColor,
         image_url: primaryImg,
         addition_type: editAdditionType,
-        images: [...editImages],
+        images: finalImages,
         tags: assignedTags
       });
       toast(`Clothing item updated (${editAdditionType} purchase)`);
@@ -541,10 +628,11 @@ export default function App() {
         type_tag: type,
         category: editCategories[0] || type,
         length_tag: null,
+        color: resolvedColorName,
         color_tag: chosenColor,
         image_url: primaryImg,
         addition_type: editAdditionType,
-        images: [...editImages],
+        images: finalImages,
         tags: assignedTags
       });
       toast(`Added ${editAdditionType === 'New' ? 'new purchase' : 'pre-existing'} garment to closet`);
@@ -552,6 +640,7 @@ export default function App() {
 
     setModal(null);
     setEditId(null);
+    setEditFormWarn(null);
     await loadData();
   };
 
@@ -1278,52 +1367,80 @@ export default function App() {
               </div>
             </details>
 
-            {/* Curated Color Families filter accordion */}
-            <details className="acc">
-              <summary>Curated Color Families ({closetColorSel.size > 0 ? `${closetColorSel.size} selected` : 'All'})</summary>
-              <div style={{ paddingTop: 6, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                {PALETTE.map(c => {
-                  const on = closetColorSel.has(c);
-                  return (
-                    <span
-                      key={c}
-                      className={`pill ${on ? 'on' : ''}`}
-                      style={{
-                        cursor: 'pointer',
-                        background: c,
-                        width: 24,
-                        height: 24,
-                        borderRadius: '50%',
-                        padding: 0,
-                        border: on ? '2px solid var(--text)' : '1px solid var(--border)'
-                      }}
-                      title={c}
-                      onClick={() => {
-                        const s = new Set(closetColorSel);
-                        s.has(c) ? s.delete(c) : s.add(c);
-                        setClosetColorSel(s);
-                      }}
-                    />
-                  );
-                })}
-                <input 
-                  type="color" 
-                  title="Custom color tag" 
-                  style={{ width: 32, height: 26, verticalAlign: 'middle', padding: 0, cursor: 'pointer' }}
-                  onChange={(e) => {
-                    const s = new Set(closetColorSel);
-                    s.add(e.target.value);
-                    setClosetColorSel(s);
-                  }}
-                />
-                {closetColorSel.size > 0 && (
-                  <button 
-                    className="btn btn-g" 
-                    style={{ padding: '2px 8px', fontSize: 11 }}
-                    onClick={() => setClosetColorSel(new Set())}
-                  >
-                    Clear colors
-                  </button>
+            {/* Curated Color Families filter accordion - strictly derived from user's active wardrobe */}
+            <details className="acc" open>
+              <summary style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                <span>Curated Color Families ({closetColorSel.size > 0 ? `${closetColorSel.size} selected` : 'All'})</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {wardrobeColorFamilies.length} in wardrobe
+                </span>
+              </summary>
+              <div style={{ paddingTop: 8 }}>
+                {wardrobeColorFamilies.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 0' }}>
+                    No colors in your wardrobe yet. Add clothing items with required color tags to curate your palette.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    {wardrobeColorFamilies.map(cf => {
+                      const on = closetColorSel.has(cf.id) || closetColorSel.has(cf.name) || closetColorSel.has(cf.hex);
+                      return (
+                        <button
+                          key={cf.id}
+                          type="button"
+                          className={`pill ${on ? 'on' : ''}`}
+                          style={{
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 10px',
+                            fontSize: 12,
+                            borderRadius: 16,
+                            background: on ? 'var(--primary)' : 'var(--surface-2)',
+                            color: on ? '#ffffff' : 'var(--text)',
+                            border: on ? '2px solid var(--primary)' : '1px solid var(--border)'
+                          }}
+                          onClick={() => {
+                            const s = new Set(closetColorSel);
+                            if (s.has(cf.id) || s.has(cf.name) || s.has(cf.hex)) {
+                              s.delete(cf.id);
+                              s.delete(cf.name);
+                              s.delete(cf.hex);
+                            } else {
+                              s.add(cf.name);
+                            }
+                            setClosetColorSel(s);
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 13,
+                              height: 13,
+                              borderRadius: '50%',
+                              backgroundColor: cf.hex,
+                              border: '1px solid rgba(0,0,0,0.2)',
+                              display: 'inline-block',
+                              flexShrink: 0
+                            }}
+                          />
+                          <span>{cf.name}</span>
+                          <span style={{ fontSize: 10, opacity: 0.8 }}>({cf.count})</span>
+                          {on && <span style={{ fontSize: 11 }}>✓</span>}
+                        </button>
+                      );
+                    })}
+                    {closetColorSel.size > 0 && (
+                      <button 
+                        type="button"
+                        className="btn btn-g" 
+                        style={{ padding: '3px 9px', fontSize: 11 }}
+                        onClick={() => setClosetColorSel(new Set())}
+                      >
+                        Clear colors
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </details>
@@ -2955,58 +3072,90 @@ export default function App() {
                 <input type="hidden" name="type_tag" value={editCategories[0] || 'Tops'} />
               </div>
 
-              {/* 2.1.2 Primary curated color family from the TAG catalog */}
+              {/* 2.1.2 Primary curated color family from the TAG catalog - Required */}
               <div className="field">
-                <label>Primary Curated Color Family</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                  {[
-                    { hex: '#000000', name: 'Black' },
-                    { hex: '#ffffff', name: 'White' },
-                    { hex: '#6b7280', name: 'Gray' },
-                    { hex: '#1e3a8a', name: 'Navy' },
-                    { hex: '#2563eb', name: 'Blue' },
-                    { hex: '#166534', name: 'Green' },
-                    { hex: '#65a30d', name: 'Olive' },
-                    { hex: '#dc2626', name: 'Red' },
-                    { hex: '#881337', name: 'Burgundy' },
-                    { hex: '#d97706', name: 'Amber' },
-                    { hex: '#b45309', name: 'Brown' },
-                    { hex: '#d4b996', name: 'Neutral' },
-                    { hex: '#a855f7', name: 'Purple' },
-                    { hex: '#ec4899', name: 'Pink' }
-                  ].map(cf => (
-                    <button
-                      key={cf.hex}
-                      type="button"
-                      onClick={() => setEditColor(cf.hex)}
-                      style={{
-                        background: cf.hex,
-                        width: 28,
-                        height: 28,
-                        borderRadius: '50%',
-                        border: editColor === cf.hex ? '3px solid var(--text)' : '1px solid var(--border)',
-                        cursor: 'pointer',
-                        padding: 0,
-                        boxShadow: editColor === cf.hex ? '0 0 0 2px var(--primary)' : 'none',
-                        transition: 'transform 0.1s'
-                      }}
-                      title={cf.name}
-                    />
-                  ))}
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span>
+                    Primary Curated Color Family <strong style={{ color: '#dc2626' }}>* (Required)</strong>
+                  </span>
+                  {editColorName ? (
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: editColor, display: 'inline-block' }} />
+                      {editColorName}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Please pick a color</span>
+                  )}
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 4 }}>
+                  {CURATED_COLOR_FAMILIES.map(cf => {
+                    const isSelected = editColor.toLowerCase() === cf.hex.toLowerCase() || editColorName.toLowerCase() === cf.name.toLowerCase();
+                    return (
+                      <button
+                        key={cf.name}
+                        type="button"
+                        onClick={() => {
+                          setEditColor(cf.hex);
+                          setEditColorName(cf.name);
+                          if (editImages.length === 0 || (editImages.length === 1 && editImages[0].startsWith('#'))) {
+                            setEditImages([cf.hex]);
+                          }
+                          setEditFormWarn(null);
+                        }}
+                        style={{
+                          background: cf.hex,
+                          width: 30,
+                          height: 30,
+                          borderRadius: '50%',
+                          border: isSelected ? '3px solid var(--text)' : '1px solid var(--border)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          boxShadow: isSelected ? '0 0 0 2px var(--primary)' : 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'transform 0.1s'
+                        }}
+                        title={`${cf.name} (${cf.hex})`}
+                      >
+                        {isSelected && (
+                          <span style={{
+                            color: ['White', 'Yellow', 'Beige'].includes(cf.name) ? '#000000' : '#ffffff',
+                            fontSize: 14,
+                            fontWeight: 900
+                          }}>
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
                     <input 
                       type="color" 
                       name="color_tag"
-                      value={editColor} 
-                      onChange={(e) => setEditColor(e.target.value)}
+                      value={editColor || '#3E6B45'} 
+                      onChange={(e) => {
+                        setEditColor(e.target.value);
+                        setEditColorName('Custom');
+                        if (editImages.length === 0 || (editImages.length === 1 && editImages[0].startsWith('#'))) {
+                          setEditImages([e.target.value]);
+                        }
+                        setEditFormWarn(null);
+                      }}
                       style={{ width: 34, height: 28, padding: 0, cursor: 'pointer', verticalAlign: 'middle', borderRadius: 4 }}
                       title="Custom color picker"
                     />
                     <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                      {editColor}
+                      {editColor || 'None selected'}
                     </span>
                   </div>
                 </div>
+                {!editColor && (
+                  <div style={{ fontSize: 11.5, color: '#dc2626', marginTop: 5 }}>
+                    ⚠️ Color selection is required to submit clothing items.
+                  </div>
+                )}
               </div>
 
               {editFormWarn && (

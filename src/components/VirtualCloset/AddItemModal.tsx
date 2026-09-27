@@ -65,7 +65,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tops');
-  const [selectedColor, setSelectedColor] = useState('Black');
+  const [selectedColor, setSelectedColor] = useState('');
   const [additionType, setAdditionType] = useState<AdditionType>('Old');
   
   // Image states
@@ -181,6 +181,11 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 
     if (!name.trim()) {
       alert('Please provide a name for this garment');
+      return;
+    }
+
+    if (!selectedColor) {
+      alert('Color is required for the submission of new clothing items. Please select a core color family.');
       return;
     }
 
