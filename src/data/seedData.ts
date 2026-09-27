@@ -105,6 +105,9 @@ export const CURATED_COLOR_FAMILIES: CuratedColorFamily[] = [
   { name: 'Neutral', hex: '#a8a29e' }
 ];
 
+export const CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear', 'Accessories'] as const;
+export const GARMENT_TYPES = ['Shirt', 'Pants', 'Skirt', 'Shorts', 'Dress', 'One-Piece', 'Shoes', 'Outerwear'] as const;
+
 // SVG Silhouette Helper for crisp vector garments
 export const createGarmentSilhouette = (color: string, label: string, type: 'top' | 'bottom' | 'outerwear' | 'dress' | 'shoes' = 'top') => {
   let path = 'M50 60 L75 40 L100 55 L125 40 L150 60 L135 85 L125 80 L125 160 L75 160 L75 80 L65 85 Z'; // top/shirt

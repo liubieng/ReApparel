@@ -52,7 +52,9 @@ import {
 } from './types/database';
 import { 
   CURATED_COLOR_FAMILIES, 
-  createGarmentSilhouette 
+  createGarmentSilhouette,
+  CATEGORIES,
+  GARMENT_TYPES
 } from './data/seedData';
 
 /* ================= CONSTANTS & CONFIG ================= */
@@ -223,7 +225,8 @@ export default function App() {
   const [editColor, setEditColor] = useState<string>('');
   const [editColorName, setEditColorName] = useState<string>('');
   const [editAdditionType, setEditAdditionType] = useState<AdditionType>('Old');
-  const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [editCategory, setEditCategory] = useState<string>('');
+  const [editType, setEditType] = useState<string>('');
   const [deleteCascadeModalGarment, setDeleteCascadeModalGarment] = useState<ClothingItem | null>(null);
   const [editFormWarn, setEditFormWarn] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -357,6 +360,36 @@ export default function App() {
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [garments]);
 
+  // Active Categories present specifically in user's wardrobe
+  const wardrobeCategories = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }>();
+    garments.forEach(g => {
+      const cat = (g.category || '').trim();
+      if (!cat) return;
+      if (map.has(cat)) {
+        map.get(cat)!.count += 1;
+      } else {
+        map.set(cat, { name: cat, count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [garments]);
+
+  // Active Garment Types present specifically in user's wardrobe
+  const wardrobeGarmentTypes = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }>();
+    garments.forEach(g => {
+      const type = (g.type_tag || '').trim();
+      if (!type) return;
+      if (map.has(type)) {
+        map.get(type)!.count += 1;
+      } else {
+        map.set(type, { name: type, count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [garments]);
+
   // Filtered Garments for Closet (2.2 Multi-attribute filtering: Category, Color, Addition Type, Wear Count, Search)
   const filteredGarments = useMemo(() => {
     return garments.filter(g => {
@@ -364,7 +397,12 @@ export default function App() {
       const addition = g.addition_type || 'Old';
       const wear = g.worn_count ?? g.wear_count ?? 0;
 
-      const matchType = closetTypeSel.size === 0 || closetTypeSel.has(type);
+      const matchType = closetTypeSel.size === 0 || Array.from(closetTypeSel).some(sel => {
+        const s = sel.toLowerCase();
+        const gCat = (g.category || '').toLowerCase();
+        const gType = (g.type_tag || '').toLowerCase();
+        return gCat === s || gType === s;
+      });
       const matchColor = closetColorSel.size === 0 || Array.from(closetColorSel).some(sel => {
         const s = sel.toLowerCase();
         const gName = (g.color || '').toLowerCase();
@@ -462,14 +500,15 @@ export default function App() {
       setEditColor(g?.color_tag || '');
       setEditColorName(g?.color || '');
       setEditAdditionType(g?.addition_type || 'Old');
-      const cats = g?.tags ? g.tags.filter(t => t.tag_type === 'Category').map(t => t.tag_name) : [g?.type_tag || g?.category || 'Tops'];
-      setEditCategories(cats.length ? cats : ['Tops']);
+      setEditCategory(g?.category || 'Tops');
+      setEditType(g?.type_tag || 'Shirt');
     } else {
       setEditImages([]);
       setEditColor('');
       setEditColorName('');
       setEditAdditionType('Old');
-      setEditCategories(['Tops']);
+      setEditCategory('');
+      setEditType('');
     }
     setModal('garmentForm');
   };
@@ -547,15 +586,29 @@ export default function App() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const name = (fd.get('name') as string).trim();
-    const type = (fd.get('type_tag') as string) || editCategories[0] || 'Tops';
 
     if (!name) {
       setEditFormWarn('Please enter a garment name.');
+      toast('Garment name is required.');
       return;
     }
 
     if (!editId && garments.length >= 100) {
       toast('Closet limit reached (100 clothing items).');
+      return;
+    }
+
+    // Category is required: exactly one type of category
+    if (!editCategory || !editCategory.trim()) {
+      setEditFormWarn('Category is required. Please select one category (e.g. Tops, Bottoms).');
+      toast('Category is required for clothing item submission.');
+      return;
+    }
+
+    // Garment type is required: exactly one type of garment
+    if (!editType || !editType.trim()) {
+      setEditFormWarn('Garment type is required. Please select one garment type (e.g. Shirt, Pants).');
+      toast('Garment type is required for clothing item submission.');
       return;
     }
 
@@ -571,10 +624,11 @@ export default function App() {
       CURATED_COLOR_FAMILIES.find(f => f.hex.toLowerCase() === chosenColor.toLowerCase())?.name || 
       'Custom';
 
-    // Primary image: if no photo uploaded, generate a crisp silhouette with the required chosen color
+    // Primary image: if no photo uploaded, generate a crisp silhouette with the required chosen color and category
+    const silhouetteType = editCategory === 'Bottoms' ? 'bottom' : editCategory === 'Outerwear' ? 'outerwear' : editCategory === 'Dresses' ? 'dress' : editCategory === 'Shoes' ? 'shoes' : 'top';
     let finalImages = [...editImages];
     if (finalImages.length === 0 || (finalImages.length === 1 && finalImages[0].startsWith('#'))) {
-      const silhouette = createGarmentSilhouette(chosenColor, name, (editCategories[0]?.toLowerCase() as any) || 'top');
+      const silhouette = createGarmentSilhouette(chosenColor, name, silhouetteType);
       finalImages = [silhouette];
     }
     const primaryImg = finalImages[0];
@@ -582,12 +636,19 @@ export default function App() {
     // Build tags from available catalog
     const allTags = mockDatabase.getTags();
     const assignedTags: Tag[] = [];
-    editCategories.forEach(catName => {
-      const match = allTags.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === catName.toLowerCase());
-      if (match) assignedTags.push(match);
-      else assignedTags.push({ tag_id: Date.now() + Math.floor(Math.random() * 1000), tag_name: catName, tag_type: 'Category' });
-    });
+    
+    // Exactly one Category tag
+    const catMatch = allTags.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === editCategory.toLowerCase());
+    if (catMatch) assignedTags.push(catMatch);
+    else assignedTags.push({ tag_id: Date.now() + Math.floor(Math.random() * 1000), tag_name: editCategory, tag_type: 'Category' });
 
+    // Garment Type tag
+    const typeMatch = allTags.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === editType.toLowerCase());
+    if (typeMatch && !assignedTags.some(t => t.tag_id === typeMatch.tag_id)) {
+      assignedTags.push(typeMatch);
+    }
+
+    // Color tag
     const colorTagMatch = allTags.find(t => t.tag_type === 'Color' && (
       t.tag_name.toLowerCase() === resolvedColorName.toLowerCase() ||
       (t.hex_color && t.hex_color.toLowerCase() === chosenColor.toLowerCase())
@@ -596,7 +657,7 @@ export default function App() {
       assignedTags.push(colorTagMatch);
     } else {
       assignedTags.push({
-        tag_id: Date.now() + Math.floor(Math.random() * 1000),
+        tag_id: Date.now() + Math.floor(Math.random() * 1000) + 10,
         tag_name: resolvedColorName,
         tag_type: 'Color',
         hex_color: chosenColor
@@ -606,8 +667,8 @@ export default function App() {
     if (editId) {
       await closetService.updateItem(editId, {
         name,
-        type_tag: type,
-        category: editCategories[0] || type,
+        type_tag: editType,
+        category: editCategory,
         length_tag: null,
         color: resolvedColorName,
         color_tag: chosenColor,
@@ -625,8 +686,8 @@ export default function App() {
       await closetService.addItem({
         user_id: currentUser.user_id,
         name,
-        type_tag: type,
-        category: editCategories[0] || type,
+        type_tag: editType,
+        category: editCategory,
         length_tag: null,
         color: resolvedColorName,
         color_tag: chosenColor,
@@ -1334,35 +1395,116 @@ export default function App() {
               </div>
             </div>
 
-            {/* Type / Category filter accordion */}
-            <details className="acc">
-              <summary>Categories &amp; Garment Types ({closetTypeSel.size > 0 ? `${closetTypeSel.size} selected` : 'All'})</summary>
-              <div style={{ paddingTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {TYPES.map(t => {
-                  const on = closetTypeSel.has(t);
-                  return (
-                    <span 
-                      key={t}
-                      className={`pill ${on ? 'on' : ''}`}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => {
-                        const s = new Set(closetTypeSel);
-                        s.has(t) ? s.delete(t) : s.add(t);
-                        setClosetTypeSel(s);
-                      }}
-                    >
-                      {t}
-                    </span>
-                  );
-                })}
-                {closetTypeSel.size > 0 && (
-                  <button 
-                    className="btn btn-g" 
-                    style={{ padding: '2px 8px', fontSize: 11 }}
-                    onClick={() => setClosetTypeSel(new Set())}
-                  >
-                    Reset Categories
-                  </button>
+            {/* Categories & Garment Types filter accordion - strictly derived from user's active wardrobe */}
+            <details className="acc" open>
+              <summary style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                <span>Categories &amp; Garment Types ({closetTypeSel.size > 0 ? `${closetTypeSel.size} selected` : 'All'})</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {wardrobeCategories.length} categories, {wardrobeGarmentTypes.length} types in wardrobe
+                </span>
+              </summary>
+              <div style={{ paddingTop: 8 }}>
+                {wardrobeCategories.length === 0 && wardrobeGarmentTypes.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '6px 0' }}>
+                    No categories or garment types in your wardrobe yet. Add clothing items to filter by category.
+                  </div>
+                ) : (
+                  <div>
+                    {wardrobeCategories.length > 0 && (
+                      <div style={{ marginBottom: wardrobeGarmentTypes.length > 0 ? 8 : 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                          Wardrobe Categories
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                          {wardrobeCategories.map(cat => {
+                            const on = closetTypeSel.has(cat.name);
+                            return (
+                              <button
+                                key={`cat-${cat.name}`}
+                                type="button"
+                                className={`pill ${on ? 'on' : ''}`}
+                                style={{
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '4px 10px',
+                                  fontSize: 12,
+                                  borderRadius: 16,
+                                  background: on ? 'var(--primary)' : 'var(--surface-2)',
+                                  color: on ? '#ffffff' : 'var(--text)',
+                                  border: on ? '2px solid var(--primary)' : '1px solid var(--border)'
+                                }}
+                                onClick={() => {
+                                  const s = new Set(closetTypeSel);
+                                  s.has(cat.name) ? s.delete(cat.name) : s.add(cat.name);
+                                  setClosetTypeSel(s);
+                                }}
+                              >
+                                <span>{cat.name}</span>
+                                <span style={{ fontSize: 10, opacity: 0.8 }}>({cat.count})</span>
+                                {on && <span style={{ fontSize: 11 }}>✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {wardrobeGarmentTypes.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, marginTop: 6 }}>
+                          Wardrobe Garment Types
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                          {wardrobeGarmentTypes.map(gt => {
+                            const on = closetTypeSel.has(gt.name);
+                            return (
+                              <button
+                                key={`type-${gt.name}`}
+                                type="button"
+                                className={`pill ${on ? 'on' : ''}`}
+                                style={{
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '4px 10px',
+                                  fontSize: 12,
+                                  borderRadius: 16,
+                                  background: on ? 'var(--primary)' : 'var(--surface-2)',
+                                  color: on ? '#ffffff' : 'var(--text)',
+                                  border: on ? '2px solid var(--primary)' : '1px solid var(--border)'
+                                }}
+                                onClick={() => {
+                                  const s = new Set(closetTypeSel);
+                                  s.has(gt.name) ? s.delete(gt.name) : s.add(gt.name);
+                                  setClosetTypeSel(s);
+                                }}
+                              >
+                                <span>{gt.name}</span>
+                                <span style={{ fontSize: 10, opacity: 0.8 }}>({gt.count})</span>
+                                {on && <span style={{ fontSize: 11 }}>✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {closetTypeSel.size > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <button 
+                          type="button"
+                          className="btn btn-g" 
+                          style={{ padding: '3px 9px', fontSize: 11 }}
+                          onClick={() => setClosetTypeSel(new Set())}
+                        >
+                          Clear category filters
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </details>
@@ -3042,34 +3184,104 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 2.1.2 Tagging workflow: Assign one or more categories */}
+              {/* Category: Strictly one type of category - Required */}
               <div className="field">
-                <label>Categories (Assign one or more from TAG catalog)</label>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span>
+                    Category <strong style={{ color: '#dc2626' }}>* (Required - 1 only)</strong>
+                  </span>
+                  {editCategory ? (
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      ✓ {editCategory}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Please pick a category</span>
+                  )}
+                </label>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                  {['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear', 'Accessories'].map(cat => {
-                    const isSel = editCategories.includes(cat);
+                  {CATEGORIES.map(cat => {
+                    const isSel = editCategory === cat;
                     return (
                       <button
                         key={cat}
                         type="button"
                         className={`pill ${isSel ? 'on' : ''}`}
-                        style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 12, border: 'none' }}
+                        style={{
+                          cursor: 'pointer',
+                          padding: '5px 12px',
+                          fontSize: 12,
+                          borderRadius: 16,
+                          background: isSel ? 'var(--primary)' : 'var(--surface-2)',
+                          color: isSel ? '#ffffff' : 'var(--text)',
+                          border: isSel ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          fontWeight: isSel ? 600 : 400
+                        }}
                         onClick={() => {
-                          if (isSel) {
-                            if (editCategories.length > 1) {
-                              setEditCategories(editCategories.filter(c => c !== cat));
-                            }
-                          } else {
-                            setEditCategories([...editCategories, cat]);
-                          }
+                          setEditCategory(cat);
+                          setEditFormWarn(null);
                         }}
                       >
-                        {cat} {isSel ? '✓' : '+'}
+                        {cat} {isSel ? '✓' : ''}
                       </button>
                     );
                   })}
                 </div>
-                <input type="hidden" name="type_tag" value={editCategories[0] || 'Tops'} />
+                {!editCategory && (
+                  <div style={{ fontSize: 11.5, color: '#dc2626', marginTop: 4 }}>
+                    ⚠️ Category selection is required (mutually exclusive).
+                  </div>
+                )}
+                <input type="hidden" name="category" value={editCategory} />
+              </div>
+
+              {/* Garment Type: Strictly one type of garment - Required */}
+              <div className="field">
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span>
+                    Garment Type <strong style={{ color: '#dc2626' }}>* (Required - 1 only)</strong>
+                  </span>
+                  {editType ? (
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      ✓ {editType}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Please pick a garment type</span>
+                  )}
+                </label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {GARMENT_TYPES.map(t => {
+                    const isSel = editType === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        className={`pill ${isSel ? 'on' : ''}`}
+                        style={{
+                          cursor: 'pointer',
+                          padding: '5px 12px',
+                          fontSize: 12,
+                          borderRadius: 16,
+                          background: isSel ? 'var(--primary)' : 'var(--surface-2)',
+                          color: isSel ? '#ffffff' : 'var(--text)',
+                          border: isSel ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          fontWeight: isSel ? 600 : 400
+                        }}
+                        onClick={() => {
+                          setEditType(t);
+                          setEditFormWarn(null);
+                        }}
+                      >
+                        {t} {isSel ? '✓' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!editType && (
+                  <div style={{ fontSize: 11.5, color: '#dc2626', marginTop: 4 }}>
+                    ⚠️ Garment type is required (mutually exclusive).
+                  </div>
+                )}
+                <input type="hidden" name="type_tag" value={editType} />
               </div>
 
               {/* 2.1.2 Primary curated color family from the TAG catalog - Required */}
