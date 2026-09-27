@@ -330,11 +330,3 @@ INSERT INTO clothing_item (item_id, user_id, name, image_url, addition_type, wea
     (2003, 'a0000000-0000-0000-0000-000000000002', 'Burgundy Silk Pleated Skirt', '#8B5E6B', 'New', 1)
 ON CONFLICT (item_id) DO NOTHING;
 
-INSERT INTO donation_opportunity (donation_id, name, address, latitude, longitude, hours, accepted_types) VALUES
-    (1, 'Bagumbayan Community Clothing Drop-off', 'Barangay Hall, Bagumbayan, Quezon City, NCR', 14.63050000, 121.05050000, 'Mon-Sun 8:00 AM - 6:00 PM', 'Shirts, Pants, Children Clothing, Everyday Wear'),
-    (2, 'Sustainable Manila Porch Collection Box', 'Calle Real, Bagumbayan, Quezon City, NCR', 14.62620000, 121.04780000, 'Flexible 24/7 bin access', 'Jackets, Shoes, Warm Clothing'),
-    (3, 'Caritas San Isidro Textile Bank', 'San Isidro Parish Hall, Antipolo, Region IV-A', 14.58800000, 121.17600000, 'Tue-Sat 9:00 AM - 4:00 PM', 'Formalwear, School Uniforms, Shoes'),
-    (4, 'Dumaguete Circular Hub Drop-off', 'Perdices St, Dumaguete City, Negros Oriental', 9.30680000, 123.30850000, 'Mon-Fri 10:00 AM - 5:00 PM', 'All Clean Clothing, Linens, Fabrics'),
-    (5, 'Cubao Green Recycle Station', 'Aurora Blvd, Cubao, Quezon City, NCR', 14.62000000, 121.05350000, 'Daily 7:00 AM - 8:00 PM', 'Shoes, Sneakers, Sports Gear')
-ON CONFLICT (donation_id) DO NOTHING;
-

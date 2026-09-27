@@ -111,32 +111,45 @@ If none active, return: []`;
               queryLocation,
               drives: formatted
             });
+          } else {
+            return res.json({
+              success: true,
+              source: "no_active_drives_found",
+              queryLocation,
+              drives: []
+            });
           }
         } catch (apiErr) {
           const isQuotaOrRateLimit = apiErr?.status === 429 || apiErr?.code === 429 || apiErr?.message?.includes("429") || apiErr?.message?.includes("quota") || apiErr?.message?.includes("RESOURCE_EXHAUSTED");
           if (isQuotaOrRateLimit) {
             quotaExhaustedUntil = Date.now() + 5 * 60 * 1e3;
-            console.warn("Gemini API search grounding quota exceeded (429 RESOURCE_EXHAUSTED). Gracefully serving verified location catalog.");
+            console.warn("Gemini API search grounding quota exceeded (429 RESOURCE_EXHAUSTED).");
           } else {
-            console.warn("Gemini search grounding notice, serving verified catalog:", apiErr?.message || apiErr);
+            console.warn("Gemini search grounding notice:", apiErr?.message || apiErr);
           }
+          return res.json({
+            success: true,
+            source: "search_unavailable",
+            queryLocation,
+            drives: [],
+            notice: "Live web scraping is currently unavailable. No active donation drives could be verified."
+          });
         }
       }
-      const matchedDrives = getLocationMatchedDrives({ country, province, city, location, lat, lng });
       return res.json({
         success: true,
-        source: matchedDrives.length > 0 ? "verified_location_feed" : "empty_query",
+        source: "no_active_drives",
         queryLocation,
-        drives: matchedDrives
+        drives: [],
+        notice: apiKey ? "Search quota exhausted" : "Live web scraper requires GEMINI_API_KEY. No seeded or unverified drives are displayed."
       });
     } catch (err) {
-      console.warn("Scraper endpoint error, falling back to location catalog:", err?.message || err);
-      const matchedDrives = getLocationMatchedDrives({ country, province, city, location, lat, lng });
+      console.warn("Scraper endpoint error:", err?.message || err);
       return res.json({
         success: true,
-        source: "fallback_location_feed",
+        source: "error",
         queryLocation,
-        drives: matchedDrives
+        drives: []
       });
     }
   });
@@ -158,131 +171,5 @@ If none active, return: []`;
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`ReApparel full-stack server running on port ${PORT}`);
   });
-}
-function getLocationMatchedDrives(params) {
-  const cStr = (params.country || "").toLowerCase();
-  const pStr = (params.province || "").toLowerCase();
-  const cityStr = (params.city || "").toLowerCase();
-  const locStr = (params.location || "").toLowerCase();
-  if (cityStr.includes("dumaguete") || pStr.includes("negros") || locStr.includes("dumaguete")) {
-    return [];
-  }
-  if (cityStr.includes("cebu") || pStr.includes("cebu") || locStr.includes("cebu")) {
-    return [];
-  }
-  if (cityStr.includes("manila") || pStr.includes("manila") || locStr.includes("manila") || cityStr.includes("makati") || cityStr.includes("quezon")) {
-    return [
-      {
-        donation_id: Date.now() + 401,
-        name: "Caritas Manila Segunda Mana Circular Garment Drive",
-        address: "2002 Jesus St, Pandacan, Manila, Metro Manila, Philippines",
-        latitude: 14.5888,
-        longitude: 121.0068,
-        hours: "Mon-Sun 8:00 AM - 5:00 PM",
-        accepted_types: "All wearable garments, denim, shoes, fashion accessories, linens",
-        is_live_drive: true,
-        organizer: "Caritas Manila Inc.",
-        source_url: "https://caritasmanila.org.ph/",
-        official_page_url: "https://www.facebook.com/SegundaManaCaritasManila",
-        facebook_search_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("Segunda Mana Caritas Manila donation drive clothes"),
-        post_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("Segunda Mana Caritas Manila donation drive clothes"),
-        post_platform: "facebook",
-        post_title: "Segunda Mana Caritas Manila: Clothing & Textile Drive",
-        post_date: "Active Depot (Last 30 Days)",
-        days_ago: 2,
-        active_window: "Active in the Last 30 Days",
-        drive_dates: "Active: Last 30 Days",
-        is_last_30_days: true,
-        scraped_at: (/* @__PURE__ */ new Date()).toISOString(),
-        country: "Philippines",
-        province: "Metro Manila",
-        city: "Manila"
-      }
-    ];
-  }
-  const isSanFrancisco = cityStr.includes("san francisco") || locStr.includes("san francisco") || pStr.includes("california") && (cityStr === "" || cityStr.includes("francisco"));
-  if (isSanFrancisco) {
-    return [
-      {
-        donation_id: Date.now() + 101,
-        name: "St. Anthony Foundation Community Clothing Program",
-        address: "121 Golden Gate Ave, San Francisco, CA 94102",
-        latitude: 37.7824,
-        longitude: -122.4132,
-        hours: "Mon-Sun 8:30 AM - 4:00 PM",
-        accepted_types: "Winter jackets, coats, sweaters, clean denim, blankets, bedding",
-        is_live_drive: true,
-        organizer: "St. Anthony Foundation",
-        source_url: "https://www.stanthonysf.org/",
-        official_page_url: "https://www.facebook.com/stanthonysf",
-        facebook_search_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("St Anthony Foundation San Francisco clothing donation"),
-        post_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("St Anthony Foundation San Francisco clothing donation"),
-        post_platform: "facebook",
-        post_title: "St. Anthony SF: Community Clothing Program",
-        post_date: "Active Center (Last 30 Days)",
-        days_ago: 4,
-        active_window: "Active in the Last 30 Days",
-        drive_dates: "Active: Last 30 Days",
-        is_last_30_days: true,
-        scraped_at: (/* @__PURE__ */ new Date()).toISOString(),
-        country: "United States",
-        province: "California",
-        city: "San Francisco"
-      },
-      {
-        donation_id: Date.now() + 102,
-        name: "Goodwill Community Circular Garment Depot",
-        address: "1214 Mission Street, San Francisco, CA 94103",
-        latitude: 37.7772,
-        longitude: -122.414,
-        hours: "Mon-Sat 9:00 AM - 7:00 PM, Sun 10:00 AM - 6:00 PM",
-        accepted_types: "All clothing, shoes, fashion accessories, fabrics in wearable condition",
-        is_live_drive: true,
-        organizer: "Goodwill of San Francisco, San Mateo & Marin",
-        source_url: "https://sfgoodwill.org/",
-        official_page_url: "https://www.facebook.com/SFGoodwill",
-        facebook_search_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("SF Goodwill clothing donation drive"),
-        post_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("SF Goodwill clothing donation drive"),
-        post_platform: "facebook",
-        post_title: "SF Goodwill: Community Wardrobe & Textile Depot",
-        post_date: "Active Collection Center (Last 30 Days)",
-        days_ago: 3,
-        active_window: "Active in the Last 30 Days",
-        drive_dates: "Active: Last 30 Days",
-        is_last_30_days: true,
-        scraped_at: (/* @__PURE__ */ new Date()).toISOString(),
-        country: "United States",
-        province: "California",
-        city: "San Francisco"
-      },
-      {
-        donation_id: Date.now() + 103,
-        name: "The Salvation Army Family Store & Donation Center",
-        address: "1500 Valencia Street, San Francisco, CA 94110",
-        latitude: 37.7504,
-        longitude: -122.4208,
-        hours: "Mon-Sat 10:00 AM - 6:00 PM",
-        accepted_types: "Men, women, and children clothing, winter coats, workwear, shoes",
-        is_live_drive: true,
-        organizer: "The Salvation Army Golden State Division",
-        source_url: "https://satruck.org/",
-        official_page_url: "https://www.facebook.com/SalvationArmyUSA",
-        facebook_search_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("Salvation Army San Francisco clothing donation drive"),
-        post_url: "https://www.facebook.com/search/posts?q=" + encodeURIComponent("Salvation Army San Francisco clothing donation drive"),
-        post_platform: "facebook",
-        post_title: "Salvation Army SF: Community Wardrobe Drop-off",
-        post_date: "Active Donation Center (Last 30 Days)",
-        days_ago: 4,
-        active_window: "Active in the Last 30 Days",
-        drive_dates: "Active: Last 30 Days",
-        is_last_30_days: true,
-        scraped_at: (/* @__PURE__ */ new Date()).toISOString(),
-        country: "United States",
-        province: "California",
-        city: "San Francisco"
-      }
-    ];
-  }
-  return [];
 }
 startServer();

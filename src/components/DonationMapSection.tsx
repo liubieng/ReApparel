@@ -19,10 +19,20 @@ import {
   Filter,
   X,
   Send,
-  Layers
+  Layers,
+  RefreshCw,
+  Radio,
+  Sparkles
 } from 'lucide-react';
 import { DonationOpportunity, DonationFlagType } from '../types/database';
 import { mapsService } from '../services/mapsService';
+import { donationScraperService } from '../services/donationScraperService';
+import { 
+  COUNTRIES, 
+  PROVINCES_BY_COUNTRY, 
+  CITIES_BY_PROVINCE, 
+  getCoordinatesForLocation 
+} from '../data/locationDirectory';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -69,13 +79,18 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   const [maxDistanceKm, setMaxDistanceKm] = useState<number | 'all'>('all');
   const [onlyActiveDrives, setOnlyActiveDrives] = useState<boolean>(false);
 
+  // Webscrape state (Strict: ONLY real scraped drives, no hallucinated/seeded data)
+  const [isScraping, setIsScraping] = useState<boolean>(false);
+  const [scrapedDrives, setScrapedDrives] = useState<DonationOpportunity[]>([]);
+  const [hasScraped, setHasScraped] = useState<boolean>(false);
+
   // User location state (6.2 Auto-center using browser geolocation API)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locatingUser, setLocatingUser] = useState(false);
   const [mapCenterTarget, setMapCenterTarget] = useState<{ lat: number; lng: number; zoom?: number } | null>({
-    lat: 14.628,
-    lng: 121.050,
-    zoom: 13
+    lat: 12.8797,
+    lng: 121.7740,
+    zoom: 6
   });
 
   // Selected opportunity for InfoWindow and Bottom Drawer (6.3)
@@ -86,6 +101,18 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   const [flagType, setFlagType] = useState<DonationFlagType>('Inactive');
   const [flagNotes, setFlagNotes] = useState('');
   const [isSubmittingFlag, setIsSubmittingFlag] = useState(false);
+
+  // Cascading location options
+  const availableCountries = COUNTRIES;
+  const availableProvinces = useMemo(() => {
+    if (selectedCountry === 'all') return [];
+    return PROVINCES_BY_COUNTRY[selectedCountry] || [];
+  }, [selectedCountry]);
+
+  const availableCities = useMemo(() => {
+    if (selectedProvince === 'all') return [];
+    return CITIES_BY_PROVINCE[selectedProvince] || [];
+  }, [selectedProvince]);
 
   // Request browser geolocation on mount
   useEffect(() => {
@@ -100,7 +127,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
           }
         },
         () => {
-          // Gracefully default to Bagumbayan/NCR center
+          // Default center remains country overview
         },
         { timeout: 7000, enableHighAccuracy: false }
       );
@@ -129,29 +156,77 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     );
   };
 
-  // Derive cascading countries, provinces, and cities from verified dataset
-  const { countries, provinces, cities, categories } = useMemo(() => {
-    const countrySet = new Set<string>();
-    const provSet = new Set<string>();
-    const citySet = new Set<string>();
+  // Webscrape function for specific filters
+  const handleTriggerScrape = useCallback(async (country?: string, province?: string, city?: string) => {
+    const c = country !== undefined ? country : selectedCountry;
+    const p = province !== undefined ? province : selectedProvince;
+    const ct = city !== undefined ? city : selectedCity;
+
+    setIsScraping(true);
+
+    const targetLocationParts = [
+      ct && ct !== 'all' ? ct : '',
+      p && p !== 'all' ? p : '',
+      c && c !== 'all' ? c : ''
+    ].filter(Boolean);
+
+    const queryLocation = targetLocationParts.length > 0 
+      ? targetLocationParts.join(', ') 
+      : (c !== 'all' ? c : 'Philippines');
+
+    try {
+      // Recenter map to the selected city or province GPS coordinates
+      const coords = await getCoordinatesForLocation(
+        c === 'all' ? undefined : c,
+        p === 'all' ? undefined : p,
+        ct === 'all' ? undefined : ct
+      );
+      if (coords) {
+        setMapCenterTarget({ 
+          lat: coords.lat, 
+          lng: coords.lng, 
+          zoom: ct && ct !== 'all' ? 14 : p && p !== 'all' ? 11 : 6 
+        });
+      }
+
+      const res = await donationScraperService.scrapeOngoingDrives({
+        country: c === 'all' ? undefined : c,
+        province: p === 'all' ? undefined : p,
+        city: ct === 'all' ? undefined : ct,
+        location: queryLocation,
+        lat: coords?.lat,
+        lng: coords?.lng
+      });
+
+      setHasScraped(true);
+      if (res.success && res.drives && res.drives.length > 0) {
+        setScrapedDrives(res.drives);
+        mapsService.setDonationOpportunities(res.drives);
+        toast(`Found ${res.drives.length} active donation drive${res.drives.length === 1 ? '' : 's'} in ${queryLocation}!`);
+      } else {
+        setScrapedDrives([]);
+        mapsService.clearDonationOpportunities();
+      }
+    } catch (err) {
+      console.warn('Scraping error:', err);
+      setScrapedDrives([]);
+      mapsService.clearDonationOpportunities();
+    } finally {
+      setIsScraping(false);
+    }
+  }, [selectedCountry, selectedProvince, selectedCity, toast]);
+
+  // Initial webscrape on mount
+  useEffect(() => {
+    handleTriggerScrape('Philippines', 'all', 'all');
+  }, []);
+
+  // Use only scraped opportunities (or empty database)
+  const currentOpportunities = hasScraped ? scrapedDrives : opportunities;
+
+  const categories = useMemo(() => {
     const catSet = new Set<string>();
-
-    opportunities.forEach(opp => {
-      const c = opp.country || 'Philippines';
-      countrySet.add(c);
-
-      // Only add provinces matching the selected country
-      if (selectedCountry === 'all' || opp.country === selectedCountry || (!opp.country && selectedCountry === 'Philippines')) {
-        if (opp.province) provSet.add(opp.province);
-      }
-
-      // Only add cities matching selected country and province
-      const matchCountry = selectedCountry === 'all' || opp.country === selectedCountry || (!opp.country && selectedCountry === 'Philippines');
-      const matchProv = selectedProvince === 'all' || opp.province === selectedProvince;
-      if (matchCountry && matchProv) {
-        if (opp.city) citySet.add(opp.city);
-      }
-
+    currentOpportunities.forEach(opp => {
       if (opp.accepted_types) {
         opp.accepted_types.split(',').forEach(item => {
           const clean = item.trim();
@@ -159,18 +234,12 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
         });
       }
     });
-
-    return {
-      countries: Array.from(countrySet),
-      provinces: Array.from(provSet),
-      cities: Array.from(citySet),
-      categories: Array.from(catSet)
-    };
-  }, [opportunities, selectedCountry, selectedProvince]);
+    return Array.from(catSet);
+  }, [currentOpportunities]);
 
   // Compute distance and verify ongoing status (Strict: NO Hallucinated Donations)
   const filteredOpportunities = useMemo(() => {
-    return opportunities.map(opp => {
+    return currentOpportunities.map(opp => {
       let dist = opp.distance_km;
       if (userLocation) {
         dist = mapsService.calculateDistanceKm(
@@ -228,7 +297,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
 
       return true;
     });
-  }, [opportunities, selectedCountry, selectedProvince, selectedCity, searchQuery, selectedCategory, maxDistanceKm, onlyActiveDrives, userLocation]);
+  }, [currentOpportunities, selectedCountry, selectedProvince, selectedCity, searchQuery, selectedCategory, maxDistanceKm, onlyActiveDrives, userLocation]);
 
   // When location filter changes, automatically center the map if matching ongoing donations exist
   useEffect(() => {
@@ -334,6 +403,18 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
             <Navigation className="ico" style={{ width: 14, height: 14, transform: locatingUser ? 'rotate(45deg)' : 'none', transition: 'transform 0.3s' }} />
             {locatingUser ? 'Locating...' : 'Near Me'}
           </button>
+
+          <button 
+            type="button"
+            className="btn btn-p"
+            style={{ padding: '7px 14px', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => handleTriggerScrape()}
+            disabled={isScraping}
+            title="Perform live web search for clothing donation drives in the selected area"
+          >
+            <RefreshCw className="ico" style={{ width: 14, height: 14, animation: isScraping ? 'spin 1s linear infinite' : 'none' }} />
+            {isScraping ? 'Scraping...' : 'Scan Area'}
+          </button>
         </div>
 
         {/* Cascading Location Hierarchy: Country -> Province -> City */}
@@ -345,14 +426,16 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
             <select 
               value={selectedCountry}
               onChange={(e) => {
-                setSelectedCountry(e.target.value);
+                const newC = e.target.value;
+                setSelectedCountry(newC);
                 setSelectedProvince('all');
                 setSelectedCity('all');
+                handleTriggerScrape(newC, 'all', 'all');
               }}
               style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
             >
               <option value="all">All Countries</option>
-              {countries.map(c => (
+              {availableCountries.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -365,13 +448,15 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
             <select 
               value={selectedProvince}
               onChange={(e) => {
-                setSelectedProvince(e.target.value);
+                const newP = e.target.value;
+                setSelectedProvince(newP);
                 setSelectedCity('all');
+                handleTriggerScrape(selectedCountry, newP, 'all');
               }}
               style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
             >
               <option value="all">All Provinces / Regions</option>
-              {provinces.map(p => (
+              {availableProvinces.map(p => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
@@ -383,11 +468,15 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
             </label>
             <select 
               value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
+              onChange={(e) => {
+                const newCity = e.target.value;
+                setSelectedCity(newCity);
+                handleTriggerScrape(selectedCountry, selectedProvince, newCity);
+              }}
               style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
             >
               <option value="all">All Cities</option>
-              {cities.map(c => (
+              {availableCities.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
@@ -464,12 +553,20 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
                 setSelectedCategory('all');
                 setMaxDistanceKm('all');
                 setOnlyActiveDrives(false);
+                handleTriggerScrape('Philippines', 'all', 'all');
               }}
             >
               Reset filters
             </button>
           )}
         </div>
+
+        {isScraping && (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)' }}>
+            <RefreshCw className="ico" style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
+            <span>Webscraping active clothing donation drives in <strong>{selectedCity !== 'all' ? selectedCity : selectedProvince !== 'all' ? selectedProvince : selectedCountry !== 'all' ? selectedCountry : 'the selected area'}</strong>...</span>
+          </div>
+        )}
       </div>
 
       {/* 6.2 Google Maps Display: Full interactive map rendering DONATION_OPPORTUNITY */}
@@ -703,6 +800,32 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
             )}
 
             {/* Custom Interactive Pins on GPS Projection */}
+            {filteredOpportunities.length === 0 && !isScraping && (
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                padding: '12px 18px',
+                borderRadius: 10,
+                textAlign: 'center',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                border: '1px solid var(--border)',
+                zIndex: 4,
+                maxWidth: 290
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <MapPin style={{ width: 14, height: 14, color: '#dc2626' }} />
+                  <span>No On-Going Drives</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  No active clothing donation drives found in {selectedCity !== 'all' ? selectedCity : selectedProvince !== 'all' ? selectedProvince : selectedCountry !== 'all' ? selectedCountry : 'this area'}.
+                </div>
+              </div>
+            )}
+
             {(() => {
               if (filteredOpportunities.length === 0) return null;
               const lats = filteredOpportunities.map(o => o.latitude);
@@ -1023,11 +1146,33 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
           );
         })}
 
-        {filteredOpportunities.length === 0 && (
-          <div className="card text-center" style={{ padding: '28px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        {isScraping ? (
+          <div className="card text-center" style={{ padding: '32px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
             <div style={{
-              width: 46,
-              height: 46,
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#ecfdf5',
+              color: '#059669',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 12px'
+            }}>
+              <RefreshCw style={{ width: 24, height: 24, animation: 'spin 1.2s linear infinite' }} />
+            </div>
+            <strong style={{ fontSize: 16, display: 'block', color: 'var(--text)', marginBottom: 6 }}>
+              Webscraping active clothing donation drives...
+            </strong>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 auto', maxWidth: 440, lineHeight: 1.5 }}>
+              Searching for live verified textile drop-offs, pre-loved garment collection centers, and disaster relief drives in {selectedCity !== 'all' ? selectedCity : selectedProvince !== 'all' ? selectedProvince : selectedCountry !== 'all' ? selectedCountry : 'this area'}.
+            </p>
+          </div>
+        ) : filteredOpportunities.length === 0 ? (
+          <div className="card text-center" style={{ padding: '32px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+            <div style={{
+              width: 48,
+              height: 48,
               borderRadius: '50%',
               background: '#fef2f2',
               color: '#dc2626',
@@ -1036,32 +1181,40 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
               justifyContent: 'center',
               margin: '0 auto 12px'
             }}>
-              <AlertTriangle style={{ width: 22, height: 22 }} />
+              <AlertTriangle style={{ width: 24, height: 24 }} />
             </div>
-            <strong style={{ fontSize: 15, display: 'block', color: 'var(--text)', marginBottom: 6 }}>
+            <strong style={{ fontSize: 16, display: 'block', color: 'var(--text)', marginBottom: 6 }}>
               There are no donations ongoing in {selectedCity !== 'all' ? selectedCity : selectedProvince !== 'all' ? selectedProvince : selectedCountry !== 'all' ? selectedCountry : 'this area'}.
             </strong>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 auto 14px', maxWidth: 440, lineHeight: 1.5 }}>
-              Verified Directory Check: No active collection bins or donation drives are currently ongoing in this location. We do not generate unverified or hallucinated donation locations.
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 auto 16px', maxWidth: 480, lineHeight: 1.5 }}>
+              Live Webscrape Verification: No active collection bins, garment drop-offs, or donation drives are currently ongoing in this location. We do not generate unverified, hallucinated, or seeded donation locations.
             </p>
-            <button
-              type="button"
-              className="btn btn-p"
-              style={{ margin: '0 auto', fontSize: 12, padding: '7px 16px' }}
-              onClick={() => {
-                setSelectedCountry('Philippines');
-                setSelectedProvince('all');
-                setSelectedCity('all');
-                setSearchQuery('');
-                setSelectedCategory('all');
-                setMaxDistanceKm('all');
-                setOnlyActiveDrives(false);
-              }}
-            >
-              Reset to All Ongoing Drop-offs
-            </button>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-p"
+                style={{ fontSize: 12, padding: '7px 16px' }}
+                onClick={() => handleTriggerScrape()}
+              >
+                <RefreshCw className="ico" style={{ width: 13, height: 13 }} /> Re-scan Area
+              </button>
+              {(selectedCity !== 'all' || selectedProvince !== 'all') && (
+                <button
+                  type="button"
+                  className="btn btn-g"
+                  style={{ fontSize: 12, padding: '7px 16px' }}
+                  onClick={() => {
+                    setSelectedProvince('all');
+                    setSelectedCity('all');
+                    handleTriggerScrape(selectedCountry, 'all', 'all');
+                  }}
+                >
+                  Search Whole Country
+                </button>
+              )}
+            </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* 6.4 Community Flagging Modal */}

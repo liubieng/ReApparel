@@ -124,6 +124,9 @@ function loadInitialMockState(): MockDatabaseState {
           }
         });
       }
+      // Strictly purge any legacy seeded or mock donation opportunities from stored database state
+      parsed.donation_opportunities = [];
+      parsed.donation_flags = [];
       return parsed;
     } catch {
       // fallback
