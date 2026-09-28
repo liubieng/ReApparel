@@ -400,30 +400,61 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
       {/* Latest Assessment Diagnostic Breakdown */}
       {latest && latest.breakdown && (
         <div className="card" style={{ padding: '16px 20px' }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 15, fontFamily: 'var(--font-display)' }}>
-            Criteria Endorsement Breakdown (Latest Check-In)
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-            {Object.entries(latest.breakdown).map(([dim, score]) => {
-              const isEndorsed = score >= 4;
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontFamily: 'var(--font-display)' }}>
+              Criteria Endorsement Breakdown (Latest Check-In)
+            </h3>
+            <span style={{ 
+              fontSize: 11.5, 
+              fontWeight: 700, 
+              color: latest.score >= 4 ? 'var(--danger)' : 'var(--primary)' 
+            }}>
+              {latest.score} of 7 Criteria Endorsed ({latest.score >= 4 ? 'Indicative Risk' : 'Non-Indicative Risk'})
+            </span>
+          </div>
+
+          <div className="bsas-criteria-grid">
+            {['salience', 'mood_modification', 'conflict', 'tolerance', 'relapse', 'withdrawal', 'problems'].map((dim) => {
+              const score = (latest.breakdown as any)[dim];
+              // Criterion is endorsed when score is 1 (new BSAS scale) or >= 4 (legacy scale)
+              const isEndorsed = Number(score) === 1 || Number(score) >= 4;
               return (
                 <div
                   key={dim}
                   style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
+                    padding: '10px 8px',
+                    borderRadius: 8,
                     background: isEndorsed ? 'var(--danger-soft)' : 'var(--surface-2)',
-                    border: `1px solid ${isEndorsed ? 'var(--danger)' : 'var(--border)'}`
+                    border: `1.5px solid ${isEndorsed ? 'var(--danger)' : 'var(--border)'}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: 70,
+                    boxShadow: isEndorsed ? '0 1px 3px rgba(166,72,58,0.1)' : 'none'
                   }}
                 >
-                  <div style={{ fontSize: 11, textTransform: 'capitalize', color: 'var(--text-muted)' }}>
+                  <div style={{ 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    textTransform: 'capitalize', 
+                    color: isEndorsed ? 'var(--danger)' : 'var(--text)',
+                    lineHeight: 1.25,
+                    minHeight: 28
+                  }}>
                     {dim.replace('_', ' ')}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                    <strong style={{ fontSize: 13, color: isEndorsed ? 'var(--danger)' : 'var(--text)' }}>
-                      Score: {score}
+                    <strong style={{ fontSize: 11.5, color: isEndorsed ? 'var(--danger)' : 'var(--text-muted)' }}>
+                      {isEndorsed ? 'Endorsed' : 'Normal'}
                     </strong>
-                    <span style={{ fontSize: 9.5, fontWeight: 700, color: isEndorsed ? 'var(--danger)' : 'var(--primary)' }}>
+                    <span style={{ 
+                      fontSize: 8.5, 
+                      fontWeight: 800, 
+                      padding: '2px 4px', 
+                      borderRadius: 4, 
+                      background: isEndorsed ? 'rgba(166, 72, 58, 0.15)' : 'rgba(62, 107, 69, 0.15)',
+                      color: isEndorsed ? 'var(--danger)' : 'var(--primary)' 
+                    }}>
                       {isEndorsed ? 'CRITERION' : 'NORMAL'}
                     </span>
                   </div>

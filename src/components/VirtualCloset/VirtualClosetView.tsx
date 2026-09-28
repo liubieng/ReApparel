@@ -38,8 +38,7 @@ interface VirtualClosetViewProps {
   onOpenAddModal: () => void;
   onEditGarment: (garment: ClothingItem) => void;
   onDeleteGarment: (garment: ClothingItem) => void;
-  onQuickIncrementWear: (garment: ClothingItem) => Promise<void>;
-  toast: (msg: string) => void;
+  toast?: (msg: string) => void;
 }
 
 export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
@@ -47,7 +46,6 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   onOpenAddModal,
   onEditGarment,
   onDeleteGarment,
-  onQuickIncrementWear,
   toast
 }) => {
   // Filter States
@@ -429,18 +427,18 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
 
                   {/* Card Actions */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                    {/* Quick +1 Wore Today Button */}
-                    <button
-                      type="button"
-                      className="btn btn-g"
-                      style={{ fontSize: 11, padding: '4px 8px' }}
-                      title="Increment wear count for today"
-                      onClick={() => onQuickIncrementWear(garment)}
-                    >
-                      <Plus className="ico" style={{ width: 12, height: 12 }} /> +1 Wore
-                    </button>
+                    <span style={{
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      color: 'var(--text-muted)',
+                      padding: '2px 7px',
+                      borderRadius: 4,
+                      background: 'var(--surface-2)'
+                    }}>
+                      {garment.addition_type === 'New' ? 'Recently Acquired' : 'Pre-Existing'}
+                    </span>
 
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
                       <button
                         type="button"
                         className="icobtn"

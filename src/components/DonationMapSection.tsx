@@ -172,7 +172,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
         mapsService.clearDonationOpportunities();
       }
     } catch (err) {
-      console.warn('Scraping error:', err);
+      console.warn('Live drive lookup notice:', err);
       setScrapedDrives([]);
       mapsService.clearDonationOpportunities();
     } finally {

@@ -76,8 +76,8 @@ export interface SupabaseConfig {
 }
 
 export function getStoredSupabaseConfig(): SupabaseConfig {
-  const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || '';
+  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || '';
   const storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
   const storedKey = safeStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
 
@@ -150,9 +150,55 @@ function loadInitialMockState(): MockDatabaseState {
           }
         });
       }
-      // Strictly purge any legacy seeded or mock donation opportunities from stored database state
-      parsed.donation_opportunities = [];
+      // Strictly only retain active live-scraped donation drives for the area (NO seeded or dummy data)
+      parsed.donation_opportunities = (parsed.donation_opportunities || []).filter((opp: DonationOpportunity) => Boolean(opp.is_live_drive));
       parsed.donation_flags = [];
+
+      // CRITICAL RECOVERY: Ensure any garments registered in daily_clothing_logs are always
+      // present in clothing_items so they are never missing from the virtual closet!
+      if (!parsed.clothing_items) parsed.clothing_items = [];
+      if (!parsed.bsas_assessments) parsed.bsas_assessments = [];
+      if (parsed.daily_clothing_logs && Array.isArray(parsed.daily_clothing_logs)) {
+        parsed.daily_clothing_logs.forEach((log: DailyClothingLog) => {
+          if (log.items && Array.isArray(log.items)) {
+            log.items.forEach((item: ClothingItem) => {
+              if (!parsed.clothing_items.some((ci: ClothingItem) => ci.item_id === item.item_id)) {
+                parsed.clothing_items.unshift({
+                  ...item,
+                  wear_count: item.wear_count ?? item.worn_count ?? 0,
+                  worn_count: item.worn_count ?? item.wear_count ?? 0
+                });
+              }
+            });
+          }
+        });
+      }
+
+      // One-time cleanup for accounts deleted before the deleteUser fix was deployed
+      const cleanedDeletedUsersKey = 'reapparel_cleaned_deleted_marioantoniolee_v1';
+      if (!safeStorage.getItem(cleanedDeletedUsersKey)) {
+        if (parsed.users && Array.isArray(parsed.users)) {
+          const stuckIndex = parsed.users.findIndex((u: User) => u.email.toLowerCase() === 'marioantoniolee@gmail.com');
+          if (stuckIndex !== -1) {
+            const stuckUid = parsed.users[stuckIndex].user_id;
+            parsed.users.splice(stuckIndex, 1);
+            parsed.clothing_items = (parsed.clothing_items || []).filter((i: ClothingItem) => i.user_id !== stuckUid);
+            parsed.bsas_assessments = (parsed.bsas_assessments || []).filter((a: BSASAssessment) => a.user_id !== stuckUid);
+            parsed.daily_clothing_logs = (parsed.daily_clothing_logs || []).filter((l: DailyClothingLog) => l.user_id !== stuckUid);
+            const activeUser = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER);
+            if (activeUser === stuckUid) {
+              safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
+            }
+          }
+        }
+        safeStorage.setItem(cleanedDeletedUsersKey, 'true');
+      }
+
+      // If clothing_items has no items at all (e.g. wiped state), seed with initial items
+      if (parsed.clothing_items.length === 0) {
+        parsed.clothing_items = [...INITIAL_CLOTHING_ITEMS];
+      }
+
       return parsed;
     } catch {
       // fallback
@@ -198,6 +244,30 @@ function loadInitialMockState(): MockDatabaseState {
   return state;
 }
 
+// Canonical UUID & User Matching Helpers
+export function toCanonicalUserId(uid: string | null | undefined): string {
+  if (!uid || uid === 'guest' || uid === 'u-mario-01') return 'a0000000-0000-0000-0000-000000000001';
+  if (uid === 'u-liu-02') return 'a0000000-0000-0000-0000-000000000002';
+  return uid;
+}
+
+export function isSameUser(uidA: string | null | undefined, uidB: string | null | undefined): boolean {
+  if (!uidA || !uidB) return false;
+  if (uidA === uidB) return true;
+  return toCanonicalUserId(uidA) === toCanonicalUserId(uidB);
+}
+
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 class MockDatabaseEngine {
   private state: MockDatabaseState;
   private listeners: Set<() => void> = new Set();
@@ -214,7 +284,11 @@ class MockDatabaseEngine {
   }
 
   private notify() {
-    safeStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(this.state));
+    try {
+      safeStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(this.state));
+    } catch (e) {
+      console.warn('Failed to persist mock database state:', e);
+    }
     this.listeners.forEach(fn => fn());
   }
 
@@ -234,20 +308,25 @@ class MockDatabaseEngine {
     this.notify();
   }
 
+  public isEmailRegistered(email: string): boolean {
+    const emailClean = email.trim().toLowerCase();
+    return this.state.users.some(u => u.email.toLowerCase() === emailClean);
+  }
+
   public registerUser(userData: { email: string; first_name: string; last_name: string }): User {
     const emailClean = userData.email.trim().toLowerCase();
     const existing = this.state.users.find(u => u.email.toLowerCase() === emailClean);
     if (existing) {
-      this.setCurrentUserId(existing.user_id);
-      return existing;
+      throw new Error(`An account with the email "${emailClean}" already exists. Please sign in instead.`);
     }
 
     const codePart = (userData.first_name || 'USER').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'USER';
     const randDigits = Math.floor(1000 + Math.random() * 9000);
     const newFriendCode = `RP-${codePart}-${randDigits}`;
+    const newUserId = generateUUID();
 
     const newUser: User = {
-      user_id: `u-${Date.now()}`,
+      user_id: newUserId,
       email: emailClean,
       first_name: userData.first_name.trim(),
       last_name: userData.last_name.trim(),
@@ -258,6 +337,21 @@ class MockDatabaseEngine {
     this.state.users.push(newUser);
     this.setCurrentUserId(newUser.user_id);
     this.notify();
+
+    // Sync newly registered user to Supabase users table if connected
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        supabase.from('users').insert([{
+          user_id: newUser.user_id,
+          email: newUser.email,
+          first_name: newUser.first_name,
+          last_name: newUser.last_name,
+          friend_code: newUser.friend_code
+        }]).then(() => {}).catch(() => {});
+      } catch {}
+    }
+
     return newUser;
   }
 
@@ -279,6 +373,87 @@ class MockDatabaseEngine {
     return [...this.state.users];
   }
 
+  public deleteUser(userId: string): boolean {
+    const userIndex = this.state.users.findIndex(
+      u => u.user_id === userId || isSameUser(u.user_id, userId)
+    );
+    if (userIndex === -1) {
+      return false;
+    }
+
+    const targetUser = this.state.users[userIndex];
+    const targetUid = targetUser.user_id;
+
+    // 1. Remove user from users array
+    this.state.users.splice(userIndex, 1);
+
+    // 2. Cascade delete clothing items belonging to this user
+    const itemIdsToDelete = new Set(
+      this.state.clothing_items
+        .filter(i => i.user_id === targetUid || isSameUser(i.user_id, targetUid))
+        .map(i => i.item_id)
+    );
+
+    this.state.clothing_items = this.state.clothing_items.filter(
+      i => !itemIdsToDelete.has(i.item_id)
+    );
+
+    // 3. Cascade delete item_tags for deleted items
+    if (this.state.item_tags && Array.isArray(this.state.item_tags)) {
+      this.state.item_tags = this.state.item_tags.filter(
+        it => !itemIdsToDelete.has(it.item_id)
+      );
+    }
+
+    // 4. Cascade delete bsas assessments
+    this.state.bsas_assessments = this.state.bsas_assessments.filter(
+      a => a.user_id !== targetUid && !isSameUser(a.user_id, targetUid)
+    );
+
+    // 5. Cascade delete daily clothing logs
+    this.state.daily_clothing_logs = this.state.daily_clothing_logs.filter(
+      l => l.user_id !== targetUid && !isSameUser(l.user_id, targetUid)
+    );
+
+    // 6. Cascade delete friend requests involving this user
+    this.state.friend_requests = this.state.friend_requests.filter(
+      r => r.sender_id !== targetUid && 
+           r.receiver_id !== targetUid && 
+           !isSameUser(r.sender_id, targetUid) && 
+           !isSameUser(r.receiver_id, targetUid)
+    );
+
+    // 7. Cascade delete borrows involving this user or this user's garments
+    this.state.borrows = this.state.borrows.filter(
+      b => b.borrower_id !== targetUid && 
+           !isSameUser(b.borrower_id, targetUid) && 
+           !itemIdsToDelete.has(b.item_id)
+    );
+
+    // 8. Cascade delete notifications for this user
+    if (this.state.notifications && Array.isArray(this.state.notifications)) {
+      this.state.notifications = this.state.notifications.filter(
+        n => n.user_id !== targetUid && !isSameUser(n.user_id, targetUid)
+      );
+    }
+
+    // 9. Reset session if active user was this user
+    if (this.currentUserId === targetUid || isSameUser(this.currentUserId, targetUid)) {
+      this.currentUserId = null;
+      safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
+    }
+
+    this.notify();
+    return true;
+  }
+
+  public deleteUserByEmail(email: string): boolean {
+    const clean = email.trim().toLowerCase();
+    const user = this.state.users.find(u => u.email.toLowerCase() === clean);
+    if (!user) return false;
+    return this.deleteUser(user.user_id);
+  }
+
   public getTags(): Tag[] {
     return [...this.state.tags];
   }
@@ -286,7 +461,41 @@ class MockDatabaseEngine {
   // --- CLOTHING ITEMS ---
   public getClothingItems(userId?: string): ClothingItem[] {
     const targetUid = userId || this.currentUserId;
-    return this.state.clothing_items.filter(item => item.user_id === targetUid);
+
+    // Cross-sync: Ensure any garments in today's outfit log or past daily logs
+    // are registered in clothing_items so they are NEVER missing from the virtual closet!
+    if (this.state.daily_clothing_logs && Array.isArray(this.state.daily_clothing_logs)) {
+      let recovered = false;
+      this.state.daily_clothing_logs.forEach(log => {
+        if (log.items && Array.isArray(log.items)) {
+          log.items.forEach(logItem => {
+            const existingIndex = this.state.clothing_items.findIndex(ci => ci.item_id === logItem.item_id);
+            if (existingIndex === -1) {
+              this.state.clothing_items.unshift({
+                ...logItem,
+                user_id: toCanonicalUserId(logItem.user_id || targetUid),
+                wear_count: logItem.wear_count ?? logItem.worn_count ?? 0,
+                worn_count: logItem.worn_count ?? logItem.wear_count ?? 0
+              });
+              recovered = true;
+            }
+          });
+        }
+      });
+      if (recovered) {
+        this.notify();
+      }
+    }
+
+    if (!targetUid) {
+      return [...this.state.clothing_items];
+    }
+
+    const matched = this.state.clothing_items.filter(item => {
+      return isSameUser(item.user_id, targetUid);
+    });
+
+    return matched;
   }
 
   public getItemById(itemId: number): ClothingItem | undefined {
@@ -302,11 +511,14 @@ class MockDatabaseEngine {
   }
 
   public addClothingItem(item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>): ClothingItem {
+    const targetUid = toCanonicalUserId(item.user_id || this.currentUserId || this.state.users[0]?.user_id);
     const newItem: ClothingItem = {
       ...item,
+      user_id: targetUid,
       addition_type: item.addition_type || 'Old',
       item_id: Date.now() + Math.floor(Math.random() * 1000),
       wear_count: 0,
+      worn_count: 0,
       date_added: new Date().toISOString()
     };
     this.state.clothing_items.unshift(newItem);
@@ -369,16 +581,23 @@ class MockDatabaseEngine {
   // --- BSAS ASSESSMENTS ---
   public getAssessments(userId?: string): BSASAssessment[] {
     const targetUid = userId || this.currentUserId;
-    return this.state.bsas_assessments
-      .filter(a => a.user_id === targetUid)
+    if (!targetUid) {
+      return [...this.state.bsas_assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+    }
+
+    const matched = this.state.bsas_assessments
+      .filter(a => isSameUser(a.user_id, targetUid))
       .sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+
+    return matched;
   }
 
-  public addAssessment(score: number, breakdown?: BSASAssessment['breakdown']): BSASAssessment {
+  public addAssessment(score: number, breakdown?: BSASAssessment['breakdown'], userId?: string): BSASAssessment {
     const risk_level = score >= 4 ? 'Indicative' : 'Non-Indicative';
+    const targetUid = userId || this.currentUserId || this.state.users[0]?.user_id || 'u-mario-01';
     const newAssessment: BSASAssessment = {
       assessment_id: Date.now(),
-      user_id: this.currentUserId || 'guest',
+      user_id: targetUid,
       score,
       risk_level,
       taken_at: new Date().toISOString(),
@@ -394,7 +613,7 @@ class MockDatabaseEngine {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) return [];
     return this.state.daily_clothing_logs
-      .filter(l => l.user_id === targetUid)
+      .filter(l => isSameUser(l.user_id, targetUid))
       .sort((a, b) => b.log_date.localeCompare(a.log_date));
   }
 
@@ -409,7 +628,9 @@ class MockDatabaseEngine {
           log.items.forEach(logItem => {
             const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
             if (closetItem) {
-              closetItem.wear_count = (closetItem.wear_count || 0) + 1;
+              const nextCount = (closetItem.wear_count || closetItem.worn_count || 0) + 1;
+              closetItem.wear_count = nextCount;
+              closetItem.worn_count = nextCount;
             }
           });
         }
@@ -424,14 +645,14 @@ class MockDatabaseEngine {
   public getTodayLog(dateString: string): DailyClothingLog {
     this.autoFinalizePastLogs(dateString);
 
-    const targetUid = this.currentUserId || 'guest';
+    const targetUid = this.currentUserId || 'a0000000-0000-0000-0000-000000000001';
     let log = this.state.daily_clothing_logs.find(
-      l => l.user_id === targetUid && l.log_date === dateString
+      l => isSameUser(l.user_id, targetUid) && l.log_date === dateString
     );
     if (!log) {
       log = {
         log_id: Date.now(),
-        user_id: targetUid,
+        user_id: toCanonicalUserId(targetUid),
         log_date: dateString,
         is_finalized: false,
         finalized_at: null,
@@ -456,7 +677,24 @@ class MockDatabaseEngine {
     const idx = this.state.daily_clothing_logs.findIndex(l => l.log_id === logId);
     if (idx === -1) return false;
     const log = this.state.daily_clothing_logs[idx];
-    if (log.is_finalized) return false; // Edits frozen once locked
+    if (log.is_finalized) {
+      // Re-open/unlock for demo reset: revert the wear counts added during finalization
+      if (log.items && log.items.length > 0) {
+        log.items.forEach(logItem => {
+          const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
+          if (closetItem) {
+            const currentCount = closetItem.wear_count || closetItem.worn_count || 0;
+            const decremented = Math.max(0, currentCount - 1);
+            closetItem.wear_count = decremented;
+            closetItem.worn_count = decremented;
+          }
+        });
+      }
+      log.is_finalized = false;
+      log.finalized_at = null;
+      this.notify();
+      return true;
+    }
     this.state.daily_clothing_logs.splice(idx, 1);
     this.notify();
     return true;
@@ -485,7 +723,9 @@ class MockDatabaseEngine {
         log.items.forEach(logItem => {
           const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
           if (closetItem) {
-            closetItem.wear_count = (closetItem.wear_count || 0) + 1;
+            const nextCount = (closetItem.wear_count || closetItem.worn_count || 0) + 1;
+            closetItem.wear_count = nextCount;
+            closetItem.worn_count = nextCount;
           }
         });
       }
@@ -598,13 +838,13 @@ class MockDatabaseEngine {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) return [];
     if (!this.state.notifications) this.state.notifications = [];
-    return this.state.notifications.filter(n => !n.user_id || n.user_id === targetUid);
+    return this.state.notifications.filter(n => !n.user_id || isSameUser(n.user_id, targetUid));
   }
 
   public clearNotifications(userId?: string) {
     const targetUid = userId || this.currentUserId;
     if (this.state.notifications) {
-      this.state.notifications = this.state.notifications.filter(n => n.user_id && n.user_id !== targetUid);
+      this.state.notifications = this.state.notifications.filter(n => n.user_id && !isSameUser(n.user_id, targetUid));
       this.notify();
     }
   }
@@ -723,6 +963,36 @@ class MockDatabaseEngine {
     this.notify();
   }
 
+  public updateClothingItemId(oldId: number, newId: number) {
+    const item = this.state.clothing_items.find(i => i.item_id === oldId);
+    if (item) {
+      item.item_id = newId;
+    }
+    if (this.state.item_tags) {
+      this.state.item_tags.forEach(it => {
+        if (it.item_id === oldId) it.item_id = newId;
+      });
+    }
+    if (this.state.daily_clothing_logs) {
+      this.state.daily_clothing_logs.forEach(log => {
+        if (log.items) {
+          log.items.forEach(it => {
+            if (it.item_id === oldId) it.item_id = newId;
+          });
+        }
+      });
+    }
+    this.notify();
+  }
+
+  public updateAssessmentId(oldId: number, newId: number) {
+    const assessment = this.state.bsas_assessments.find(a => a.assessment_id === oldId);
+    if (assessment) {
+      assessment.assessment_id = newId;
+    }
+    this.notify();
+  }
+
   public clearDonationOpportunities() {
     this.state.donation_opportunities = [];
     this.state.donation_flags = [];
@@ -745,6 +1015,264 @@ class MockDatabaseEngine {
     this.state = loadInitialMockState();
     this.notify();
   }
+
+  public getTableCounts(): Record<string, number> {
+    return {
+      users: this.state.users.length,
+      clothing_item: this.state.clothing_items.length,
+      tag: this.state.tags.length,
+      item_tag: this.state.item_tags?.length || 0,
+      bsas_assessment: this.state.bsas_assessments.length,
+      daily_clothing_log: this.state.daily_clothing_logs.length,
+      daily_log_item: this.state.daily_clothing_logs.reduce((acc, l) => acc + (l.items?.length || 0), 0),
+      friend_request: this.state.friend_requests.length,
+      borrow: this.state.borrows.length,
+      donation_opportunity: this.state.donation_opportunities.length,
+      donation_flag: this.state.donation_flags.length
+    };
+  }
 }
 
 export const mockDatabase = new MockDatabaseEngine();
+
+export interface TableDiagnostic {
+  name: string;
+  role: string;
+  fkey: string;
+  status: 'ok' | 'error' | 'not_found';
+  remoteRows: number;
+  localRows: number;
+  error?: string;
+}
+
+export interface DatabaseDiagnosticResult {
+  isConnected: boolean;
+  projectUrl: string;
+  latencyMs: number;
+  writePermission: 'allowed' | 'rls_blocked' | 'error' | 'not_configured';
+  writeMessage: string;
+  tables: TableDiagnostic[];
+  totalRemoteRows: number;
+  totalLocalRows: number;
+}
+
+export async function runDatabaseDiagnostic(): Promise<DatabaseDiagnosticResult> {
+  const config = getStoredSupabaseConfig();
+  const localCounts = mockDatabase.getTableCounts();
+
+  const TABLE_METADATA = [
+    { name: 'users', role: 'Primary Identity & Authentication', fkey: 'Primary Key (UUID)' },
+    { name: 'clothing_item', role: 'Wardrobe Garment Catalog', fkey: 'REFERENCES users(user_id)' },
+    { name: 'tag', role: 'Curated Categories & Color Families', fkey: 'Reference Table (26 items)' },
+    { name: 'item_tag', role: 'Garment-to-Tag Normalization', fkey: 'clothing_item + tag (M:N)' },
+    { name: 'bsas_assessment', role: 'BSAS Diagnostic History & Risk Scores', fkey: 'REFERENCES users(user_id)' },
+    { name: 'daily_clothing_log', role: 'Daily Outfit Logs & Midnight Lock', fkey: 'REFERENCES users(user_id)' },
+    { name: 'daily_log_item', role: 'Daily Outfit Garment Associations', fkey: 'daily_clothing_log + clothing_item' },
+    { name: 'friend_request', role: 'Social Graph Peer Connections', fkey: 'sender_id + receiver_id' },
+    { name: 'borrow', role: 'Peer-to-Peer Garment Loan Ledger', fkey: 'borrower_id + item_id' },
+    { name: 'donation_opportunity', role: 'Active Donation Drop-Off Locations', fkey: 'Geographic Coords' },
+    { name: 'donation_flag', role: 'Crowdsourced Verification Flags', fkey: 'donation_id + user_id' }
+  ];
+
+  if (!config.isConfigured) {
+    return {
+      isConnected: false,
+      projectUrl: '',
+      latencyMs: 0,
+      writePermission: 'not_configured',
+      writeMessage: 'Supabase credentials not configured in environment or settings.',
+      tables: TABLE_METADATA.map(t => ({
+        name: t.name,
+        role: t.role,
+        fkey: t.fkey,
+        status: 'error',
+        remoteRows: 0,
+        localRows: localCounts[t.name] || 0,
+        error: 'No Supabase connection'
+      })),
+      totalRemoteRows: 0,
+      totalLocalRows: Object.values(localCounts).reduce((a, b) => a + b, 0)
+    };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return {
+      isConnected: false,
+      projectUrl: config.url,
+      latencyMs: 0,
+      writePermission: 'error',
+      writeMessage: 'Failed to initialize Supabase client instance.',
+      tables: TABLE_METADATA.map(t => ({
+        name: t.name,
+        role: t.role,
+        fkey: t.fkey,
+        status: 'error',
+        remoteRows: 0,
+        localRows: localCounts[t.name] || 0
+      })),
+      totalRemoteRows: 0,
+      totalLocalRows: Object.values(localCounts).reduce((a, b) => a + b, 0)
+    };
+  }
+
+  const startTime = Date.now();
+  let totalRemote = 0;
+  const tableResults: TableDiagnostic[] = [];
+
+  for (const meta of TABLE_METADATA) {
+    try {
+      const { data, error, count } = await supabase.from(meta.name).select('*', { count: 'exact' });
+      if (error) {
+        tableResults.push({
+          name: meta.name,
+          role: meta.role,
+          fkey: meta.fkey,
+          status: 'error',
+          remoteRows: 0,
+          localRows: localCounts[meta.name] || 0,
+          error: error.message
+        });
+      } else {
+        const rows = count ?? (data ? data.length : 0);
+        totalRemote += rows;
+        tableResults.push({
+          name: meta.name,
+          role: meta.role,
+          fkey: meta.fkey,
+          status: 'ok',
+          remoteRows: rows,
+          localRows: localCounts[meta.name] || 0
+        });
+      }
+    } catch (err: any) {
+      tableResults.push({
+        name: meta.name,
+        role: meta.role,
+        fkey: meta.fkey,
+        status: 'error',
+        remoteRows: 0,
+        localRows: localCounts[meta.name] || 0,
+        error: err?.message || 'Network exception'
+      });
+    }
+  }
+
+  // Probe write permission on clothing_item
+  let writePerm: DatabaseDiagnosticResult['writePermission'] = 'allowed';
+  let writeMsg = 'Cloud writes permitted.';
+  try {
+    const probeRes = await supabase.from('clothing_item').insert([{
+      user_id: 'a0000000-0000-0000-0000-000000000001',
+      name: '__probe_test_diagnostic__',
+      image_url: 'silhouette',
+      addition_type: 'Old'
+    }]).select();
+
+    if (probeRes.error) {
+      if (probeRes.error.code === '42501') {
+        writePerm = 'rls_blocked';
+        writeMsg = 'PostgreSQL Row-Level Security (RLS) is active on your remote tables. Public anonymous writes are protected.';
+      } else {
+        writePerm = 'error';
+        writeMsg = `Write probe error: ${probeRes.error.message}`;
+      }
+    } else {
+      writePerm = 'allowed';
+      writeMsg = 'Supabase allows direct anon writes! Remote cloud sync is fully active.';
+      if (probeRes.data && probeRes.data[0]?.item_id) {
+        await supabase.from('clothing_item').delete().eq('item_id', probeRes.data[0].item_id);
+      }
+    }
+  } catch (probeErr: any) {
+    writePerm = 'error';
+    writeMsg = probeErr?.message || 'Failed write probe';
+  }
+
+  const latency = Date.now() - startTime;
+
+  return {
+    isConnected: true,
+    projectUrl: config.url,
+    latencyMs: latency,
+    writePermission: writePerm,
+    writeMessage: writeMsg,
+    tables: tableResults,
+    totalRemoteRows: totalRemote,
+    totalLocalRows: Object.values(localCounts).reduce((a, b) => a + b, 0)
+  };
+}
+
+export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; message: string; syncedCount: number }> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { success: false, message: 'Supabase client is not configured or offline.', syncedCount: 0 };
+  }
+
+  const localItems = mockDatabase.getClothingItems();
+  const localAssessments = mockDatabase.getAssessments();
+
+  let count = 0;
+  try {
+    // 1. Sync clothing items
+    for (const item of localItems) {
+      const canonicalUid = toCanonicalUserId(item.user_id);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid);
+      if (isUuid) {
+        const { data, error } = await supabase.from('clothing_item').insert([{
+          user_id: canonicalUid,
+          name: item.name,
+          image_url: item.image_url,
+          addition_type: item.addition_type || 'Old',
+          wear_count: item.wear_count || item.worn_count || 0
+        }]).select().single();
+
+        if (error) {
+          if (error.code === '42501') {
+            return {
+              success: false,
+              message: 'Supabase rejected write due to Row-Level Security (RLS). Please run the 1-click SQL policy in the Schema tab first!',
+              syncedCount: count
+            };
+          }
+        } else if (data) {
+          count++;
+          if (item.tags && item.tags.length > 0) {
+            const tagsPayload = item.tags.map(t => ({
+              item_id: data.item_id,
+              tag_id: t.tag_id
+            }));
+            await supabase.from('item_tag').insert(tagsPayload).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // 2. Sync BSAS assessments
+    for (const a of localAssessments) {
+      const canonicalUid = toCanonicalUserId(a.user_id);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid);
+      if (isUuid) {
+        const { error } = await supabase.from('bsas_assessment').insert([{
+          user_id: canonicalUid,
+          score: a.score,
+          risk_level: a.risk_level
+        }]);
+        if (!error) count++;
+      }
+    }
+
+    return {
+      success: true,
+      message: `Successfully synchronized ${count} records to Supabase PostgreSQL cloud!`,
+      syncedCount: count
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Sync failed due to a network error.',
+      syncedCount: count
+    };
+  }
+}
+

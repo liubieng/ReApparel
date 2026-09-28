@@ -36,9 +36,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const totalWears = garments.reduce((sum, g) => sum + (g.worn_count ?? g.wear_count ?? 0), 0);
   const initials = `${currentUser.first_name[0] || ''}${currentUser.last_name[0] || ''}`.toUpperCase();
 
-  // Check if user has active unreturned borrows
+  // Check if current user has active unreturned borrows (as borrower or lender)
   const activeUnreturned = borrows.filter(
-    b => (b.status === 'Accepted' || (b.status as string) === 'approved')
+    b => (b.status === 'Accepted' || (b.status as string) === 'approved') &&
+         (b.borrower_id === currentUser.user_id || b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id)
   );
 
   return (

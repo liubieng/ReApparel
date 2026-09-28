@@ -233,10 +233,22 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 <span>Finalize Outfit &amp; Update Wear Counts</span>
               </button>
             ) : (
-              <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <CheckCircle2 className="ico" style={{ width: 14, height: 14 }} />
-                Outfit finalized &amp; wear counts incremented!
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <CheckCircle2 className="ico" style={{ width: 14, height: 14 }} />
+                  Outfit finalized &amp; wear counts incremented!
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-g"
+                  style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  onClick={onDeleteLog}
+                  title="Re-open today's log for continuous demonstration and testing"
+                >
+                  <RotateCcw className="ico" style={{ width: 12, height: 12 }} />
+                  <span>Unlock / Reset Today's Log (Demo)</span>
+                </button>
+              </div>
             )}
           </div>
 

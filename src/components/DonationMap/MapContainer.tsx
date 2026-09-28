@@ -310,12 +310,14 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             const maxLat = Math.max(...lats);
             const minLng = Math.min(...lngs);
             const maxLng = Math.max(...lngs);
-            const latSpan = maxLat - minLat || 0.05;
-            const lngSpan = maxLng - minLng || 0.05;
+            const latDiff = maxLat - minLat;
+            const lngDiff = maxLng - minLng;
+            const latSpan = latDiff > 0.001 ? latDiff : 0.05;
+            const lngSpan = lngDiff > 0.001 ? lngDiff : 0.05;
 
             return opportunities.map(opp => {
-              const xPct = 12 + (((opp.longitude - minLng) / lngSpan) * 76);
-              const yPct = 12 + (((maxLat - opp.latitude) / latSpan) * 76);
+              const xPct = lngDiff > 0.001 ? 12 + (((opp.longitude - minLng) / lngSpan) * 76) : 50;
+              const yPct = latDiff > 0.001 ? 12 + (((maxLat - opp.latitude) / latSpan) * 76) : 50;
               const hasFlags = (opp.flags_count || 0) > 0 || (opp.flags && opp.flags.length > 0);
               const isSelected = selectedOpp?.donation_id === opp.donation_id;
 

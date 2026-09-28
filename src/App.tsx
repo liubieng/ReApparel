@@ -145,8 +145,12 @@ export default function App() {
       setFriendRequests(friendsService.getFriendRequests());
       setBorrows(friendsService.getBorrows());
     } else {
-      setGarments([]);
-      setAssessments([]);
+      const items = await closetService.getItems();
+      setGarments(items);
+      const userAssessments = await closetService.getAssessments();
+      setAssessments(userAssessments);
+      const log = await closetService.getTodayLog();
+      setTodayLog(log);
       setFriends([]);
       setFriendRequests([]);
       setBorrows([]);
@@ -196,7 +200,8 @@ export default function App() {
 
   // BSAS Check-In Completed
   const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>) => {
-    await closetService.submitAssessment(score, breakdown);
+    const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || 'a0000000-0000-0000-0000-000000000001';
+    await closetService.submitAssessment(score, breakdown, activeUid);
     await loadData();
     toast(score >= 4 ? 'Check-in saved: Indicative risk identified' : 'Check-in saved: Non-Indicative risk level');
     setView('recovery');
@@ -204,7 +209,11 @@ export default function App() {
 
   // Garment Management: Add, Edit, Delete, Quick Wear Increment
   const handleAddGarment = async (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => {
-    await closetService.addItem(item);
+    const activeUid = item.user_id || currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || 'a0000000-0000-0000-0000-000000000001';
+    await closetService.addItem({
+      ...item,
+      user_id: activeUid
+    });
     await loadData();
   };
 
@@ -218,16 +227,6 @@ export default function App() {
     setDeletingGarment(null);
     await loadData();
     toast('Clothing item deleted from your closet.');
-  };
-
-  const handleQuickIncrementWear = async (garment: ClothingItem) => {
-    const currentWear = garment.worn_count ?? garment.wear_count ?? 0;
-    await closetService.updateItem(garment.item_id, {
-      wear_count: currentWear + 1,
-      worn_count: currentWear + 1
-    });
-    await loadData();
-    toast(`Wore "${garment.name}" today (+1 wear count)`);
   };
 
   // Daily Outfit Log Handlers
@@ -317,20 +316,38 @@ export default function App() {
     loadData();
   };
 
-  // Account Deletion Safeguard
+  // Account Deletion Safeguard with confirmation dialog
   const handleDeleteAccount = () => {
-    mockDatabase.clearAllData();
-    mockDatabase.setCurrentUserId(null);
-    setCurrentUser(null);
-    setView('login');
-    toast('Account deleted.');
+    if (!currentUser) return;
+    const targetUser = currentUser;
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Account & Closet Data?',
+      message: 'This will permanently remove your user profile, digitized garments, outfit logs, and BSAS assessment history. This action cannot be undone. Are you sure you wish to proceed?',
+      onConfirm: async () => {
+        try {
+          await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
+          setCurrentUser(null);
+          setView('login');
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+          toast('Account and wardrobe data permanently erased. You may register again anytime.');
+        } catch (err) {
+          console.error('Account deletion error:', err);
+          toast('Error deleting account: ' + (err instanceof Error ? err.message : 'Please try again.'));
+        }
+      }
+    });
   };
 
-  // Pending Count for Nav Badges
-  const pendingRequestsCount = friendRequests.filter(
+  // Pending Counts for Nav Badges
+  const pendingFriendsCount = friendRequests.filter(
     r => currentUser && r.receiver_id === currentUser.user_id && r.status === 'pending'
-  ).length + borrows.filter(
-    b => currentUser && b.borrower_id !== currentUser.user_id && b.status === 'Pending'
+  ).length;
+
+  const pendingBorrowsCount = borrows.filter(
+    b => currentUser && 
+      (b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id) && 
+      b.status === 'Pending'
   ).length;
 
   // --------------------------------------------------------------------------
@@ -386,7 +403,8 @@ export default function App() {
         currentView={view}
         isOpen={isMobileSidebarOpen}
         currentUser={currentUser}
-        pendingRequestsCount={pendingRequestsCount}
+        pendingBorrowsCount={pendingBorrowsCount}
+        pendingFriendsCount={pendingFriendsCount}
         onSelectView={(viewId) => { setView(viewId); setIsMobileSidebarOpen(false); }}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onLogout={handleLogout}
@@ -411,7 +429,6 @@ export default function App() {
               onOpenAddModal={() => setIsAddGarmentOpen(true)}
               onEditGarment={(g) => setEditingGarment(g)}
               onDeleteGarment={(g) => setDeletingGarment(g)}
-              onQuickIncrementWear={handleQuickIncrementWear}
               toast={toast}
             />
           )}
@@ -530,7 +547,7 @@ export default function App() {
       <AddItemModal
         isOpen={isAddGarmentOpen}
         onClose={() => setIsAddGarmentOpen(false)}
-        userId={currentUser.user_id}
+        userId={currentUser?.user_id || 'a0000000-0000-0000-0000-000000000001'}
         onAddItem={handleAddGarment}
         toast={toast}
       />
@@ -577,6 +594,7 @@ export default function App() {
         isOpen={isDatabaseModalOpen}
         onClose={() => setIsDatabaseModalOpen(false)}
         onConfigUpdated={loadData}
+        toast={toast}
       />
     </div>
   );

@@ -48,7 +48,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
   // Requests friends sent to borrow the current user's garments
   const friendsRequests = borrows.filter(b => {
     // Current user is the owner of the garment
-    return b.borrower_id !== currentUser.user_id;
+    return b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id;
   });
 
   const handleAcceptWithConflictCheck = (borrow: Borrow) => {

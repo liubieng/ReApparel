@@ -1,71 +1,244 @@
-import { 
-  BSASQuestion, 
-  User, 
-  Tag, 
-  ClothingItem, 
-  BSASAssessment, 
-  DailyClothingLog, 
-  FriendRequest, 
-  Borrow, 
-  DonationOpportunity, 
-  DonationFlag 
+import {
+  BSASQuestion,
+  User,
+  Tag,
+  ClothingItem,
+  BSASAssessment,
+  DailyClothingLog,
+  FriendRequest,
+  Borrow,
+  DonationOpportunity,
+  DonationFlag
 } from '../types/database';
 
-export const BSAS_QUESTIONS: BSASQuestion[] = [
+export interface BSASQuestionItem {
+  id: number;
+  text: string;
+  dimension: string;
+  dimensionKey: 'salience' | 'mood_modification' | 'conflict' | 'tolerance' | 'relapse' | 'withdrawal' | 'problems';
+  itemNumberInDimension: number;
+}
+
+export const BSAS_28_ITEMS: BSASQuestionItem[] = [
+  // 1. Salience (Items 1-4)
   {
     id: 1,
-    key: 'salience',
-    title: '1. Salience & Preoccupation',
-    description: 'You think about shopping and buying products all the time.',
-    dimension: 'Salience'
+    text: "Shopping/buying is the most important thing in my life.",
+    dimension: "Salience",
+    dimensionKey: "salience",
+    itemNumberInDimension: 1
   },
   {
     id: 2,
-    key: 'mood_modification',
-    title: '2. Mood Modification',
-    description: 'You shop or buy things in order to change your mood or relieve stress.',
-    dimension: 'Mood Modification'
+    text: "I think about shopping/buying things all the time.",
+    dimension: "Salience",
+    dimensionKey: "salience",
+    itemNumberInDimension: 2
   },
   {
     id: 3,
-    key: 'conflict',
-    title: '3. Interpersonal Conflict',
-    description: 'Shopping has caused friction with people close to you or impaired your daily responsibilities.',
-    dimension: 'Conflict'
+    text: "I spend a lot of time thinking of or planning shopping/buying.",
+    dimension: "Salience",
+    dimensionKey: "salience",
+    itemNumberInDimension: 3
   },
   {
     id: 4,
-    key: 'tolerance',
-    title: '4. Escalation & Tolerance',
-    description: 'You feel you have to buy more and more than before to achieve the same satisfaction.',
-    dimension: 'Tolerance'
+    text: "Thoughts about shopping/buying keep popping in my head.",
+    dimension: "Salience",
+    dimensionKey: "salience",
+    itemNumberInDimension: 4
   },
+  // 2. Mood Modification (Items 5-8)
   {
     id: 5,
-    key: 'withdrawal',
-    title: '5. Withdrawal & Unease',
-    description: 'You feel restless, anxious, or irritable if you are prevented or unable to shop.',
-    dimension: 'Withdrawal'
+    text: "I shop in order to feel better.",
+    dimension: "Mood Modification",
+    dimensionKey: "mood_modification",
+    itemNumberInDimension: 1
   },
   {
     id: 6,
-    key: 'relapse',
-    title: '6. Loss of Control & Relapse',
-    description: 'You have tried to cut down or stop shopping, but were unable to succeed.',
-    dimension: 'Relapse'
+    text: "I shop/buy things in order to change my mood.",
+    dimension: "Mood Modification",
+    dimensionKey: "mood_modification",
+    itemNumberInDimension: 2
   },
   {
     id: 7,
-    key: 'problems',
-    title: '7. Negative Consequences & Problems',
-    description: 'Shopping has resulted in debts, financial difficulties, or harmed your personal wellbeing.',
-    dimension: 'Problems'
+    text: "I shop/buy things in order to forget about personal problems.",
+    dimension: "Mood Modification",
+    dimensionKey: "mood_modification",
+    itemNumberInDimension: 3
+  },
+  {
+    id: 8,
+    text: "I shop/buy things in order to reduce feelings of guilt, anxiety, helplessness, loneliness, and/or depression.",
+    dimension: "Mood Modification",
+    dimensionKey: "mood_modification",
+    itemNumberInDimension: 4
+  },
+  // 3. Conflict (Items 9-12)
+  {
+    id: 9,
+    text: "I shop/buy so much that it negatively affects my daily obligations (e.g., school and work).",
+    dimension: "Conflict",
+    dimensionKey: "conflict",
+    itemNumberInDimension: 1
+  },
+  {
+    id: 10,
+    text: "I give less priority to hobbies, leisure activities, job/studies, or exercise because of shopping/buying.",
+    dimension: "Conflict",
+    dimensionKey: "conflict",
+    itemNumberInDimension: 2
+  },
+  {
+    id: 11,
+    text: "I have ignored love partner, family, and friends because of shopping/buying.",
+    dimension: "Conflict",
+    dimensionKey: "conflict",
+    itemNumberInDimension: 3
+  },
+  {
+    id: 12,
+    text: "I often end up in arguments with others because of shopping/buying.",
+    dimension: "Conflict",
+    dimensionKey: "conflict",
+    itemNumberInDimension: 4
+  },
+  // 4. Tolerance (Items 13-16)
+  {
+    id: 13,
+    text: "I feel an increasing inclination to shop/buy things.",
+    dimension: "Tolerance",
+    dimensionKey: "tolerance",
+    itemNumberInDimension: 1
+  },
+  {
+    id: 14,
+    text: "I shop/buy much more than I had intended/planned.",
+    dimension: "Tolerance",
+    dimensionKey: "tolerance",
+    itemNumberInDimension: 2
+  },
+  {
+    id: 15,
+    text: "I feel I have to shop/buy more and more to obtain the same satisfaction as before.",
+    dimension: "Tolerance",
+    dimensionKey: "tolerance",
+    itemNumberInDimension: 3
+  },
+  {
+    id: 16,
+    text: "I spend more and more time shopping/buying.",
+    dimension: "Tolerance",
+    dimensionKey: "tolerance",
+    itemNumberInDimension: 4
+  },
+  // 5. Relapse (Items 17-20)
+  {
+    id: 17,
+    text: "I have tried to cut down on shopping/buying without success.",
+    dimension: "Relapse",
+    dimensionKey: "relapse",
+    itemNumberInDimension: 1
+  },
+  {
+    id: 18,
+    text: "I have been told by others to reduce shopping/buying without listening to them.",
+    dimension: "Relapse",
+    dimensionKey: "relapse",
+    itemNumberInDimension: 2
+  },
+  {
+    id: 19,
+    text: "I have decided to shop/buy less, but have not been able to do so.",
+    dimension: "Relapse",
+    dimensionKey: "relapse",
+    itemNumberInDimension: 3
+  },
+  {
+    id: 20,
+    text: "I have managed to limit shopping/buying for periods, and then experienced relapse.",
+    dimension: "Relapse",
+    dimensionKey: "relapse",
+    itemNumberInDimension: 4
+  },
+  // 6. Withdrawal (Items 21-24)
+  {
+    id: 21,
+    text: "I become stressed if obstructed from shopping/buying things.",
+    dimension: "Withdrawal",
+    dimensionKey: "withdrawal",
+    itemNumberInDimension: 1
+  },
+  {
+    id: 22,
+    text: "I become sour and grumpy if I for some reasons cannot shop/buy things when I feel like it.",
+    dimension: "Withdrawal",
+    dimensionKey: "withdrawal",
+    itemNumberInDimension: 2
+  },
+  {
+    id: 23,
+    text: "I feel bad if I for some reason are prevented from shopping/buying things.",
+    dimension: "Withdrawal",
+    dimensionKey: "withdrawal",
+    itemNumberInDimension: 3
+  },
+  {
+    id: 24,
+    text: "If there has been a while since I last shopped I feel a strong urge to shop/buy things.",
+    dimension: "Withdrawal",
+    dimensionKey: "withdrawal",
+    itemNumberInDimension: 4
+  },
+  // 7. Problems (Items 25-28)
+  {
+    id: 25,
+    text: "I shop/buy so much that it has caused economic problems.",
+    dimension: "Problems",
+    dimensionKey: "problems",
+    itemNumberInDimension: 1
+  },
+  {
+    id: 26,
+    text: "I shop/buy so much that it has impaired my well-being.",
+    dimension: "Problems",
+    dimensionKey: "problems",
+    itemNumberInDimension: 2
+  },
+  {
+    id: 27,
+    text: "I have worried so much about my shopping that it sometimes has made me sleepless.",
+    dimension: "Problems",
+    dimensionKey: "problems",
+    itemNumberInDimension: 3
+  },
+  {
+    id: 28,
+    text: "I have been bothered with poor conscience because of shopping/buying.",
+    dimension: "Problems",
+    dimensionKey: "problems",
+    itemNumberInDimension: 4
   }
 ];
 
+export const BSAS_RESPONSE_OPTIONS = [
+  { val: 0, label: 'Completely Disagree', badge: '0' },
+  { val: 1, label: 'Disagree', badge: '1' },
+  { val: 2, label: 'Neither Disagree Nor Agree', badge: '2' },
+  { val: 3, label: 'Agree', badge: '3' },
+  { val: 4, label: 'Completely Agree', badge: '4' }
+];
+
+// Alias for backwards-compatibility
+export const BSAS_QUESTIONS = BSAS_28_ITEMS;
+
 export const INITIAL_USERS: User[] = [
   {
-    user_id: 'u-mario-01',
+    user_id: 'a0000000-0000-0000-0000-000000000001',
     email: 'mario@example.com',
     first_name: 'Mario',
     last_name: 'Lee',
@@ -73,7 +246,7 @@ export const INITIAL_USERS: User[] = [
     created_at: '2026-09-01T00:00:00.000Z'
   },
   {
-    user_id: 'u-liu-02',
+    user_id: 'a0000000-0000-0000-0000-000000000002',
     email: 'liu@example.com',
     first_name: 'Liu',
     last_name: 'Chen',
@@ -155,92 +328,7 @@ export const INITIAL_TAGS: Tag[] = [
   { tag_id: 114, tag_name: 'Neutral', tag_type: 'Color', hex_color: '#a8a29e' }
 ];
 
-export const INITIAL_CLOTHING_ITEMS: ClothingItem[] = [
-  {
-    item_id: 1001,
-    user_id: 'u-mario-01',
-    name: 'Vintage Forest Cotton Shirt',
-    type_tag: 'Shirt',
-    category: 'Tops',
-    color: 'Green',
-    color_tag: '#3E6B45',
-    addition_type: 'Old',
-    wear_count: 8,
-    date_added: '2026-08-15T00:00:00.000Z',
-    image_url: createGarmentSilhouette('#3E6B45', 'Vintage Forest Shirt', 'top'),
-    images: [createGarmentSilhouette('#3E6B45', 'Vintage Forest Shirt', 'top')]
-  },
-  {
-    item_id: 1002,
-    user_id: 'u-mario-01',
-    name: 'Tailored Indigo Denim Pants',
-    type_tag: 'Pants',
-    category: 'Bottoms',
-    color: 'Blue',
-    color_tag: '#5B7FA6',
-    addition_type: 'Old',
-    wear_count: 5,
-    date_added: '2026-08-20T00:00:00.000Z',
-    image_url: createGarmentSilhouette('#5B7FA6', 'Tailored Indigo Denim', 'bottom'),
-    images: [createGarmentSilhouette('#5B7FA6', 'Tailored Indigo Denim', 'bottom')]
-  },
-  {
-    item_id: 1003,
-    user_id: 'u-mario-01',
-    name: 'Earthy Wool Knit Sweater',
-    type_tag: 'Shirt',
-    category: 'Knitwear',
-    color: 'Brown',
-    color_tag: '#B98F5E',
-    addition_type: 'New',
-    wear_count: 0,
-    date_added: '2026-09-10T00:00:00.000Z',
-    image_url: createGarmentSilhouette('#B98F5E', 'Earthy Wool Knit', 'top'),
-    images: [createGarmentSilhouette('#B98F5E', 'Earthy Wool Knit', 'top')]
-  },
-  {
-    item_id: 2001,
-    user_id: 'u-liu-02',
-    name: 'Classic Linen Blazer',
-    type_tag: 'One-Piece',
-    category: 'Outerwear',
-    color: 'Beige',
-    color_tag: '#C7A06B',
-    addition_type: 'Old',
-    wear_count: 12,
-    date_added: '2026-08-10T00:00:00.000Z',
-    image_url: createGarmentSilhouette('#C7A06B', 'Classic Linen Blazer', 'outerwear'),
-    images: [createGarmentSilhouette('#C7A06B', 'Classic Linen Blazer', 'outerwear')]
-  },
-  {
-    item_id: 2002,
-    user_id: 'u-liu-02',
-    name: 'Midnight Chino Trousers',
-    type_tag: 'Pants',
-    category: 'Bottoms',
-    color: 'Black',
-    color_tag: '#2A2A2E',
-    addition_type: 'Old',
-    wear_count: 7,
-    date_added: '2026-08-12T00:00:00.000Z',
-    image_url: createGarmentSilhouette('#2A2A2E', 'Midnight Chino', 'bottom'),
-    images: [createGarmentSilhouette('#2A2A2E', 'Midnight Chino', 'bottom')]
-  },
-  {
-    item_id: 2003,
-    user_id: 'u-liu-02',
-    name: 'Burgundy Silk Pleated Skirt',
-    type_tag: 'Skirt',
-    category: 'Bottoms',
-    color: 'Burgundy',
-    color_tag: '#8B5E6B',
-    addition_type: 'New',
-    wear_count: 1,
-    date_added: '2026-09-14T00:00:00.000Z',
-    image_url: createGarmentSilhouette('#8B5E6B', 'Burgundy Silk Skirt', 'bottom'),
-    images: [createGarmentSilhouette('#8B5E6B', 'Burgundy Silk Skirt', 'bottom')]
-  }
-];
+export const INITIAL_CLOTHING_ITEMS: ClothingItem[] = [];
 
 export const INITIAL_ASSESSMENTS: BSASAssessment[] = [];
 
@@ -252,4 +340,6 @@ export const INITIAL_FRIEND_REQUESTS: FriendRequest[] = [];
 export const INITIAL_BORROWS: Borrow[] = [];
 
 export const INITIAL_DONATION_OPPORTUNITIES: DonationOpportunity[] = [];
+
+
 

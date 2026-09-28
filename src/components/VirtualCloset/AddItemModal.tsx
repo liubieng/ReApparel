@@ -1,7 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Check, AlertCircle, Sparkles, ImagePlus } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
-import { CATEGORIES, GARMENT_TYPES, CURATED_COLOR_FAMILIES, CuratedColorFamily } from '../../data/seedData';
+import { 
+  CATEGORIES, 
+  GARMENT_TYPES, 
+  CURATED_COLOR_FAMILIES, 
+  CuratedColorFamily,
+  createGarmentSilhouette 
+} from '../../data/seedData';
 import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 
 /**
@@ -12,19 +18,18 @@ import { removeBackgroundClientSide } from '../../utils/imageProcessing';
  * CAPSTONE DEFENSE CONTEXT & ARCHITECTURE:
  * 1. UN SDG 12 Responsible Consumption:
  *    - Enforces wardrobe digitization to optimize circularity and wear counts.
- * 2. Strict Data Integrity:
- *    - Enforces mutually exclusive single category selection.
- *    - Enforces mutually exclusive single garment type selection.
- *    - Enforces mandatory color selection for wardrobe chromatic analytics.
+ * 2. Smart Attribute Resolution:
+ *    - Automatically synchronizes Category & Garment Type selections.
+ *    - Gracefully defaults colors and crisp vector silhouettes if omitted.
  * 3. Client-Side Edge Background Removal:
  *    - Implements HTML5 Canvas image segmentation to isolate garment silhouettes
- *      without requiring expensive or cloud-dependent external ML APIs.
+ *      without requiring external ML APIs or server roundtrips.
  */
 
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: string;
+  userId?: string;
   onAddItem: (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => Promise<void>;
   toast: (msg: string) => void;
 }
@@ -37,15 +42,17 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   toast
 }) => {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<string>('');
-  const [garmentType, setGarmentType] = useState<string>('');
-  const [selectedColor, setSelectedColor] = useState<string>('');
-  const [selectedColorHex, setSelectedColorHex] = useState<string>('');
+  const [category, setCategory] = useState<string>('Tops');
+  const [garmentType, setGarmentType] = useState<string>('Shirt');
+  const [selectedColor, setSelectedColor] = useState<string>('Neutral');
+  const [selectedColorHex, setSelectedColorHex] = useState<string>('#64748b');
   const [images, setImages] = useState<string[]>([]);
   const [formWarning, setFormWarning] = useState<string | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   if (!isOpen) return null;
 
@@ -90,6 +97,29 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleSelectCategory = (cat: string) => {
+    setCategory(cat);
+    setFormWarning(null);
+    // Smart sync with garmentType
+    if (cat === 'Tops' || cat === 'Knitwear') setGarmentType('Shirt');
+    else if (cat === 'Bottoms') setGarmentType('Pants');
+    else if (cat === 'Outerwear') setGarmentType('Outerwear');
+    else if (cat === 'Shoes') setGarmentType('Shoes');
+    else if (cat === 'Dresses') setGarmentType('Dress');
+    else if (cat === 'Accessories') setGarmentType('One-Piece');
+  };
+
+  const handleSelectGarmentType = (gt: string) => {
+    setGarmentType(gt);
+    setFormWarning(null);
+    // Smart sync with category
+    if (gt === 'Shirt') setCategory('Tops');
+    else if (gt === 'Pants' || gt === 'Skirt' || gt === 'Shorts') setCategory('Bottoms');
+    else if (gt === 'Dress' || gt === 'One-Piece') setCategory('Dresses');
+    else if (gt === 'Outerwear') setCategory('Outerwear');
+    else if (gt === 'Shoes') setCategory('Shoes');
+  };
+
   const handleSelectColorFamily = (family: CuratedColorFamily) => {
     setSelectedColor(family.name);
     setSelectedColorHex(family.hex);
@@ -100,48 +130,65 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     e.preventDefault();
     setFormWarning(null);
 
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setFormWarning('Please enter a garment name.');
+      modalRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    if (!category) {
-      setFormWarning('Category is required (please pick exactly 1).');
-      return;
+    // Resolve category and garmentType
+    const finalCategory = category || 'Tops';
+    const finalType = garmentType || 'Shirt';
+    const finalColor = selectedColor || 'Neutral';
+    const finalColorHex = selectedColorHex || '#64748b';
+
+    // Generate crisp vector silhouette if no user photo uploaded
+    const silType = (finalCategory === 'Bottoms' || finalType === 'Pants' || finalType === 'Skirt' || finalType === 'Shorts')
+      ? 'bottom'
+      : (finalCategory === 'Outerwear' || finalType === 'Outerwear')
+        ? 'outerwear'
+        : (finalCategory === 'Dresses' || finalType === 'Dress')
+          ? 'dress'
+          : (finalCategory === 'Shoes' || finalType === 'Shoes')
+            ? 'shoes'
+            : 'top';
+
+    const primaryImage = images.length > 0 
+      ? images[0] 
+      : createGarmentSilhouette(finalColorHex, trimmedName, silType);
+
+    setIsSubmitting(true);
+    try {
+      await onAddItem({
+        user_id: userId || 'a0000000-0000-0000-0000-000000000001',
+        name: trimmedName,
+        image_url: primaryImage,
+        addition_type: 'Old',
+        category: finalCategory,
+        type_tag: finalType,
+        color: finalColor,
+        color_tag: finalColorHex,
+        images: images.length > 0 ? images : [primaryImage]
+      });
+
+      toast(`"${trimmedName}" added to your virtual closet!`);
+      // Reset form fields
+      setName('');
+      setImages([]);
+      setFormWarning(null);
+      onClose();
+    } catch (err) {
+      console.error('Failed to add garment:', err);
+      setFormWarning('Unable to save item to closet. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (!garmentType) {
-      setFormWarning('Garment type is required (please pick exactly 1).');
-      return;
-    }
-
-    if (!selectedColor) {
-      setFormWarning('Color is required (please choose a color family).');
-      return;
-    }
-
-    // Default placeholder if no image uploaded
-    const primaryImage = images[0] || selectedColorHex || '#3E6B45';
-
-    await onAddItem({
-      user_id: userId,
-      name: name.trim(),
-      image_url: primaryImage,
-      addition_type: 'Old',
-      category,
-      type_tag: garmentType,
-      color: selectedColor,
-      color_tag: selectedColorHex,
-      images: images.length > 0 ? images : [primaryImage]
-    });
-
-    toast(`"${name.trim()}" added to your virtual closet!`);
-    onClose();
   };
 
   return (
     <div className="modalScrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div ref={modalRef} className="modal" style={{ maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         
         {/* Modal Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -162,9 +209,13 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             color: 'var(--danger)',
             fontSize: 12,
             marginBottom: 14,
-            border: '1px solid var(--danger)'
+            border: '1px solid var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
           }}>
-            {formWarning}
+            <AlertCircle className="ico" style={{ width: 14, height: 14 }} />
+            <span>{formWarning}</span>
           </div>
         )}
 
@@ -173,7 +224,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
           {/* Garment Photos (1-3) */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Photos (1–3)</span>
+              <span>Photos (Optional, 1–3)</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{images.length}/3 photos</span>
             </label>
 
@@ -215,7 +266,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
               onChange={handleImageFileChange}
             />
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              ⚡ Background is automatically removed using HTML5 Canvas edge sampling.
+              ⚡ Background is automatically isolated. If no photo is uploaded, a crisp vector silhouette is generated.
             </div>
           </div>
 
@@ -224,17 +275,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             <label>Garment Name *</label>
             <input
               type="text"
-              placeholder="e.g. Linen Relaxed Overshirt"
+              placeholder="e.g. Linen Relaxed Overshirt, Vintage Denim Jeans"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); setFormWarning(null); }}
               required
+              autoFocus
             />
           </div>
 
-          {/* Category Selection (Single choice enforced) */}
+          {/* Category Selection */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Category * (Pick 1)</span>
+              <span>Category</span>
               {category && <span style={{ fontSize: 11.5, color: 'var(--primary)', fontWeight: 700 }}>✓ {category}</span>}
             </label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
@@ -255,7 +307,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                       border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
                       fontWeight: isSelected ? 600 : 400
                     }}
-                    onClick={() => { setCategory(cat); setFormWarning(null); }}
+                    onClick={() => handleSelectCategory(cat)}
                   >
                     {cat} {isSelected ? '✓' : ''}
                   </button>
@@ -264,10 +316,10 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          {/* Garment Type Selection (Single choice enforced) */}
+          {/* Garment Type Selection */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Garment Type * (Pick 1)</span>
+              <span>Garment Type</span>
               {garmentType && <span style={{ fontSize: 11.5, color: 'var(--primary)', fontWeight: 700 }}>✓ {garmentType}</span>}
             </label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4, maxHeight: 110, overflowY: 'auto' }}>
@@ -288,7 +340,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                       border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
                       fontWeight: isSelected ? 600 : 400
                     }}
-                    onClick={() => { setGarmentType(gt); setFormWarning(null); }}
+                    onClick={() => handleSelectGarmentType(gt)}
                   >
                     {gt} {isSelected ? '✓' : ''}
                   </button>
@@ -297,10 +349,10 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          {/* Required Color Selection */}
+          {/* Color Selection */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Color * (Required)</span>
+              <span>Color Profile</span>
               {selectedColor && (
                 <span style={{ fontSize: 11.5, color: 'var(--primary)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: selectedColorHex, display: 'inline-block' }} />
@@ -341,13 +393,27 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-            <button type="button" className="btn btn-g" onClick={onClose}>
+          {/* Actions & Immediate Inline Warning */}
+          {formWarning && (
+            <div style={{
+              color: 'var(--danger)',
+              fontSize: 12,
+              marginTop: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <AlertCircle className="ico" style={{ width: 14, height: 14 }} />
+              <span>{formWarning}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <button type="button" className="btn btn-g" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-p" style={{ padding: '8px 18px' }}>
-              Add to Closet
+            <button type="submit" className="btn btn-p" disabled={isSubmitting} style={{ padding: '8px 20px' }}>
+              {isSubmitting ? 'Adding...' : 'Add to Closet'}
             </button>
           </div>
 
@@ -357,3 +423,4 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     </div>
   );
 };
+

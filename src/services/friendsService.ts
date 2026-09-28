@@ -1,4 +1,4 @@
-import { mockDatabase } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId } from './supabaseClient';
 import { User, FriendRequest, Borrow, ClothingItem } from '../types/database';
 
 export const friendsService = {
@@ -11,7 +11,7 @@ export const friendsService = {
   },
 
   switchCurrentUser(userId: string) {
-    mockDatabase.setCurrentUserId(userId);
+    mockDatabase.setCurrentUserId(toCanonicalUserId(userId));
   },
 
   getFriendRequests(): FriendRequest[] {
@@ -19,11 +19,46 @@ export const friendsService = {
   },
 
   sendFriendRequest(friendCode: string): { success: boolean; message: string } {
-    return mockDatabase.sendFriendRequest(friendCode);
+    const res = mockDatabase.sendFriendRequest(friendCode);
+    if (res.success) {
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          const reqs = mockDatabase.getFriendRequests();
+          const latest = reqs[0];
+          if (latest) {
+            const isSenderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(latest.sender_id);
+            const isReceiverUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(latest.receiver_id);
+            if (isSenderUuid && isReceiverUuid) {
+              supabase.from('friend_request').insert([{
+                sender_id: latest.sender_id,
+                receiver_id: latest.receiver_id,
+                status: latest.status
+              }]).then(() => {}).catch(() => {});
+            }
+          }
+        } catch {}
+      }
+    }
+    return res;
   },
 
   respondToRequest(requestId: number, status: 'accepted' | 'rejected') {
     mockDatabase.respondToFriendRequest(requestId, status);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const req = mockDatabase.getFriendRequests().find(r => r.request_id === requestId);
+        if (req) {
+          supabase
+            .from('friend_request')
+            .update({ status: req.status, updated_at: req.updated_at })
+            .match({ sender_id: req.sender_id, receiver_id: req.receiver_id })
+            .then(() => {})
+            .catch(() => {});
+        }
+      } catch {}
+    }
   },
 
   getConnectedFriends(): User[] {
@@ -71,11 +106,38 @@ export const friendsService = {
   },
 
   requestBorrow(itemId: number, startDate: string, endDate: string): Borrow {
-    return mockDatabase.createBorrowRequest(itemId, startDate, endDate);
+    const borrow = mockDatabase.createBorrowRequest(itemId, startDate, endDate);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const isBorrowerUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(borrow.borrower_id);
+        if (isBorrowerUuid) {
+          supabase.from('borrow').insert([{
+            borrower_id: borrow.borrower_id,
+            item_id: borrow.item_id,
+            start_date: borrow.start_date,
+            end_date: borrow.end_date,
+            status: borrow.status
+          }]).then(() => {}).catch(() => {});
+        }
+      } catch {}
+    }
+    return borrow;
   },
 
   updateBorrowStatus(borrowId: number, status: Borrow['status']) {
     mockDatabase.updateBorrowStatus(borrowId, status);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        supabase
+          .from('borrow')
+          .update({ status })
+          .eq('borrow_id', borrowId)
+          .then(() => {})
+          .catch(() => {});
+      } catch {}
+    }
   },
 
   getNotifications(userId?: string) {

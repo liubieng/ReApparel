@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Shirt, Leaf, Users, Sparkles, ArrowRight, ShieldCheck, KeyRound, UserPlus, LogIn } from 'lucide-react';
+import { Shirt, Leaf, Users, Sparkles, ArrowRight, ShieldCheck, KeyRound, UserPlus, LogIn, AlertCircle } from 'lucide-react';
 import { User } from '../../types/database';
-import { mockDatabase } from '../../services/supabaseClient';
+import { mockDatabase, getSupabase } from '../../services/supabaseClient';
 
 /**
  * ============================================================================
@@ -28,9 +28,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form submission handler
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -41,24 +42,46 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         return;
       }
 
-      // Authenticate via mockDatabase or registered user
-      const user = mockDatabase.loginUser(identifier);
-      if (user) {
-        toast(`Welcome back, ${user.first_name}!`);
-        onLoginSuccess(user, false);
-      } else {
-        // Create an account on the fly if testing a new email/code
-        const fallbackUser = mockDatabase.registerUser({
-          email: identifier.includes('@') ? identifier : `${identifier.toLowerCase()}@reapparel.local`,
-          first_name: identifier.split('@')[0],
-          last_name: ''
-        });
-        toast(`Logged in as ${fallbackUser.first_name}`);
-        onLoginSuccess(fallbackUser, true);
+      setIsSubmitting(true);
+      try {
+        // 1. Authenticate via local state
+        let user = mockDatabase.loginUser(identifier);
+
+        // 2. If not found locally, query Supabase users table
+        if (!user) {
+          const supabase = getSupabase();
+          if (supabase) {
+            try {
+              const { data } = await supabase
+                .from('users')
+                .select('*')
+                .or(`email.ilike.${identifier},friend_code.ilike.${identifier}`)
+                .limit(1);
+              if (data && data.length > 0) {
+                const remoteUser = data[0] as User;
+                const all = mockDatabase.getAllUsers();
+                if (!all.some(u => u.user_id === remoteUser.user_id)) {
+                  all.push(remoteUser);
+                }
+                mockDatabase.setCurrentUserId(remoteUser.user_id);
+                user = remoteUser;
+              }
+            } catch {}
+          }
+        }
+
+        if (user) {
+          toast(`Welcome back, ${user.first_name}!`);
+          onLoginSuccess(user, false);
+        } else {
+          setErrorMsg('No account found with this email or friend code. Please check your credentials or switch to Register.');
+        }
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
       // Registration mode
-      const trimmedEmail = emailOrCode.trim();
+      const trimmedEmail = emailOrCode.trim().toLowerCase();
       const trimmedFirst = firstName.trim();
       const trimmedLast = lastName.trim();
 
@@ -67,36 +90,66 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         return;
       }
 
-      if (!trimmedEmail.includes('@')) {
+      if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
         setErrorMsg('Please enter a valid email address.');
         return;
       }
 
-      if (password && password.length < 6) {
-        setErrorMsg('Password must be at least 6 characters.');
+      // 1. Check if email already registered locally
+      if (mockDatabase.isEmailRegistered(trimmedEmail)) {
+        setErrorMsg(`An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
         return;
       }
 
-      if (password !== confirmPassword) {
-        setErrorMsg('Passwords do not match. Please verify your confirmation password.');
-        return;
+      setIsSubmitting(true);
+      try {
+        // 2. Check if email already registered in Supabase users table
+        const supabase = getSupabase();
+        if (supabase) {
+          try {
+            const { data } = await supabase
+              .from('users')
+              .select('user_id')
+              .ilike('email', trimmedEmail)
+              .limit(1);
+            if (data && data.length > 0) {
+              setErrorMsg(`An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
+              return;
+            }
+          } catch {}
+        }
+
+        if (password && password.length < 6) {
+          setErrorMsg('Password must be at least 6 characters.');
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          setErrorMsg('Passwords do not match. Please verify your confirmation password.');
+          return;
+        }
+
+        const newUser = mockDatabase.registerUser({
+          email: trimmedEmail,
+          first_name: trimmedFirst,
+          last_name: trimmedLast
+        });
+
+        toast(`Account created! Welcome to ReApparel, ${newUser.first_name}.`);
+        // New users are directed to the BSAS baseline assessment first
+        onLoginSuccess(newUser, true);
+      } catch (err: any) {
+        setErrorMsg(err?.message || `An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
+      } finally {
+        setIsSubmitting(false);
       }
-
-      const newUser = mockDatabase.registerUser({
-        email: trimmedEmail,
-        first_name: trimmedFirst,
-        last_name: trimmedLast
-      });
-
-      toast(`Account created! Welcome to ReApparel, ${newUser.first_name}.`);
-      // New users are directed to the BSAS baseline assessment first
-      onLoginSuccess(newUser, true);
     }
   };
 
   // Quick switch for panel demonstration
   const handleQuickDemoLogin = (userId: string) => {
-    const user = mockDatabase.getAllUsers().find(u => u.user_id === userId);
+    const all = mockDatabase.getAllUsers();
+    const user = all.find(u => u.user_id === userId || u.user_id === 'a0000000-0000-0000-0000-000000000001');
     if (user) {
       mockDatabase.setCurrentUserId(user.user_id);
       toast(`Switched to demo profile: ${user.first_name} ${user.last_name}`);
@@ -186,9 +239,53 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             color: 'var(--danger)',
             fontSize: 12.5,
             marginBottom: 16,
-            border: '1px solid var(--danger)'
+            border: '1px solid var(--danger)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6
           }}>
-            {errorMsg}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
+              <span>{errorMsg}</span>
+            </div>
+            {errorMsg.includes('already exists') && (
+              <button
+                type="button"
+                onClick={() => { setAuthMode('login'); setErrorMsg(null); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary)',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  padding: 0
+                }}
+              >
+                Click here to switch to Sign In &rarr;
+              </button>
+            )}
+            {errorMsg.includes('No account found') && (
+              <button
+                type="button"
+                onClick={() => { setAuthMode('register'); setErrorMsg(null); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary)',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  padding: 0
+                }}
+              >
+                Click here to Register a new account &rarr;
+              </button>
+            )}
           </div>
         )}
 
@@ -275,7 +372,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               type="button"
               className="btn btn-g"
               style={{ fontSize: 11.5, padding: '6px 8px', justifyContent: 'center' }}
-              onClick={() => handleQuickDemoLogin('u-mario-01')}
+              onClick={() => handleQuickDemoLogin('a0000000-0000-0000-0000-000000000001')}
             >
               Mario (Lender)
             </button>
@@ -283,7 +380,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               type="button"
               className="btn btn-g"
               style={{ fontSize: 11.5, padding: '6px 8px', justifyContent: 'center' }}
-              onClick={() => handleQuickDemoLogin('u-liu-02')}
+              onClick={() => handleQuickDemoLogin('a0000000-0000-0000-0000-000000000002')}
             >
               Liu (Borrower)
             </button>

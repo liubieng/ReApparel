@@ -125,10 +125,10 @@ export async function removeBackgroundClientSide(
           throw new Error('Canvas 2D context unavailable');
         }
 
-        // Target standard crisp garment silhouette dimensions (max 900px)
+        // Target standard crisp garment silhouette dimensions (max 480px for memory & quota efficiency)
         let width = img.width;
         let height = img.height;
-        const maxDim = 900;
+        const maxDim = 480;
         if (width > maxDim || height > maxDim) {
           if (width > height) {
             height = Math.round((height * maxDim) / width);

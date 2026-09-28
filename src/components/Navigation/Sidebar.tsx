@@ -35,7 +35,9 @@ interface SidebarProps {
   currentView: string;
   isOpen: boolean;
   currentUser: User | null;
-  pendingRequestsCount: number;
+  pendingRequestsCount?: number;
+  pendingBorrowsCount?: number;
+  pendingFriendsCount?: number;
   onSelectView: (viewId: string) => void;
   onCloseMobile: () => void;
   onLogout: () => void;
@@ -46,18 +48,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   isOpen,
   currentUser,
-  pendingRequestsCount,
+  pendingRequestsCount = 0,
+  pendingBorrowsCount,
+  pendingFriendsCount = 0,
   onSelectView,
   onCloseMobile,
   onLogout,
   onOpenDatabase
 }) => {
+  const borrowsCount = pendingBorrowsCount !== undefined ? pendingBorrowsCount : pendingRequestsCount;
+
   return (
     <>
       {/* Mobile Backdrop */}
       {isOpen && (
         <div 
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 25 }}
+          className="mobile-backdrop"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
           onClick={onCloseMobile}
         />
       )}
@@ -93,6 +100,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const Icon = item.icon;
             const isActive = currentView === item.id;
             const isRequests = item.id === 'requests';
+            const isFriends = item.id === 'friends';
+            const badgeCount = isRequests ? borrowsCount : isFriends ? pendingFriendsCount : 0;
 
             return (
               <button
@@ -123,8 +132,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Icon style={{ width: 16, height: 16 }} />
                 <span style={{ flex: 1 }}>{item.label}</span>
 
-                {/* Badge for pending requests */}
-                {isRequests && pendingRequestsCount > 0 && (
+                {/* Badge for pending requests & friend connections */}
+                {badgeCount > 0 && (
                   <span style={{
                     fontSize: 10,
                     fontWeight: 700,
@@ -133,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     background: 'var(--danger)',
                     color: '#ffffff'
                   }}>
-                    {pendingRequestsCount}
+                    {badgeCount}
                   </span>
                 )}
               </button>

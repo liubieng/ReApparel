@@ -61,7 +61,7 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 16 }}>
-          Grounded in the <strong>Bergen Shopping Addiction Scale (BSAS)</strong> (Andreassen et al., 2015), this 7-item diagnostic assessment evaluates your shopping motivations across seven core dimensions of compulsive consumption.
+          Grounded in the <strong>Bergen Shopping Addiction Scale (BSAS)</strong> (Andreassen et al., 2015), this 28-item diagnostic assessment evaluates your shopping motivations across seven core dimensions of compulsive consumption.
         </p>
 
         {/* 7 Diagnostic Dimensions List */}
@@ -73,7 +73,7 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
           border: '1px solid var(--border)'
         }}>
           <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>
-            7 Clinical Behavioral Dimensions Evaluated:
+            7 Clinical Behavioral Dimensions Evaluated (4 Items Each):
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11.5, color: 'var(--text-muted)' }}>
             <div>1. <strong>Salience</strong> (Preoccupation)</div>
@@ -97,7 +97,7 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
           borderRadius: 4,
           marginBottom: 24
         }}>
-          <strong>Scoring Threshold:</strong> Responses are rated from 0 to 7. Endorsement score &ge; 4 on a criterion counts as a positive diagnostic indicator. Endorsing 4 or more criteria classifies the assessment as <em>Indicative Risk</em>.
+          <strong>Clinical Scoring (Psychology Tools):</strong> 5-point Likert scale (Completely Disagree to Completely Agree). Scoring <em>Agree</em> or <em>Completely Agree</em> endorses a symptom. Endorsing 4 or more criteria classifies the assessment as <em>Indicative Risk</em>.
         </div>
 
         {/* Action Buttons */}
@@ -108,7 +108,7 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
             style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 14 }}
             onClick={onStartAssessment}
           >
-            Start 7-Item Check-In <ArrowRight className="ico" style={{ marginLeft: 6 }} />
+            Start BSAS Check-In (28 Items) <ArrowRight className="ico" style={{ marginLeft: 6 }} />
           </button>
           
           <button

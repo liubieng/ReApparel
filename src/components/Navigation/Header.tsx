@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
     <div className="top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
       <button 
         type="button" 
-        className="icobtn" 
+        className="icobtn mobile-menu-btn" 
         onClick={onOpenMobileSidebar}
         aria-label="Open navigation sidebar"
       >
