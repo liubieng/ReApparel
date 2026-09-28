@@ -1,364 +1,466 @@
 import React, { useState, useMemo } from 'react';
 import { 
+  Shirt, 
   Plus, 
   Search, 
   Filter, 
-  Tag as TagIcon, 
-  Sparkles, 
-  Edit3, 
+  X, 
+  Pencil, 
+  Trash2, 
+  RotateCcw, 
   Check, 
-  TrendingUp, 
-  AlertCircle,
-  Shirt,
+  Sparkles, 
+  CalendarPlus,
   Layers,
-  ArrowUpDown,
-  Share2
+  Info
 } from 'lucide-react';
-import { ClothingItem, Tag } from '../../types/database';
-import { AddItemModal } from './AddItemModal';
-import { EditItemModal } from './EditItemModal';
+import { ClothingItem, AdditionType } from '../../types/database';
+import { CURATED_COLOR_FAMILIES } from '../../data/seedData';
+
+/**
+ * ============================================================================
+ * VIRTUAL CLOSET VIEW (VirtualClosetView.tsx)
+ * ============================================================================
+ * 
+ * CAPSTONE DEFENSE CONTEXT & METHODOLOGY:
+ * - Direct implementation of UN SDG 12 (Target 12.5): Reducing garment underutilization
+ *   through real-time wardrobe transparency.
+ * - Multi-Attribute Dynamic Filtering:
+ *   1. Active Wardrobe Categories (filters reflect only garments owned by the user).
+ *   2. Curated Chromatic Families (extracts color profiles of the wardrobe).
+ *   3. Baseline Lifecycle Type: Old (pre-existing) vs New (post-onboarding purchase).
+ *   4. Wear Utilization Frequency: Unworn (0 wears) vs Active Utilization (3+ wears).
+ * - Wear Count Maximization: Encourages users to wear existing items instead of buying new.
+ */
 
 interface VirtualClosetViewProps {
-  items: ClothingItem[];
-  tags: Tag[];
-  userId: string;
-  onAddItem: (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => Promise<void>;
-  onUpdateItem: (itemId: number, updates: Partial<ClothingItem>) => Promise<void>;
-  onDeleteItem: (itemId: number) => Promise<void>;
-  onSelectForTodayOutfit?: (item: ClothingItem) => void;
+  garments: ClothingItem[];
+  onOpenAddModal: () => void;
+  onEditGarment: (garment: ClothingItem) => void;
+  onDeleteGarment: (garment: ClothingItem) => void;
+  onQuickIncrementWear: (garment: ClothingItem) => Promise<void>;
+  toast: (msg: string) => void;
 }
 
 export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
-  items,
-  tags,
-  userId,
-  onAddItem,
-  onUpdateItem,
-  onDeleteItem,
-  onSelectForTodayOutfit
+  garments,
+  onOpenAddModal,
+  onEditGarment,
+  onDeleteGarment,
+  onQuickIncrementWear,
+  toast
 }) => {
+  // Filter States
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedColor, setSelectedColor] = useState<string>('All');
-  const [selectedWearFilter, setSelectedWearFilter] = useState<string>('All'); // 'All' | 'Unworn' | 'Low' | 'High'
-  const [sortBy, setSortBy] = useState<'recent' | 'wear_desc' | 'wear_asc'>('recent');
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
+  const [wearFilter, setWearFilter] = useState<'all' | 'unworn' | 'low' | 'active'>('all');
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
+  // Compute Active Categories present in user's wardrobe
+  const wardrobeCategories = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }>();
+    garments.forEach(g => {
+      const cat = (g.category || g.type_tag || '').trim();
+      if (!cat) return;
+      if (map.has(cat)) {
+        map.get(cat)!.count += 1;
+      } else {
+        map.set(cat, { name: cat, count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [garments]);
 
-  const categories = useMemo(() => tags.filter(t => t.tag_type === 'Category'), [tags]);
-  const colors = useMemo(() => {
-    const itemColors = new Set(items.map(i => (i.color || '').toLowerCase()).filter(Boolean));
-    return tags.filter(t => t.tag_type === 'Color' && itemColors.has(t.tag_name.toLowerCase()));
-  }, [items, tags]);
+  // Compute Active Curated Color Families present in user's wardrobe
+  const wardrobeColors = useMemo(() => {
+    const map = new Map<string, { name: string; hex: string; count: number }>();
+    garments.forEach(g => {
+      const gName = (g.color || '').trim();
+      const gHex = (g.color_tag || (g.image_url?.startsWith('#') ? g.image_url : '')).trim();
 
-  // Filtered and sorted garments
-  const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      // Search
+      const matched = CURATED_COLOR_FAMILIES.find(f => 
+        (gName && f.name.toLowerCase() === gName.toLowerCase()) ||
+        (gHex && f.hex.toLowerCase() === gHex.toLowerCase())
+      );
+
+      const key = matched ? matched.name : (gName || gHex);
+      if (!key) return;
+
+      const familyName = matched ? matched.name : (gName || 'Custom');
+      const familyHex = gHex || matched?.hex || '#64748b';
+
+      if (map.has(key)) {
+        map.get(key)!.count += 1;
+      } else {
+        map.set(key, { name: familyName, hex: familyHex, count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [garments]);
+
+  // Filtered Garment Items
+  const filteredGarments = useMemo(() => {
+    return garments.filter(g => {
+      const type = g.type_tag || g.category || '';
+      const wear = g.worn_count ?? g.wear_count ?? 0;
+
+      // Type / Category Filter
+      const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
+        return (g.category && g.category.toLowerCase() === sel.toLowerCase()) ||
+               (g.type_tag && g.type_tag.toLowerCase() === sel.toLowerCase());
+      });
+      if (!matchType) return false;
+
+      // Color Filter
+      const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
+        const itemColor = (g.color || '').toLowerCase();
+        const itemColorTag = (g.color_tag || '').toLowerCase();
+        const selLower = sel.toLowerCase();
+        return itemColor.includes(selLower) || itemColorTag.includes(selLower);
+      });
+      if (!matchColor) return false;
+
+      // Wear Activity Filter
+      if (wearFilter === 'unworn' && wear > 0) return false;
+      if (wearFilter === 'low' && (wear < 1 || wear > 2)) return false;
+      if (wearFilter === 'active' && wear < 3) return false;
+
+      // Search Query
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesName = item.name.toLowerCase().includes(query);
-        const matchesCat = item.category?.toLowerCase().includes(query);
-        const matchesColor = item.color?.toLowerCase().includes(query);
-        if (!matchesName && !matchesCat && !matchesColor) return false;
+        const q = searchQuery.toLowerCase();
+        const matchName = g.name.toLowerCase().includes(q);
+        const matchCat = (g.category || '').toLowerCase().includes(q);
+        const matchColorName = (g.color || '').toLowerCase().includes(q);
+        const matchTypeTag = (g.type_tag || '').toLowerCase().includes(q);
+        if (!matchName && !matchCat && !matchColorName && !matchTypeTag) return false;
       }
-
-      // Category filter
-      if (selectedCategory !== 'All' && item.category !== selectedCategory) {
-        return false;
-      }
-
-      // Color filter
-      if (selectedColor !== 'All' && item.color !== selectedColor) {
-        return false;
-      }
-
-      // Wear count filter
-      if (selectedWearFilter === 'Unworn' && item.wear_count !== 0) return false;
-      if (selectedWearFilter === 'Low' && (item.wear_count === 0 || item.wear_count > 5)) return false;
-      if (selectedWearFilter === 'High' && item.wear_count <= 5) return false;
 
       return true;
-    }).sort((a, b) => {
-      if (sortBy === 'wear_desc') return (b.wear_count || 0) - (a.wear_count || 0);
-      if (sortBy === 'wear_asc') return (a.wear_count || 0) - (b.wear_count || 0);
-      return new Date(b.date_added).getTime() - new Date(a.date_added).getTime();
     });
-  }, [items, searchQuery, selectedCategory, selectedColor, selectedWearFilter, sortBy]);
+  }, [garments, selectedTypes, selectedColors, wearFilter, searchQuery]);
 
-  // Metrics
-  const totalCount = items.length;
-  const unwornCount = items.filter(i => i.wear_count === 0).length;
-  const activeUtilization = totalCount > 0 ? Math.round(((totalCount - unwornCount) / totalCount) * 100) : 0;
-  const totalWearsCount = items.reduce((acc, i) => acc + (i.wear_count || 0), 0);
+  const toggleTypeFilter = (typeName: string) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(typeName)) next.delete(typeName);
+      else next.add(typeName);
+      return next;
+    });
+  };
+
+  const toggleColorFilter = (colorName: string) => {
+    setSelectedColors(prev => {
+      const next = new Set(prev);
+      if (next.has(colorName)) next.delete(colorName);
+      else next.add(colorName);
+      return next;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setSelectedTypes(new Set());
+    setSelectedColors(new Set());
+    setWearFilter('all');
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0 || wearFilter !== 'all' || searchQuery.trim().length > 0;
 
   return (
-    <div className="space-y-6">
-      
-      {/* Overview Stat Ribbon */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 block uppercase tracking-wider">
-            Total Garments
-          </span>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900">{totalCount}</span>
-            <span className="text-xs text-slate-500 font-medium">pieces</span>
+    <div>
+      {/* View Header with Action Button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>
+            Virtual Closet
+          </h2>
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+            {garments.length} total garments registered &middot; {filteredGarments.length} currently displayed
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 block uppercase tracking-wider">
-            Active Utilization
-          </span>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-emerald-600">{activeUtilization}%</span>
-            <span className="text-xs text-emerald-700/80 font-medium">closet rotated</span>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 block uppercase tracking-wider">
-            Unworn Items (0 Wears)
-          </span>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-amber-600">{unwornCount}</span>
-            <span className="text-xs text-amber-700/80 font-medium">need rotation</span>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <span className="text-xs font-semibold text-slate-500 block uppercase tracking-wider">
-            Total Wears Logged
-          </span>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-indigo-600">{totalWearsCount}</span>
-            <span className="text-xs text-indigo-700/80 font-medium">closet wears</span>
-          </div>
-        </div>
+        <button
+          type="button"
+          className="btn btn-p"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', fontSize: 13 }}
+          onClick={onOpenAddModal}
+        >
+          <Plus className="ico" style={{ width: 16, height: 16 }} />
+          <span>Add Garment</span>
+        </button>
       </div>
 
-      {/* Action Bar & Search / Multi-attribute Filtering */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
+      {/* Search & Filter Bar */}
+      <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
         
-        {/* Top search & Add Garment button */}
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search garments by name, category, or core color..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-            />
-            {searchQuery && (
+        {/* Search Input */}
+        <div style={{ position: 'relative', marginBottom: 12 }}>
+          <Search className="ico" style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)', width: 15, height: 15 }} />
+          <input
+            type="text"
+            placeholder="Search garments by name, category, or color..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: 32, fontSize: 13 }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="icobtn"
+              onClick={() => setSearchQuery('')}
+              style={{ position: 'absolute', right: 8, top: 6 }}
+            >
+              <X className="ico" style={{ width: 14, height: 14 }} />
+            </button>
+          )}
+        </div>
+
+        {/* Multi-Attribute Filter Badges */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          
+          {/* 1. Category Filter (Active Wardrobe Only) */}
+          {wardrobeCategories.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', minWidth: 70 }}>
+                Category:
+              </span>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {wardrobeCategories.map(({ name, count }) => {
+                  const isSelected = selectedTypes.has(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`pill ${isSelected ? 'on' : ''}`}
+                      style={{
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        cursor: 'pointer',
+                        borderRadius: 12,
+                        background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                        color: isSelected ? '#ffffff' : 'var(--text)',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)'
+                      }}
+                      onClick={() => toggleTypeFilter(name)}
+                    >
+                      {name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 2. Curated Color Families Filter (Active Wardrobe Only) */}
+          {wardrobeColors.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', minWidth: 70 }}>
+                Color:
+              </span>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {wardrobeColors.map(({ name, hex, count }) => {
+                  const isSelected = selectedColors.has(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      className="btn btn-g"
+                      style={{
+                        fontSize: 11,
+                        padding: '2px 8px',
+                        borderRadius: 12,
+                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                        background: isSelected ? 'var(--surface-2)' : 'var(--surface)'
+                      }}
+                      onClick={() => toggleColorFilter(name)}
+                    >
+                      <span style={{
+                        width: 9,
+                        height: 9,
+                        borderRadius: '50%',
+                        background: hex,
+                        display: 'inline-block',
+                        marginRight: 4,
+                        border: '1px solid rgba(0,0,0,0.1)'
+                      }} />
+                      <span>{name} ({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Wear Activity Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Utilization:
+              </span>
+              {(['all', 'unworn', 'low', 'active'] as const).map(w => (
+                <button
+                  key={w}
+                  type="button"
+                  className={`btn ${wearFilter === w ? 'btn-p' : 'btn-g'}`}
+                  style={{ fontSize: 11, padding: '3px 8px' }}
+                  onClick={() => setWearFilter(w)}
+                >
+                  {w === 'unworn' ? 'Unworn (0)' : w === 'low' ? 'Low (1–2)' : w === 'active' ? 'Active (3+)' : 'All'}
+                </button>
+              ))}
+            </div>
+
+            {hasActiveFilters && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                type="button"
+                className="btn btn-g"
+                style={{ fontSize: 11, padding: '3px 8px', color: 'var(--danger)' }}
+                onClick={clearAllFilters}
               >
-                Clear
+                <RotateCcw className="ico" style={{ width: 11, height: 11 }} /> Reset Filters
               </button>
             )}
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Sort Dropdown */}
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 bg-slate-50">
-              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-transparent border-none text-xs font-semibold text-slate-800 focus:outline-hidden cursor-pointer"
-              >
-                <option value="recent">Recently Added</option>
-                <option value="wear_desc">Most Worn First</option>
-                <option value="wear_asc">Least Worn First</option>
-              </select>
-            </div>
-
-            {/* Add Garment CTA */}
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md shadow-emerald-600/20 transition cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Garment</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Multi-attribute Filter Strip */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
-          
-          <div className="flex items-center gap-1 text-slate-400 font-semibold uppercase tracking-wider text-[10px] mr-1">
-            <Filter className="w-3 h-3" />
-            <span>Filters:</span>
-          </div>
-
-          {/* Category Filter */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium focus:outline-hidden cursor-pointer hover:bg-slate-50"
-          >
-            <option value="All">All Categories</option>
-            {categories.map(c => (
-              <option key={c.tag_id} value={c.tag_name}>{c.tag_name}</option>
-            ))}
-          </select>
-
-          {/* Color Filter */}
-          <select
-            value={selectedColor}
-            onChange={(e) => setSelectedColor(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium focus:outline-hidden cursor-pointer hover:bg-slate-50"
-          >
-            <option value="All">All Core Colors</option>
-            {colors.map(c => (
-              <option key={c.tag_id} value={c.tag_name}>{c.tag_name}</option>
-            ))}
-          </select>
-
-          {/* Wear Count Filter */}
-          <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
-            {[
-              { id: 'All', label: 'All Wears' },
-              { id: 'Unworn', label: 'Unworn (0)' },
-              { id: 'Low', label: 'Low (1-5)' },
-              { id: 'High', label: 'High (6+)' }
-            ].map(w => (
-              <button
-                key={w.id}
-                onClick={() => setSelectedWearFilter(w.id)}
-                className={`px-2.5 py-1 rounded-md font-medium text-xs transition cursor-pointer ${
-                  selectedWearFilter === w.id
-                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {w.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Reset Filters */}
-          {(selectedCategory !== 'All' || selectedColor !== 'All' || selectedWearFilter !== 'All' || searchQuery) && (
-            <button
-              onClick={() => {
-                setSelectedCategory('All');
-                setSelectedColor('All');
-                setSelectedWearFilter('All');
-                setSearchQuery('');
-              }}
-              className="text-xs text-rose-600 hover:text-rose-700 font-medium underline px-2 py-1 ml-auto cursor-pointer"
-            >
-              Reset Filters
-            </button>
-          )}
 
         </div>
 
       </div>
 
       {/* Garments Grid */}
-      {filteredItems.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-lg mx-auto">
-          <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
-            <Shirt className="w-8 h-8" />
-          </div>
-          <h3 className="text-base font-bold text-slate-800 font-display">
-            {items.length === 0 ? 'Your Virtual Closet is Empty' : 'No matching garments found'}
+      {filteredGarments.length === 0 ? (
+        <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
+          <Shirt style={{ width: 44, height: 44, color: 'var(--text-muted)', opacity: 0.4, margin: '0 auto 12px' }} />
+          <h3 style={{ fontSize: 16, margin: '0 0 6px', fontFamily: 'var(--font-display)' }}>
+            No Garments Found
           </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            {items.length === 0 
-              ? 'Start building your mindful wardrobe. Upload garment photos with automated background removal to catalog your pieces.'
-              : 'Try adjusting your search keywords, category filters, or add a new piece to your virtual closet.'}
+          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto 16px' }}>
+            {hasActiveFilters ? 'No items in your wardrobe match the selected filter criteria.' : 'Your virtual closet is currently empty. Start logging what you own!'}
           </p>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition cursor-pointer shadow-md shadow-emerald-600/20"
-          >
-            <Plus className="w-4 h-4" />
-            {items.length === 0 ? 'Add Your First Garment' : 'Add Garment Now'}
-          </button>
+          {hasActiveFilters ? (
+            <button type="button" className="btn btn-g" onClick={clearAllFilters}>
+              Clear All Filters
+            </button>
+          ) : (
+            <button type="button" className="btn btn-p" onClick={onOpenAddModal}>
+              <Plus className="ico" /> Add Your First Garment
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
-          {filteredItems.map((item) => {
-            const isUnworn = item.wear_count === 0;
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+          gap: 14
+        }}>
+          {filteredGarments.map(garment => {
+            const wearCount = garment.worn_count ?? garment.wear_count ?? 0;
+            const isColorHex = garment.image_url?.startsWith('#');
+
             return (
               <div
-                key={item.item_id}
-                className="group relative bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md hover:border-slate-300 transition duration-150 flex flex-col"
+                key={garment.item_id}
+                className="card"
+                style={{
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                }}
               >
-                {/* Image Silhouette Container */}
-                <div className="relative aspect-square w-full bg-[linear-gradient(45deg,#f8fafc_25%,transparent_25%),linear-gradient(-45deg,#f8fafc_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f8fafc_75%),linear-gradient(-45deg,transparent_75%,#f8fafc_75%)] bg-[size:12px_12px] bg-[position:0_0,0_6px,6px_-6px,-6px_0] flex items-center justify-center p-3 overflow-hidden border-b border-slate-100">
-                  <img
-                    src={item.image_url}
-                    alt={item.name}
-                    className="max-h-full max-w-full object-contain filter drop-shadow-sm group-hover:scale-105 transition duration-200"
-                    loading="lazy"
-                  />
-
-                  {/* Wear Count Pill */}
-                  <div className="absolute top-2 right-2 z-10">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-2xs flex items-center gap-1 ${
-                        isUnworn
-                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      }`}
-                    >
-                      <TrendingUp className="w-2.5 h-2.5" />
-                      <span>{item.wear_count} wears</span>
-                    </span>
-                  </div>
-
-                  {/* Quick Edit Overlay Button */}
-                  <button
-                    onClick={() => setEditingItem(item)}
-                    className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                    title="Edit Metadata"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
+                {/* Thumbnail / Transparent Silhouette */}
+                <div style={{
+                  height: 160,
+                  width: '100%',
+                  borderRadius: 8,
+                  marginBottom: 10,
+                  background: isColorHex ? garment.image_url : 'var(--surface-2)',
+                  backgroundImage: isColorHex ? undefined : `url(${garment.image_url})`,
+                  backgroundSize: 'contain',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative'
+                }}>
+                  {/* Wear Count Badge */}
+                  <span style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 6,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: wearCount > 0 ? 'var(--primary)' : 'rgba(100, 116, 139, 0.85)',
+                    color: '#ffffff'
+                  }}>
+                    {wearCount} {wearCount === 1 ? 'wear' : 'wears'}
+                  </span>
                 </div>
 
-                {/* Metadata & Tag Info */}
-                <div className="p-3 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-semibold text-xs text-slate-900 line-clamp-1 group-hover:text-emerald-700 transition" title={item.name}>
-                      {item.name}
-                    </h4>
+                {/* Garment Details */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <strong style={{ fontSize: 13.5, marginBottom: 4, lineHeight: 1.3, color: 'var(--text)' }}>
+                    {garment.name}
+                  </strong>
 
-                    {/* Category & Color */}
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      {item.category && (
-                        <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                          {item.category}
-                        </span>
-                      )}
-                      {item.color && (
-                        <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full border border-slate-300" style={{ backgroundColor: tags.find(t => t.tag_name === item.color)?.hex_color || '#94a3b8' }} />
-                          {item.color}
-                        </span>
-                      )}
+                  {/* Tags */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {garment.category && (
+                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                        {garment.category}
+                      </span>
+                    )}
+                    {garment.type_tag && garment.type_tag !== garment.category && (
+                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                        {garment.type_tag}
+                      </span>
+                    )}
+                    {garment.color && (
+                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: garment.color_tag || '#64748b' }} />
+                        {garment.color}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Card Actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                    {/* Quick +1 Wore Today Button */}
+                    <button
+                      type="button"
+                      className="btn btn-g"
+                      style={{ fontSize: 11, padding: '4px 8px' }}
+                      title="Increment wear count for today"
+                      onClick={() => onQuickIncrementWear(garment)}
+                    >
+                      <Plus className="ico" style={{ width: 12, height: 12 }} /> +1 Wore
+                    </button>
+
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        type="button"
+                        className="icobtn"
+                        title="Edit Garment"
+                        onClick={() => onEditGarment(garment)}
+                      >
+                        <Pencil className="ico" style={{ width: 13, height: 13 }} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icobtn"
+                        style={{ color: 'var(--danger)' }}
+                        title="Delete Garment"
+                        onClick={() => onDeleteGarment(garment)}
+                      >
+                        <Trash2 className="ico" style={{ width: 13, height: 13 }} />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Quick Action: Select for Today's Look */}
-                  {onSelectForTodayOutfit && (
-                    <button
-                      onClick={() => onSelectForTodayOutfit(item)}
-                      className="mt-3 w-full py-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 text-[11px] font-semibold text-slate-700 hover:text-emerald-700 transition cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Shirt className="w-3 h-3" />
-                      <span>Wear Today</span>
-                    </button>
-                  )}
                 </div>
 
               </div>
@@ -366,25 +468,6 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
           })}
         </div>
       )}
-
-      {/* Add Item Modal */}
-      <AddItemModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        tags={tags}
-        userId={userId}
-        onAddItem={onAddItem}
-      />
-
-      {/* Edit Item Modal */}
-      <EditItemModal
-        isOpen={Boolean(editingItem)}
-        onClose={() => setEditingItem(null)}
-        item={editingItem}
-        tags={tags}
-        onUpdate={onUpdateItem}
-        onDelete={onDeleteItem}
-      />
 
     </div>
   );

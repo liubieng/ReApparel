@@ -1,266 +1,194 @@
 import React, { useState, useRef } from 'react';
-import { X, Save, Trash2, AlertTriangle, Upload, Wand2 } from 'lucide-react';
-import { ClothingItem, Tag, AdditionType } from '../../types/database';
-import { removeBackgroundClientSide, fileToDataUrl } from '../../utils/imageProcessing';
+import { X, Upload } from 'lucide-react';
+import { AdditionType, ClothingItem } from '../../types/database';
+import { CATEGORIES, GARMENT_TYPES, CURATED_COLOR_FAMILIES } from '../../data/seedData';
+import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 
 interface EditItemModalProps {
+  garment: ClothingItem | null;
   isOpen: boolean;
   onClose: () => void;
-  item: ClothingItem | null;
-  tags: Tag[];
-  onUpdate: (itemId: number, updates: Partial<ClothingItem>) => Promise<void>;
-  onDelete: (itemId: number) => Promise<void>;
+  onUpdateItem: (itemId: number, updates: Partial<ClothingItem>) => Promise<void>;
+  toast: (msg: string) => void;
 }
 
 export const EditItemModal: React.FC<EditItemModalProps> = ({
+  garment,
   isOpen,
   onClose,
-  item,
-  tags,
-  onUpdate,
-  onDelete
+  onUpdateItem,
+  toast
 }) => {
-  if (!isOpen || !item) return null;
+  if (!isOpen || !garment) return null;
 
-  const [name, setName] = useState(item.name);
-  const [imageUrl, setImageUrl] = useState(item.image_url);
-  const [category, setCategory] = useState(item.category || 'Tops');
-  const [color, setColor] = useState(item.color || 'Black');
-  const [additionType, setAdditionType] = useState<AdditionType>(item.addition_type || 'Old');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isProcessingBg, setIsProcessingBg] = useState(false);
-  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState(garment.name);
+  const [category, setCategory] = useState<string>(garment.category || '');
+  const [garmentType, setGarmentType] = useState<string>(garment.type_tag || '');
+  const [color, setColor] = useState<string>(garment.color || '');
+  const [colorHex, setColorHex] = useState<string>(garment.color_tag || '');
+  const [images, setImages] = useState<string[]>(
+    garment.images && garment.images.length > 0 ? garment.images : [garment.image_url]
+  );
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const categories = tags.filter(t => t.tag_type === 'Category');
-  const colors = tags.filter(t => t.tag_type === 'Color');
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsProcessingBg(true);
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      const result = await removeBackgroundClientSide(dataUrl, {
-        tolerance: 52,
-        feather: 1.5,
-        removeShadows: true
-      });
-      setImageUrl(result.dataUrl);
-    } catch (err) {
-      console.warn('Background removal error in edit modal', err);
-    } finally {
-      setIsProcessingBg(false);
-      if (e.target) {
-        e.target.value = '';
+    if (images.length >= 3) {
+      toast('Maximum 3 photos per item.');
+      return;
+    }
+
+    setIsProcessing(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const raw = evt.target?.result as string;
+      try {
+        const transparent = await removeBackgroundClientSide(raw);
+        setImages(prev => [...prev, transparent.dataUrl]);
+        toast('Photo updated!');
+      } catch {
+        setImages(prev => [...prev, raw]);
+      } finally {
+        setIsProcessing(false);
       }
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsUpdating(true);
-    try {
-      await onUpdate(item.item_id, {
-        name: name.trim(),
-        image_url: imageUrl,
-        category,
-        color,
-        addition_type: additionType
-      });
-      onClose();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
+    if (!name.trim()) {
+      toast('Garment name cannot be empty.');
+      return;
     }
-  };
 
-  const handleDelete = async () => {
-    setIsUpdating(true);
-    try {
-      await onDelete(item.item_id);
-      onClose();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
+    const primaryImage = images[0] || garment.image_url;
+
+    await onUpdateItem(garment.item_id, {
+      name: name.trim(),
+      addition_type: garment.addition_type || 'Old',
+      category,
+      type_tag: garmentType,
+      color,
+      color_tag: colorHex,
+      image_url: primaryImage,
+      images
+    });
+
+    toast(`Updated "${name.trim()}"`);
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="modalScrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" style={{ maxWidth: 500, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
         
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <h3 className="text-base font-bold text-slate-900 font-display">
-            Edit Garment Metadata
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-          >
-            <X className="w-5 h-5" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontFamily: 'var(--font-display)' }}>Edit Clothing Item</h3>
+          <button type="button" className="icobtn" onClick={onClose} aria-label="Close modal">
+            <X className="ico" />
           </button>
         </div>
 
-        {showDeleteConfirm ? (
-          <div className="p-6 space-y-4">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div className="text-center">
-              <h4 className="text-base font-bold text-slate-900">Cascade Deletion Warning</h4>
-              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                Deleting <strong className="text-slate-800">"{item.name}"</strong> will remove it from your virtual closet, all daily outfit logs, and active borrow requests with cascade protection.
-              </p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={isUpdating}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold shadow-md shadow-rose-600/20 transition cursor-pointer disabled:opacity-50"
-              >
-                {isUpdating ? 'Deleting...' : 'Confirm Cascade Delete'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSave} className="p-6 space-y-5">
-            {/* Permanent file input always mounted in DOM */}
-            <input
-              id="edit-garment-upload-input"
-              ref={editFileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            {/* Visual preview & Change Photo */}
-            <div className="flex items-center justify-between gap-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="relative w-16 h-16 rounded-lg object-contain bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
-                  {isProcessingBg && (
-                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                      <Wand2 className="w-5 h-5 text-emerald-600 animate-spin" />
-                    </div>
-                  )}
-                  <img
-                    src={imageUrl}
-                    alt={name}
-                    className="max-h-full max-w-full object-contain"
-                  />
-                </div>
-                <div>
-                  <span className="text-xs text-slate-400 block font-mono">Item ID: #{item.item_id}</span>
-                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-0.5">
-                    Worn {item.wear_count} times
-                  </span>
-                </div>
-              </div>
-
-              <label
-                htmlFor="edit-garment-upload-input"
-                className="text-xs text-slate-700 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0"
-              >
-                <Upload className="w-3.5 h-3.5 text-slate-500" />
-                <span>Change Photo</span>
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Garment Title
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Category
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.tag_id}
-                    type="button"
-                    onClick={() => setCategory(cat.tag_name)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                      category === cat.tag_name
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {cat.tag_name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Core Color Family
-              </label>
-              <select
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30"
-              >
-                {colors.map((c) => (
-                  <option key={c.tag_id} value={c.tag_name}>
-                    {c.tag_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1.5 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete Garment
-              </button>
-              <div className="flex gap-2">
+        <form onSubmit={handleSubmit}>
+          {/* Photos */}
+          <div className="field">
+            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Photos ({images.length}/3)</span>
+            </label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+              {images.map((src, idx) => (
+                <span key={idx} className="swatchsm" style={{ backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                  <span className="x" onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}>✕</span>
+                </span>
+              ))}
+              {images.length < 3 && (
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  className="btn btn-g"
+                  style={{ fontSize: 11 }}
+                  disabled={isProcessing}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  Cancel
+                  <Upload className="ico" style={{ width: 12, height: 12 }} /> Add Photo
                 </button>
-                <button
-                  type="submit"
-                  disabled={isUpdating}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-semibold transition cursor-pointer disabled:opacity-50"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  Save Changes
-                </button>
-              </div>
+              )}
             </div>
-          </form>
-        )}
+            <input type="file" ref={fileInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+          </div>
+
+          {/* Name */}
+          <div className="field">
+            <label>Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+
+          {/* Category */}
+          <div className="field">
+            <label>Category (1 only)</label>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`pill ${category === cat ? 'on' : ''}`}
+                  style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 14 }}
+                  onClick={() => setCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Garment Type */}
+          <div className="field">
+            <label>Garment Type (1 only)</label>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, maxHeight: 90, overflowY: 'auto' }}>
+              {GARMENT_TYPES.map(gt => (
+                <button
+                  key={gt}
+                  type="button"
+                  className={`pill ${garmentType === gt ? 'on' : ''}`}
+                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12 }}
+                  onClick={() => setGarmentType(gt)}
+                >
+                  {gt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Color */}
+          <div className="field">
+            <label>Color</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 4, maxHeight: 90, overflowY: 'auto' }}>
+              {CURATED_COLOR_FAMILIES.map(f => (
+                <button
+                  key={f.name}
+                  type="button"
+                  className="btn btn-g"
+                  style={{
+                    fontSize: 10.5, padding: '3px 6px',
+                    border: color === f.name ? '2px solid var(--primary)' : '1px solid var(--border)'
+                  }}
+                  onClick={() => { setColor(f.name); setColorHex(f.hex); }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: f.hex, display: 'inline-block', marginRight: 4 }} />
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button type="button" className="btn btn-g" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-p">Save Changes</button>
+          </div>
+        </form>
 
       </div>
     </div>

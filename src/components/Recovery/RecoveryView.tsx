@@ -1,0 +1,439 @@
+import React, { useMemo } from 'react';
+import { 
+  BrainCircuit, 
+  ShieldCheck, 
+  AlertTriangle, 
+  Clock, 
+  TrendingDown, 
+  TrendingUp, 
+  Leaf, 
+  Sparkles, 
+  RotateCcw, 
+  Shirt, 
+  ArrowRight,
+  BarChart3,
+  CheckCircle2
+} from 'lucide-react';
+import { BSASAssessment, ClothingItem } from '../../types/database';
+
+/**
+ * ============================================================================
+ * RECOVERY & WARDROBE ANALYTICS VIEW (RecoveryView.tsx)
+ * ============================================================================
+ * 
+ * CAPSTONE DEFENSE CONTEXT & METHODOLOGY:
+ * 1. Bergen Shopping Addiction Scale (BSAS) Clinical Progress Monitoring:
+ *    - Diagnostic cut-off score >= 4 indicates "Indicative Risk" for compulsive shopping.
+ *    - Score < 4 indicates "Non-Indicative Risk" (behavioral stabilization).
+ * 2. 30-Day Assessment Cooldown:
+ *    - Prevents test-retest learning bias in psychological instruments.
+ *    - Includes a testing override ("Simulate +30 Days") for panel demonstration.
+ * 3. Longitudinal Recovery Chart:
+ *    - Renders a score progression chart showing reduction of compulsive tendencies.
+ * 4. UN SDG 12 Wardrobe Circularity Metrics:
+ *    - Tracks wardrobe utilization rate, total wardrobe wears,
+ *      and carbon/garment wear optimization.
+ */
+
+interface RecoveryViewProps {
+  assessments: BSASAssessment[];
+  garments: ClothingItem[];
+  simulatedDaysOffset: number;
+  onSimulateCooldownAdvance: () => void;
+  onStartRetakeAssessment: () => void;
+  onNavigateToCloset: () => void;
+}
+
+export const RecoveryView: React.FC<RecoveryViewProps> = ({
+  assessments,
+  garments,
+  simulatedDaysOffset,
+  onSimulateCooldownAdvance,
+  onStartRetakeAssessment,
+  onNavigateToCloset
+}) => {
+  // Sort assessments chronologically (latest first for card, oldest first for chart)
+  const sortedDesc = useMemo(() => {
+    return [...assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+  }, [assessments]);
+
+  const sortedAsc = useMemo(() => {
+    return [...assessments].sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
+  }, [assessments]);
+
+  const latest = sortedDesc[0];
+
+  // 30-Day Cooldown Calculation
+  const cooldownInfo = useMemo(() => {
+    if (!latest) {
+      return { canTake: true, daysRemaining: 0, lastDate: null, nextDate: null };
+    }
+    const lastDate = new Date(latest.taken_at);
+    const msSince = Date.now() - lastDate.getTime() + simulatedDaysOffset * 86400000;
+    const daysSince = Math.floor(msSince / (1000 * 60 * 60 * 24));
+    const COOLDOWN_DAYS = 30;
+    const daysRemaining = Math.max(0, COOLDOWN_DAYS - daysSince);
+
+    const nextDate = new Date(lastDate.getTime() + COOLDOWN_DAYS * 86400000);
+
+    return {
+      canTake: daysRemaining === 0,
+      daysRemaining,
+      lastDate: lastDate.toLocaleDateString(),
+      nextDate: nextDate.toLocaleDateString()
+    };
+  }, [latest, simulatedDaysOffset]);
+
+  // Wardrobe Utilization Metrics (SDG 12)
+  const wardrobeStats = useMemo<{
+    total: number;
+    wornCount: number;
+    unwornCount: number;
+    rate: number;
+    totalWears: number;
+    hero: ClothingItem | null;
+  }>(() => {
+    const total = garments.length;
+    if (total === 0) {
+      return { total: 0, wornCount: 0, unwornCount: 0, rate: 0, totalWears: 0, hero: null };
+    }
+
+    let totalWorn = 0;
+    let totalWears = 0;
+    let maxWear = 0;
+    let heroItem: ClothingItem | null = null;
+
+    garments.forEach(g => {
+      const wear = g.worn_count ?? g.wear_count ?? 0;
+      totalWears += wear;
+      if (wear > 0) totalWorn++;
+      if (wear > maxWear) {
+        maxWear = wear;
+        heroItem = g;
+      }
+    });
+
+    const rate = Math.round((totalWorn / total) * 100);
+
+    return {
+      total,
+      wornCount: totalWorn,
+      unwornCount: total - totalWorn,
+      rate,
+      totalWears,
+      hero: heroItem
+    };
+  }, [garments]);
+
+  // SVG Chart Geometry
+  const chartHeight = 160;
+  const chartWidth = 560;
+  const maxScore = 7;
+
+  const points = sortedAsc.map((a, idx) => {
+    const x = sortedAsc.length > 1
+      ? 40 + (idx / (sortedAsc.length - 1)) * (chartWidth - 80)
+      : chartWidth / 2;
+    const y = chartHeight - 25 - (a.score / maxScore) * (chartHeight - 50);
+    return {
+      x,
+      y,
+      score: a.score,
+      date: new Date(a.taken_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    };
+  });
+
+  const pathD = points.length > 0
+    ? points.reduce((acc, p, idx) => (idx === 0 ? `M ${p.x},${p.y}` : `${acc} L ${p.x},${p.y}`), '')
+    : '';
+
+  const thresholdY = chartHeight - 25 - (4 / maxScore) * (chartHeight - 50);
+
+  return (
+    <div>
+      {/* View Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>
+            Recovery Progress &amp; Impact
+          </h2>
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+            Longitudinal BSAS tracking &amp; UN SDG 12 sustainable closet utilization
+          </div>
+        </div>
+
+        {/* Retake or Cooldown Action */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {cooldownInfo.canTake ? (
+            <button
+              type="button"
+              className="btn btn-p"
+              style={{ fontSize: 13, padding: '7px 14px' }}
+              onClick={onStartRetakeAssessment}
+            >
+              <BrainCircuit className="ico" style={{ width: 14, height: 14 }} />
+              <span>Take Check-In Now</span>
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Clock className="ico" style={{ width: 13, height: 13 }} />
+                <span>Next in {cooldownInfo.daysRemaining} days</span>
+              </span>
+              <button
+                type="button"
+                className="btn btn-g"
+                style={{ fontSize: 11, padding: '4px 8px' }}
+                title="Simulates 30 days passing to unlock immediate retake for panel demo"
+                onClick={onSimulateCooldownAdvance}
+              >
+                Simulate +30 Days
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Status Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14, marginBottom: 20 }}>
+        
+        {/* Card 1: Diagnostic BSAS Status */}
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                BSAS Clinical Status
+              </span>
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, fontFamily: 'var(--font-display)', color: 'var(--text)' }}>
+                {latest ? `${latest.score} / 7 Criteria` : 'No Check-In Yet'}
+              </div>
+            </div>
+
+            {latest && (
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '4px 8px',
+                borderRadius: 6,
+                background: latest.score >= 4 ? 'var(--danger-soft)' : 'var(--surface-2)',
+                color: latest.score >= 4 ? 'var(--danger)' : 'var(--primary)',
+                border: `1px solid ${latest.score >= 4 ? 'var(--danger)' : 'var(--primary)'}`
+              }}>
+                {latest.score >= 4 ? (
+                  <>
+                    <AlertTriangle style={{ width: 12, height: 12 }} /> Indicative Risk
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck style={{ width: 12, height: 12 }} /> Non-Indicative Risk
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            {latest ? (
+              latest.score >= 4
+                ? 'Clinical cutoff reached (>=4). Mindful borrowing and wardrobe utilization recommended.'
+                : 'Shopping behaviors remain within healthy, non-compulsive thresholds (<4 criteria endorsed).'
+            ) : (
+              'Complete your first 7-item check-in to establish your baseline score.'
+            )}
+          </p>
+        </div>
+
+        {/* Card 2: Wardrobe Utilization Rate (SDG 12) */}
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                SDG 12 Utilization Rate
+              </span>
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, fontFamily: 'var(--font-display)', color: 'var(--primary)' }}>
+                {wardrobeStats.rate}% Worn
+              </div>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {wardrobeStats.wornCount} / {wardrobeStats.total} Items
+            </span>
+          </div>
+
+          <div style={{ height: 6, width: '100%', background: 'var(--surface-2)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
+            <div style={{ height: '100%', width: `${wardrobeStats.rate}%`, background: 'var(--primary)' }} />
+          </div>
+
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)' }}>
+            {wardrobeStats.unwornCount > 0
+              ? `${wardrobeStats.unwornCount} items unworn in closet. Maximize active wears before buying new!`
+              : 'Outstanding! 100% of your current wardrobe has been actively utilized.'}
+          </p>
+        </div>
+
+        {/* Card 3: Total Wardrobe Wears */}
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Total Wardrobe Wears
+              </span>
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, fontFamily: 'var(--font-display)', color: 'var(--text)' }}>
+                {wardrobeStats.totalWears} Wears
+              </div>
+            </div>
+            <Shirt className="ico" style={{ color: 'var(--primary)', width: 18, height: 18 }} />
+          </div>
+
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            {wardrobeStats.hero
+              ? `Most utilized item: "${wardrobeStats.hero.name}" (${wardrobeStats.hero.worn_count ?? wardrobeStats.hero.wear_count ?? 0} wears).`
+              : 'Maximize repeat wears across your wardrobe to reduce textile waste.'}
+          </p>
+        </div>
+
+      </div>
+
+      {/* Longitudinal BSAS Progression Line Chart */}
+      <div className="card" style={{ padding: '18px 20px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <h3 style={{ margin: '0 0 2px', fontSize: 16, fontFamily: 'var(--font-display)' }}>
+              BSAS Score Progression Timeline
+            </h3>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Diagnostic score trajectory across repeated check-ins (Target: score &lt; 4)
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary)' }} /> Score Line
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--danger)' }}>
+              <span style={{ width: 12, height: 2, background: 'var(--danger)', display: 'inline-block' }} /> Threshold (4)
+            </span>
+          </div>
+        </div>
+
+        {sortedAsc.length === 0 ? (
+          <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            No assessment history logged yet. Complete a check-in to plot your recovery curve.
+          </div>
+        ) : (
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} style={{ width: '100%', maxHeight: 200 }}>
+              {/* Grid Lines */}
+              {[0, 1, 2, 3, 4, 5, 6, 7].map(scoreVal => {
+                const y = chartHeight - 25 - (scoreVal / maxScore) * (chartHeight - 50);
+                const isThreshold = scoreVal === 4;
+                return (
+                  <g key={scoreVal}>
+                    <line
+                      x1={35}
+                      y1={y}
+                      x2={chartWidth - 20}
+                      y2={y}
+                      stroke={isThreshold ? 'var(--danger)' : 'var(--border)'}
+                      strokeDasharray={isThreshold ? '4 3' : undefined}
+                      strokeWidth={isThreshold ? 1.5 : 1}
+                      opacity={isThreshold ? 0.8 : 0.4}
+                    />
+                    <text x={18} y={y + 4} fontSize={9.5} fill={isThreshold ? 'var(--danger)' : 'var(--text-muted)'} fontWeight={isThreshold ? 700 : 400}>
+                      {scoreVal}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Score Line Path */}
+              {pathD && (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke="var(--primary)"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Data Point Circles */}
+              {points.map((p, idx) => (
+                <g key={idx}>
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={5}
+                    fill="var(--surface)"
+                    stroke="var(--primary)"
+                    strokeWidth={2.5}
+                  />
+                  <text
+                    x={p.x}
+                    y={chartHeight - 6}
+                    fontSize={10}
+                    textAnchor="middle"
+                    fill="var(--text-muted)"
+                  >
+                    {p.date}
+                  </text>
+                  <text
+                    x={p.x}
+                    y={p.y - 8}
+                    fontSize={10}
+                    fontWeight={700}
+                    textAnchor="middle"
+                    fill="var(--text)"
+                  >
+                    {p.score}
+                  </text>
+                </g>
+              ))}
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* Latest Assessment Diagnostic Breakdown */}
+      {latest && latest.breakdown && (
+        <div className="card" style={{ padding: '16px 20px' }}>
+          <h3 style={{ margin: '0 0 10px', fontSize: 15, fontFamily: 'var(--font-display)' }}>
+            Criteria Endorsement Breakdown (Latest Check-In)
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+            {Object.entries(latest.breakdown).map(([dim, score]) => {
+              const isEndorsed = score >= 4;
+              return (
+                <div
+                  key={dim}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    background: isEndorsed ? 'var(--danger-soft)' : 'var(--surface-2)',
+                    border: `1px solid ${isEndorsed ? 'var(--danger)' : 'var(--border)'}`
+                  }}
+                >
+                  <div style={{ fontSize: 11, textTransform: 'capitalize', color: 'var(--text-muted)' }}>
+                    {dim.replace('_', ' ')}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <strong style={{ fontSize: 13, color: isEndorsed ? 'var(--danger)' : 'var(--text)' }}>
+                      Score: {score}
+                    </strong>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: isEndorsed ? 'var(--danger)' : 'var(--primary)' }}>
+                      {isEndorsed ? 'CRITERION' : 'NORMAL'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};

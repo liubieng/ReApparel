@@ -1,0 +1,170 @@
+import React from 'react';
+import { 
+  Shirt, 
+  Calendar, 
+  Leaf, 
+  Users, 
+  HeartHandshake, 
+  UserCircle, 
+  Settings, 
+  LogOut, 
+  MapPin,
+  Sparkles,
+  Database
+} from 'lucide-react';
+import { User } from '../../types/database';
+
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+}
+
+export const NAV_ITEMS: NavItem[] = [
+  { id: 'closet', label: 'Virtual Closet', icon: Shirt },
+  { id: 'daily-log', label: 'Daily Outfit Log', icon: Calendar },
+  { id: 'recovery', label: 'Recovery Progress', icon: Leaf },
+  { id: 'requests', label: 'Lending & Requests', icon: HeartHandshake },
+  { id: 'friends', label: 'Friends & Loans', icon: Users },
+  { id: 'donations', label: 'Donation Map', icon: MapPin },
+  { id: 'profile', label: 'Profile', icon: UserCircle },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
+
+interface SidebarProps {
+  currentView: string;
+  isOpen: boolean;
+  currentUser: User | null;
+  pendingRequestsCount: number;
+  onSelectView: (viewId: string) => void;
+  onCloseMobile: () => void;
+  onLogout: () => void;
+  onOpenDatabase: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  currentView,
+  isOpen,
+  currentUser,
+  pendingRequestsCount,
+  onSelectView,
+  onCloseMobile,
+  onLogout,
+  onOpenDatabase
+}) => {
+  return (
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div 
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 25 }}
+          onClick={onCloseMobile}
+        />
+      )}
+
+      <nav className={`side ${isOpen ? 'open' : ''}`}>
+        {/* Brand Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <div style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            background: 'var(--primary)',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Shirt style={{ width: 20, height: 20 }} />
+          </div>
+          <div>
+            <strong style={{ fontSize: 16, fontFamily: 'var(--font-display)', display: 'block', color: 'var(--text)' }}>
+              ReApparel
+            </strong>
+            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', fontWeight: 700 }}>
+              SDG 12 &middot; BSAS Recovery
+            </span>
+          </div>
+        </div>
+
+        {/* Navigation Items */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentView === item.id;
+            const isRequests = item.id === 'requests';
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`navitem ${isActive ? 'active' : ''}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '9px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: isActive ? 'var(--surface-2)' : 'transparent',
+                  color: isActive ? 'var(--primary)' : 'var(--text)',
+                  fontWeight: isActive ? 600 : 400,
+                  fontSize: 13,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  width: '100%'
+                }}
+                onClick={() => {
+                  onSelectView(item.id);
+                  onCloseMobile();
+                }}
+              >
+                <Icon style={{ width: 16, height: 16 }} />
+                <span style={{ flex: 1 }}>{item.label}</span>
+
+                {/* Badge for pending requests */}
+                {isRequests && pendingRequestsCount > 0 && (
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '1px 6px',
+                    borderRadius: 10,
+                    background: 'var(--danger)',
+                    color: '#ffffff'
+                  }}>
+                    {pendingRequestsCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            type="button"
+            className="btn btn-g"
+            style={{ fontSize: 11.5, justifyContent: 'flex-start', padding: '6px 10px' }}
+            onClick={onOpenDatabase}
+          >
+            <Database className="ico" style={{ width: 13, height: 13 }} />
+            <span>Database Schema</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-g"
+            style={{ fontSize: 11.5, justifyContent: 'flex-start', padding: '6px 10px', color: 'var(--danger)' }}
+            onClick={onLogout}
+          >
+            <LogOut className="ico" style={{ width: 13, height: 13 }} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+
+      </nav>
+    </>
+  );
+};
