@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload } from 'lucide-react';
-import { AdditionType, ClothingItem } from '../../types/database';
+import { ClothingItem } from '../../types/database';
 import { CATEGORIES, GARMENT_TYPES, CURATED_COLOR_FAMILIES } from '../../data/seedData';
 import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 

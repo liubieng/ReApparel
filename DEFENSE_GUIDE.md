@@ -13,7 +13,7 @@
 ### The ReApparel Solution:
 ReApparel is a web platform that combines **behavioral psychology** with **digital wardrobe tracking** and **circular sharing**:
 1. **Behavioral Recovery (BSAS)**: Evaluates shopping motivations using the validated 7-item Bergen Shopping Addiction Scale (Andreassen et al., 2015), tracking recovery trajectories over time.
-2. **Wardrobe Accountability**: Classifies garments by baseline lifecycle ("Old" pre-existing vs "New" acquisitions) and tracks cumulative wear counts to maximize garment lifespan.
+2. **Wardrobe Accountability**: Digitizes garments with category and color analytics, tracking cumulative wear counts and wardrobe utilization to maximize garment lifespan (UN SDG 12).
 3. **Circular Peer-to-Peer Lending**: Facilitates borrowing items among connected friends with an automated conflict-detection schedule guard, preventing unnecessary purchases for short-term events.
 4. **Textile Donation & Drop-off Mapping**: Connects users to local verified clothing donation drives, pre-loved hubs, and disaster relief collections.
 
@@ -54,8 +54,14 @@ src/
 │   ├── Modals/
 │   │   ├── DeleteCascadeModal.tsx   # PostgreSQL Cascade Awareness Confirmation Modal
 │   │   └── ConfirmModal.tsx         # Reusable Generic Confirmation Dialog
-│   ├── DatabaseModal.tsx            # Supabase Cloud Database Configuration & PostgreSQL Schema
-│   └── DonationMapSection.tsx       # Interactive Google Maps & Live Geolocation Web Scraper
+│   ├── DonationMap/
+│   │   ├── CascadingFilters.tsx     # Country, Province, City cascading selects & distance radius
+│   │   ├── MapContainer.tsx         # Google Maps + Offline Vector Fallback Grid with custom pins
+│   │   ├── OpportunityDrawer.tsx    # Selected opportunity spotlight drawer & navigation
+│   │   ├── OpportunityCard.tsx      # Nearby location card with distance & flag counters
+│   │   └── FlagModal.tsx            # Community inaccuracy/inactivity reporting dialog
+│   ├── DonationMapSection.tsx       # Donation Module Coordinator (~340 lines)
+│   └── DatabaseModal.tsx            # Supabase Cloud Database Configuration & PostgreSQL Schema
 ├── services/
 │   ├── closetService.ts             # Business logic for Garments, BSAS assessments, & Daily Logs
 │   ├── friendsService.ts            # Business logic for Connections and Borrow Schedules
@@ -133,7 +139,7 @@ src/
 - **Execution**:
   - Filters for Category and Color are dynamically computed from active garments currently owned by the user.
   - Multi-dimensional conjunction:
-    $$\text{Display} = \text{Category Match} \land \text{Color Match} \land \text{Lifecycle Match} \land \text{Wear Filter Match} \land \text{Search Match}$$
+    $$\text{Display} = \text{Category Match} \land \text{Color Match} \land \text{Wear Filter Match} \land \text{Search Match}$$
 
 ---
 
@@ -169,7 +175,7 @@ ReApparel's database design follows strict 3rd Normal Form (3NF) principles acro
 ---
 
 ### Question 2: "How does this platform directly contribute to UN SDG 12?"
-> **Model Answer**: "UN SDG 12 Target 12.5 calls for substantially reducing waste generation through prevention, reduction, recycling, and reuse. ReApparel targets the root cause of textile waste: underutilization and compulsive overconsumption. By tracking wear counts, categorizing pre-existing vs new items, and enabling peer-to-peer garment borrowing, we extend the active lifespan of clothing, directly reducing new purchases and post-consumer textile disposal."
+> **Model Answer**: "UN SDG 12 Target 12.5 calls for substantially reducing waste generation through prevention, reduction, recycling, and reuse. ReApparel targets the root cause of textile waste: underutilization and compulsive overconsumption. By tracking wear counts, boosting wardrobe utilization, and enabling peer-to-peer garment borrowing, we extend the active lifespan of clothing, directly reducing new purchases and post-consumer textile disposal."
 
 ---
 

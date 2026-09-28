@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Check, AlertCircle, Sparkles, ImagePlus } from 'lucide-react';
-import { AdditionType, ClothingItem } from '../../types/database';
+import { ClothingItem } from '../../types/database';
 import { CATEGORIES, GARMENT_TYPES, CURATED_COLOR_FAMILIES, CuratedColorFamily } from '../../data/seedData';
 import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 
@@ -9,9 +9,9 @@ import { removeBackgroundClientSide } from '../../utils/imageProcessing';
  * ADD CLOTHING ITEM MODAL (AddItemModal.tsx)
  * ============================================================================
  * 
- * CAPSTONE DEFENSE CONTEXT & SCIENTIFIC REQUIREMENTS:
- * 1. UN SDG 12 (Target 12.5):
- *    - Tracks wardrobe baseline by classifying garments as "Old" (pre-existing) vs "New" (recent acquisition).
+ * CAPSTONE DEFENSE CONTEXT & ARCHITECTURE:
+ * 1. UN SDG 12 Responsible Consumption:
+ *    - Enforces wardrobe digitization to optimize circularity and wear counts.
  * 2. Strict Data Integrity:
  *    - Enforces mutually exclusive single category selection.
  *    - Enforces mutually exclusive single garment type selection.
