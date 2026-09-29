@@ -16,25 +16,27 @@ import {
 } from './types/database';
 
 // Modular view components
-import { AuthView } from './components/Auth/AuthView';
-import { BSASIntroView } from './components/BSAS/BSASIntroView';
-import { BSASAssessmentModal } from './components/BSAS/BSASAssessmentModal';
-import { VirtualClosetView } from './components/VirtualCloset/VirtualClosetView';
-import { AddItemModal } from './components/VirtualCloset/AddItemModal';
-import { EditItemModal } from './components/VirtualCloset/EditItemModal';
-import { DailyLogView } from './components/DailyLog/DailyLogView';
-import { RecoveryView } from './components/Recovery/RecoveryView';
-import { FriendsView } from './components/Friends/FriendsView';
-import { BorrowModal } from './components/Friends/BorrowModal';
-import { LendingDashboardView } from './components/Friends/LendingDashboardView';
-import { ProfileView } from './components/Profile/ProfileView';
-import { SettingsView } from './components/Settings/SettingsView';
-import { Sidebar } from './components/Navigation/Sidebar';
-import { Header } from './components/Navigation/Header';
-import { DeleteCascadeModal } from './components/Modals/DeleteCascadeModal';
-import { ConfirmModal } from './components/Modals/ConfirmModal';
-import { DatabaseModal } from './components/DatabaseModal';
-import { DonationMapSection } from './components/DonationMapSection';
+import { AuthView } from './views/AuthView';
+import { BSASIntroView } from './views/BSASIntroView';
+import { VirtualClosetView } from './views/VirtualClosetView';
+import { DailyLogView } from './views/DailyLogView';
+import { RecoveryView } from './views/RecoveryView';
+import { FriendsView } from './views/FriendsView';
+import { LendingDashboardView } from './views/LendingDashboardView';
+import { ProfileView } from './views/ProfileView';
+import { SettingsView } from './views/SettingsView';
+import { DonationMapSection } from './views/DonationMapSection';
+
+// Layout & Modal dialog components
+import { Sidebar } from './components/layout/Sidebar';
+import { Header } from './components/layout/Header';
+import { BSASAssessmentModal } from './components/modals/BSASAssessmentModal';
+import { AddItemModal } from './components/modals/AddItemModal';
+import { EditItemModal } from './components/modals/EditItemModal';
+import { BorrowModal } from './components/modals/BorrowModal';
+import { DeleteCascadeModal } from './components/modals/DeleteCascadeModal';
+import { ConfirmModal } from './components/modals/ConfirmModal';
+import { DatabaseModal } from './components/modals/DatabaseModal';
 
 /**
  * ============================================================================
@@ -80,6 +82,7 @@ export default function App() {
     finalized_at: null,
     items: []
   });
+  const [dailyLogs, setDailyLogs] = useState<DailyClothingLog[]>([]);
 
   // Presentation Simulation State (Allows defense panel to advance 30 days instantly)
   const [simulatedDaysOffset, setSimulatedDaysOffset] = useState<number>(0);
@@ -155,6 +158,8 @@ export default function App() {
       setFriendRequests([]);
       setBorrows([]);
     }
+    const allLogs = await closetService.getDailyLogs();
+    setDailyLogs(allLogs);
     setOpportunities(mapsService.getDonationOpportunities());
   }, []);
 
@@ -390,6 +395,12 @@ export default function App() {
     );
   }
 
+  // SFR-4.2: 30-Day BSAS Assessment Cooldown & Notification Status
+  const latestAssessment = assessments[0];
+  const isBSASDue = !latestAssessment || (
+    Math.floor((Date.now() - new Date(latestAssessment.taken_at).getTime() + simulatedDaysOffset * 86400000) / 86400000) >= 30
+  );
+
   // --------------------------------------------------------------------------
   // MAIN APPLICATION LAYOUT (SIDEBAR + ACTIVE VIEW ROUTER)
   // --------------------------------------------------------------------------
@@ -405,6 +416,7 @@ export default function App() {
         currentUser={currentUser}
         pendingBorrowsCount={pendingBorrowsCount}
         pendingFriendsCount={pendingFriendsCount}
+        isBSASDue={isBSASDue}
         onSelectView={(viewId) => { setView(viewId); setIsMobileSidebarOpen(false); }}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onLogout={handleLogout}
@@ -436,6 +448,7 @@ export default function App() {
           {view === 'daily-log' && (
             <DailyLogView
               todayLog={todayLog}
+              dailyLogs={dailyLogs}
               closetGarments={garments}
               onToggleGarmentInOutfit={handleToggleGarmentInOutfit}
               onFinalizeLog={handleFinalizeDailyLog}

@@ -10,8 +10,8 @@ import {
   AlertCircle,
   ArrowRight
 } from 'lucide-react';
-import { Borrow, User } from '../../types/database';
-import { checkDateOverlap } from './BorrowModal';
+import { Borrow, User } from '../types/database';
+import { checkDateOverlap } from '../components/modals/BorrowModal';
 
 /**
  * ============================================================================

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   BrainCircuit, 
   ShieldCheck, 
@@ -12,9 +12,13 @@ import {
   Shirt, 
   ArrowRight,
   BarChart3,
-  CheckCircle2
+  CheckCircle2,
+  Filter,
+  AlertCircle,
+  Flame,
+  Award
 } from 'lucide-react';
-import { BSASAssessment, ClothingItem } from '../../types/database';
+import { BSASAssessment, ClothingItem } from '../types/database';
 
 /**
  * ============================================================================
@@ -25,7 +29,7 @@ import { BSASAssessment, ClothingItem } from '../../types/database';
  * 1. Bergen Shopping Addiction Scale (BSAS) Clinical Progress Monitoring:
  *    - Diagnostic cut-off score >= 4 indicates "Indicative Risk" for compulsive shopping.
  *    - Score < 4 indicates "Non-Indicative Risk" (behavioral stabilization).
- * 2. 30-Day Assessment Cooldown:
+ * 2. 30-Day Assessment Cooldown (SFR-4.2):
  *    - Prevents test-retest learning bias in psychological instruments.
  *    - Includes a testing override ("Simulate +30 Days") for panel demonstration.
  * 3. Longitudinal Recovery Chart:
@@ -33,6 +37,7 @@ import { BSASAssessment, ClothingItem } from '../../types/database';
  * 4. UN SDG 12 Wardrobe Circularity Metrics:
  *    - Tracks wardrobe utilization rate, total wardrobe wears,
  *      and carbon/garment wear optimization.
+ * 5. SFR-16.1 & UFR-16: Most-to-Least Frequently Used Clothing Items Ranking.
  */
 
 interface RecoveryViewProps {
@@ -52,6 +57,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   onStartRetakeAssessment,
   onNavigateToCloset
 }) => {
+  const [rankCategoryFilter, setRankCategoryFilter] = useState<string>('All');
   // Sort assessments chronologically (latest first for card, oldest first for chart)
   const sortedDesc = useMemo(() => {
     return [...assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
@@ -124,6 +130,24 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
       hero: heroItem
     };
   }, [garments]);
+
+  // SFR-16.1 & UFR-16: Most-to-Least Frequently Used Garments Ranking
+  const sortedGarments = useMemo(() => {
+    return [...garments].sort((a, b) => {
+      const wearA = a.worn_count ?? a.wear_count ?? 0;
+      const wearB = b.worn_count ?? b.wear_count ?? 0;
+      return wearB - wearA;
+    });
+  }, [garments]);
+
+  const maxGarmentWear = useMemo(() => {
+    return Math.max(1, ...garments.map(g => g.worn_count ?? g.wear_count ?? 0));
+  }, [garments]);
+
+  const filteredSortedGarments = useMemo(() => {
+    if (rankCategoryFilter === 'All') return sortedGarments;
+    return sortedGarments.filter(g => (g.category || 'Tops').toLowerCase() === rankCategoryFilter.toLowerCase());
+  }, [sortedGarments, rankCategoryFilter]);
 
   // SVG Chart Geometry
   const chartHeight = 160;
@@ -464,6 +488,162 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* SFR-16.1 & UFR-16: Most-to-Least Frequently Used Clothing Items Ranking */}
+      <div className="card" style={{ padding: '18px 20px', marginTop: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <BarChart3 style={{ width: 17, height: 17, color: 'var(--primary)' }} />
+              <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'var(--font-display)' }}>
+                Wardrobe Utilization Ranking
+              </h3>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+              SFR-16.1 &amp; UFR-16: Clothing items sorted from most frequently to least frequently worn
+            </div>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories'].map(cat => (
+              <button
+                key={cat}
+                type="button"
+                className={`btn ${rankCategoryFilter === cat ? 'btn-p' : 'btn-g'}`}
+                style={{ fontSize: 11, padding: '4px 8px' }}
+                onClick={() => setRankCategoryFilter(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredSortedGarments.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            No clothing items found for category "{rankCategoryFilter}".
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filteredSortedGarments.map((item, idx) => {
+              const wear = item.worn_count ?? item.wear_count ?? 0;
+              const wearPct = maxGarmentWear > 0 ? (wear / maxGarmentWear) * 100 : 0;
+              const isUnworn = wear === 0;
+              const isStaple = wear >= 10;
+              const isHero = idx === 0 && wear > 0;
+
+              return (
+                <div
+                  key={item.item_id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    background: isUnworn ? 'var(--danger-soft)' : 'var(--surface-2)',
+                    border: `1px solid ${isUnworn ? 'var(--danger)' : isHero ? 'var(--primary)' : 'var(--border)'}`,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {/* Rank Badge */}
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    background: isHero ? 'var(--primary)' : idx < 3 ? 'var(--surface)' : 'transparent',
+                    color: isHero ? '#ffffff' : 'var(--text)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    fontSize: 12,
+                    flexShrink: 0,
+                    border: isHero ? 'none' : '1px solid var(--border)'
+                  }}>
+                    #{idx + 1}
+                  </div>
+
+                  {/* Thumbnail / Swatch */}
+                  <div style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 6,
+                    background: item.color || 'var(--primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0,
+                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
+                  }}>
+                    <Shirt style={{ width: 18, height: 18 }} />
+                  </div>
+
+                  {/* Garment Details & Utilization Bar */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 13, color: 'var(--text)' }}>
+                        {item.name}
+                      </strong>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+                        &bull; {item.category}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar of Relative Wear */}
+                    <div style={{
+                      marginTop: 6,
+                      height: 5,
+                      width: '100%',
+                      background: 'var(--surface)',
+                      borderRadius: 3,
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${wearPct}%`,
+                        background: isUnworn ? 'var(--danger)' : isHero ? 'var(--primary)' : 'var(--accent)',
+                        borderRadius: 3
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Wear Count Metric */}
+                  <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 70 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: isUnworn ? 'var(--danger)' : 'var(--text)' }}>
+                      {wear} {wear === 1 ? 'wear' : 'wears'}
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 600, marginTop: 2 }}>
+                      {isUnworn ? (
+                        <span style={{ color: 'var(--danger)' }}>Unworn ⚠️</span>
+                      ) : isStaple ? (
+                        <span style={{ color: 'var(--primary)' }}>Staple 🌟</span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>In Rotation</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Link for Unworn Items */}
+                  {isUnworn && (
+                    <button
+                      type="button"
+                      className="btn btn-g"
+                      style={{ fontSize: 11, padding: '4px 8px', flexShrink: 0 }}
+                      onClick={onNavigateToCloset}
+                      title="Shop Your Closet to wear this unworn item"
+                    >
+                      Wear Today &rarr;
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
     </div>
   );

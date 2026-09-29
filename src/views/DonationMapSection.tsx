@@ -11,11 +11,11 @@ import {
 } from '../data/locationDirectory';
 
 // Subcomponents
-import { CascadingFilters } from './DonationMap/CascadingFilters';
-import { MapContainer } from './DonationMap/MapContainer';
-import { OpportunityDrawer } from './DonationMap/OpportunityDrawer';
-import { OpportunityCard } from './DonationMap/OpportunityCard';
-import { FlagModal } from './DonationMap/FlagModal';
+import { CascadingFilters } from '../components/map/CascadingFilters';
+import { MapContainer } from '../components/map/MapContainer';
+import { OpportunityDrawer } from '../components/map/OpportunityDrawer';
+import { OpportunityCard } from '../components/map/OpportunityCard';
+import { FlagModal } from '../components/modals/FlagModal';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 

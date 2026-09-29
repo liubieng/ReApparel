@@ -39,7 +39,7 @@ export interface ClothingItem {
   user_id: string;
   name: string;
   image_url: string;
-  addition_type: AdditionType;
+  addition_type?: AdditionType;
   wear_count: number;
   worn_count?: number;
   date_added: string;

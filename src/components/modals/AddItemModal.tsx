@@ -10,22 +10,6 @@ import {
 } from '../../data/seedData';
 import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 
-/**
- * ============================================================================
- * ADD CLOTHING ITEM MODAL (AddItemModal.tsx)
- * ============================================================================
- * 
- * CAPSTONE DEFENSE CONTEXT & ARCHITECTURE:
- * 1. UN SDG 12 Responsible Consumption:
- *    - Enforces wardrobe digitization to optimize circularity and wear counts.
- * 2. Smart Attribute Resolution:
- *    - Automatically synchronizes Category & Garment Type selections.
- *    - Gracefully defaults colors and crisp vector silhouettes if omitted.
- * 3. Client-Side Edge Background Removal:
- *    - Implements HTML5 Canvas image segmentation to isolate garment silhouettes
- *      without requiring external ML APIs or server roundtrips.
- */
-
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -164,7 +148,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         user_id: userId || 'a0000000-0000-0000-0000-000000000001',
         name: trimmedName,
         image_url: primaryImage,
-        addition_type: 'Old',
         category: finalCategory,
         type_tag: finalType,
         color: finalColor,

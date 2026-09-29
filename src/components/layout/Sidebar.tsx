@@ -38,6 +38,7 @@ interface SidebarProps {
   pendingRequestsCount?: number;
   pendingBorrowsCount?: number;
   pendingFriendsCount?: number;
+  isBSASDue?: boolean;
   onSelectView: (viewId: string) => void;
   onCloseMobile: () => void;
   onLogout: () => void;
@@ -51,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingRequestsCount = 0,
   pendingBorrowsCount,
   pendingFriendsCount = 0,
+  isBSASDue = false,
   onSelectView,
   onCloseMobile,
   onLogout,
@@ -143,6 +145,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     color: '#ffffff'
                   }}>
                     {badgeCount}
+                  </span>
+                )}
+
+                {/* SFR-4.2: Notification when BSAS questionnaire is available to be retaken */}
+                {item.id === 'recovery' && isBSASDue && (
+                  <span 
+                    title="BSAS Questionnaire is available to be retaken!"
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: 10,
+                      background: 'var(--primary)',
+                      color: '#ffffff',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em'
+                    }}
+                  >
+                    Due
                   </span>
                 )}
               </button>

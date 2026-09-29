@@ -69,7 +69,6 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
     await onUpdateItem(garment.item_id, {
       name: name.trim(),
-      addition_type: garment.addition_type || 'Old',
       category,
       type_tag: garmentType,
       color,

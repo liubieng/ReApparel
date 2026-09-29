@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, ClothingItem, Borrow } from '../../types/database';
+import { User, ClothingItem, Borrow } from '../types/database';
 import { UserCircle, ShieldCheck, Leaf, Shirt, Trash2, ArrowRight } from 'lucide-react';
 
 /**

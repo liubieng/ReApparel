@@ -22,7 +22,7 @@ import {
   runDatabaseDiagnostic, 
   syncAllLocalDataToSupabase,
   DatabaseDiagnosticResult 
-} from '../services/supabaseClient';
+} from '../../services/supabaseClient';
 
 interface DatabaseModalProps {
   isOpen: boolean;

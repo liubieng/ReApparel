@@ -12,9 +12,9 @@ import {
   Search,
   Inbox
 } from 'lucide-react';
-import { User, FriendRequest, ClothingItem } from '../../types/database';
-import { friendsService } from '../../services/friendsService';
-import { closetService } from '../../services/closetService';
+import { User, FriendRequest, ClothingItem } from '../types/database';
+import { friendsService } from '../services/friendsService';
+import { closetService } from '../services/closetService';
 
 /**
  * ============================================================================

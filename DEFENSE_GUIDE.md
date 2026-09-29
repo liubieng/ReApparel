@@ -79,7 +79,7 @@ src/
 ## 3. Core Algorithms & Scientific Grounding (What to Show the Panel)
 
 ### Algorithm 1: BSAS 7-Item Scoring & Risk Categorization
-- **File**: `src/components/BSAS/BSASAssessmentModal.tsx` & `src/services/closetService.ts`
+- **File**: `src/components/modals/BSASAssessmentModal.tsx` & `src/services/closetService.ts`
 - **Theory**: Based on Andreassen et al. (2015) *The Bergen Shopping Addiction Scale*.
 - **The 7 Dimensions**:
   1. *Salience*: Preoccupation with shopping in daily thought patterns.
@@ -98,7 +98,7 @@ src/
 ---
 
 ### Algorithm 2: Lending Schedule Overlap & Conflict Detection
-- **File**: `src/components/Friends/BorrowModal.tsx` & `src/components/Friends/LendingDashboardView.tsx`
+- **File**: `src/components/modals/BorrowModal.tsx` & `src/views/LendingDashboardView.tsx`
 - **Purpose**: Prevents two friends from borrowing the same clothing item for overlapping dates.
 - **Formula**:
   Two intervals $[A_{\text{start}}, A_{\text{end}}]$ and $[B_{\text{start}}, B_{\text{end}}]$ overlap if and only if:
@@ -110,7 +110,7 @@ src/
 ---
 
 ### Algorithm 3: Automated Midnight Finalization (Daily Outfit Logging)
-- **File**: `src/components/DailyLog/DailyLogView.tsx` & `src/services/closetService.ts`
+- **File**: `src/views/DailyLogView.tsx` & `src/services/closetService.ts`
 - **Purpose**: Prevents retroactive tampering with wear data and automates wear metrics.
 - **Execution**:
   - During the day: User can freely add or remove garments from today's outfit.
@@ -122,7 +122,7 @@ src/
 ---
 
 ### Algorithm 4: Client-Side Background Removal (Silhouette Isolation)
-- **File**: `src/utils/imageProcessing.ts` & `src/components/VirtualCloset/AddItemModal.tsx`
+- **File**: `src/utils/imageProcessing.ts` & `src/components/modals/AddItemModal.tsx`
 - **Purpose**: Isolates garment silhouettes onto transparent PNGs for clean visual cataloging without incurring external API latency, costs, or cloud privacy concerns.
 - **Algorithm**:
   1. Draws the uploaded photo onto an off-screen HTML5 `<canvas>`.
@@ -134,7 +134,7 @@ src/
 ---
 
 ### Algorithm 5: Dynamic Multi-Attribute Wardrobe Filtering
-- **File**: `src/components/VirtualCloset/VirtualClosetView.tsx`
+- **File**: `src/views/VirtualClosetView.tsx`
 - **Purpose**: Provides real-time visibility into wardrobe composition without displaying irrelevant categories or colors.
 - **Execution**:
   - Filters for Category and Color are dynamically computed from active garments currently owned by the user.
