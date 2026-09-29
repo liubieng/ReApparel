@@ -45,12 +45,21 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const raw = evt.target?.result as string;
+      if (!raw) {
+        setIsProcessing(false);
+        return;
+      }
       try {
-        const transparent = await removeBackgroundClientSide(raw);
-        setImages(prev => [...prev, transparent.dataUrl]);
-        toast('Photo updated!');
+        const transparent = await removeBackgroundClientSide(raw, {
+          tolerance: 32,
+          removeShadows: false
+        });
+        const finalImage = transparent?.dataUrl || raw;
+        setImages(prev => [...prev, finalImage]);
+        toast('Photo added successfully!');
       } catch {
         setImages(prev => [...prev, raw]);
+        toast('Photo added successfully!');
       } finally {
         setIsProcessing(false);
       }
@@ -98,21 +107,63 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             <label style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Photos ({images.length}/3)</span>
             </label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0' }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '8px 0' }}>
               {images.map((src, idx) => (
-                <span key={idx} className="swatchsm" style={{ backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-                  <span className="x" onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}>✕</span>
-                </span>
+                <div
+                  key={idx}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 8,
+                    border: '1.5px solid var(--border)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    backgroundColor: 'var(--surface-2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <img
+                    src={src}
+                    alt={`Photo ${idx + 1}`}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      position: 'absolute',
+                      top: 2,
+                      right: 2,
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 18,
+                      height: 18,
+                      fontSize: 10,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
               ))}
               {images.length < 3 && (
                 <button
                   type="button"
                   className="btn btn-g"
-                  style={{ fontSize: 11 }}
+                  style={{ fontSize: 11, height: 64, padding: '0 12px' }}
                   disabled={isProcessing}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="ico" style={{ width: 12, height: 12 }} /> Add Photo
+                  <Upload className="ico" style={{ width: 12, height: 12 }} />
+                  {isProcessing ? 'Processing...' : 'Add Photo'}
                 </button>
               )}
             </div>

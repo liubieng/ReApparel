@@ -165,8 +165,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     width: '100%',
                     borderRadius: 6,
                     marginBottom: 8,
-                    background: isHex ? item.image_url : 'var(--surface-2)',
-                    backgroundImage: isHex ? undefined : `url(${item.image_url})`,
+                    backgroundColor: isHex ? item.image_url : 'var(--surface-2)',
+                    backgroundImage: isHex ? undefined : `url("${item.image_url}")`,
                     backgroundSize: 'contain',
                     backgroundRepeat: 'no-repeat',
                     backgroundPosition: 'center'
@@ -249,7 +249,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           <form onSubmit={handleSendRequest} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <input
               type="text"
-              placeholder="e.g. RP-LIUC-2048"
+              placeholder="e.g. RP-ABCD-1234"
               value={friendCodeInput}
               onChange={(e) => setFriendCodeInput(e.target.value)}
               style={{ fontSize: 13 }}
@@ -265,7 +265,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
             </button>
           </form>
           <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
-            Demo codes: <code>RP-MARI-1024</code> (Mario) &middot; <code>RP-LIUC-2048</code> (Liu)
+            Enter a friend's unique 11-character code to connect.
           </p>
         </div>
 

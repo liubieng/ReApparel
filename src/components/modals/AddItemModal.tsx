@@ -55,17 +55,23 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       const reader = new FileReader();
       reader.onload = async (event) => {
         const rawDataUrl = event.target?.result as string;
+        if (!rawDataUrl) {
+          setIsProcessingImage(false);
+          return;
+        }
         try {
-          // Process client-side background removal via HTML5 Canvas
+          // Process client-side background removal with safe parameters
           const transparentResult = await removeBackgroundClientSide(rawDataUrl, {
-            tolerance: 48,
-            removeShadows: true
+            tolerance: 32,
+            removeShadows: false
           });
-          setImages(prev => [...prev, transparentResult.dataUrl]);
-          toast('Photo uploaded & silhouette isolated!');
+          const finalImage = transparentResult?.dataUrl || rawDataUrl;
+          setImages(prev => [...prev, finalImage]);
+          toast('Photo uploaded successfully!');
         } catch {
-          // Fallback to raw image if canvas manipulation encounters cross-origin issue
+          // Fallback to raw uploaded image
           setImages(prev => [...prev, rawDataUrl]);
+          toast('Photo uploaded successfully!');
         } finally {
           setIsProcessingImage(false);
         }
@@ -212,18 +218,59 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </label>
 
             {/* Photo Previews */}
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, margin: '8px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '8px 0' }}>
               {images.map((imgSrc, idx) => {
                 const isColorHex = imgSrc.startsWith('#');
                 return (
-                  <span
+                  <div
                     key={idx}
-                    className="swatchsm"
-                    style={isColorHex ? { background: imgSrc } : { backgroundImage: `url(${imgSrc})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                    style={{
+                      width: 68,
+                      height: 68,
+                      borderRadius: 8,
+                      border: '1.5px solid var(--border)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      backgroundColor: 'var(--surface-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
                   >
-                    {isColorHex ? idx + 1 : ''}
-                    <span className="x" onClick={() => handleRemoveImage(idx)} title="Remove photo">✕</span>
-                  </span>
+                    {isColorHex ? (
+                      <div style={{ width: '100%', height: '100%', backgroundColor: imgSrc }} />
+                    ) : (
+                      <img
+                        src={imgSrc}
+                        alt={`Photo ${idx + 1}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(idx)}
+                      title="Remove photo"
+                      style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        background: 'rgba(0,0,0,0.65)',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: 18,
+                        height: 18,
+                        fontSize: 10,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        lineHeight: 1
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 );
               })}
 
@@ -231,12 +278,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                 <button
                   type="button"
                   className="btn btn-g"
-                  style={{ fontSize: 12, padding: '6px 12px', height: 42 }}
+                  style={{ fontSize: 12, padding: '6px 12px', height: 68 }}
                   disabled={isProcessingImage}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="ico" style={{ width: 14, height: 14 }} />
-                  {isProcessingImage ? 'Processing Silhouette...' : 'Upload Photo'}
+                  {isProcessingImage ? 'Uploading...' : 'Upload Photo'}
                 </button>
               )}
             </div>

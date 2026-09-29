@@ -101,8 +101,8 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
             width: 54,
             height: 54,
             borderRadius: 6,
-            background: garment.image_url?.startsWith('#') ? garment.image_url : 'var(--surface)',
-            backgroundImage: garment.image_url?.startsWith('#') ? undefined : `url(${garment.image_url})`,
+            backgroundColor: garment.image_url?.startsWith('#') ? garment.image_url : 'var(--surface)',
+            backgroundImage: garment.image_url?.startsWith('#') ? undefined : `url("${garment.image_url}")`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             flexShrink: 0

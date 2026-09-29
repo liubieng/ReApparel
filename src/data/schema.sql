@@ -313,20 +313,4 @@ INSERT INTO tag (tag_name, tag_type) VALUES
     ('Neutral', 'Color')
 ON CONFLICT (tag_name, tag_type) DO NOTHING;
 
--- --------------------------------------------------------------------
--- Seed Data: Sample Users, Garments & Donation Opportunities
--- --------------------------------------------------------------------
-INSERT INTO users (user_id, email, first_name, last_name, friend_code) VALUES
-    ('a0000000-0000-0000-0000-000000000001', 'mario@example.com', 'Mario', 'Lee', 'RP-MARI-1024'),
-    ('a0000000-0000-0000-0000-000000000002', 'liu@example.com', 'Liu', 'Chen', 'RP-LIUC-2048')
-ON CONFLICT (email) DO NOTHING;
-
-INSERT INTO clothing_item (item_id, user_id, name, image_url, addition_type, wear_count) VALUES
-    (1001, 'a0000000-0000-0000-0000-000000000001', 'Vintage Forest Cotton Shirt', '#3E6B45', 'Old', 8),
-    (1002, 'a0000000-0000-0000-0000-000000000001', 'Tailored Indigo Denim Pants', '#5B7FA6', 'Old', 5),
-    (1003, 'a0000000-0000-0000-0000-000000000001', 'Earthy Wool Knit Sweater', '#B98F5E', 'New', 0),
-    (2001, 'a0000000-0000-0000-0000-000000000002', 'Classic Linen Blazer', '#C7A06B', 'Old', 12),
-    (2002, 'a0000000-0000-0000-0000-000000000002', 'Midnight Chino Trousers', '#2A2A2E', 'Old', 7),
-    (2003, 'a0000000-0000-0000-0000-000000000002', 'Burgundy Silk Pleated Skirt', '#8B5E6B', 'New', 1)
-ON CONFLICT (item_id) DO NOTHING;
 

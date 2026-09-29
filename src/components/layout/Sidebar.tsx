@@ -148,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 )}
 
-                {/* SFR-4.2: Notification when BSAS questionnaire is available to be retaken */}
+                {/* Notification when BSAS questionnaire is available to be retaken */}
                 {item.id === 'recovery' && isBSASDue && (
                   <span 
                     title="BSAS Questionnaire is available to be retaken!"

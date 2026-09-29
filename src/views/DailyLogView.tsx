@@ -46,7 +46,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   const selectedItems = todayLog.items || [];
   const isLocked = todayLog.is_finalized;
 
-  // SFR-13.2: Display all daily clothing logs in chronological order by date
+  // Display all daily clothing logs in chronological order by date
   const finalizedLogs = useMemo(() => {
     // Include finalized logs or logs with items
     const logs = dailyLogs.filter(l => l.is_finalized || (l.items && l.items.length > 0));
@@ -123,7 +123,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
         </span>
       </div>
 
-      {/* View Tabs: Today's Active Log vs Chronological History (SFR-13.2) */}
+      {/* View Tabs: Today's Active Log vs Chronological History */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
         <button
           type="button"
@@ -205,9 +205,10 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                           width: 24,
                           height: 24,
                           borderRadius: 4,
-                          background: isHex ? item.image_url : undefined,
-                          backgroundImage: isHex ? undefined : `url(${item.image_url})`,
-                          backgroundSize: 'cover',
+                          backgroundColor: isHex ? item.image_url : 'var(--surface-2)',
+                          backgroundImage: isHex ? undefined : `url("${item.image_url}")`,
+                          backgroundSize: 'contain',
+                          backgroundRepeat: 'no-repeat',
                           backgroundPosition: 'center',
                           display: 'inline-block'
                         }}
@@ -368,8 +369,8 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                         width: '100%',
                         borderRadius: 6,
                         marginBottom: 8,
-                        background: isHex ? garment.image_url : 'var(--surface-2)',
-                        backgroundImage: isHex ? undefined : `url(${garment.image_url})`,
+                        backgroundColor: isHex ? garment.image_url : 'var(--surface-2)',
+                        backgroundImage: isHex ? undefined : `url("${garment.image_url}")`,
                         backgroundSize: 'contain',
                         backgroundRepeat: 'no-repeat',
                         backgroundPosition: 'center'
@@ -394,14 +395,14 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
         </>
       ) : (
         /* ====================================================================
-         * SFR-13.2 & UFR-13: CHRONOLOGICAL DAILY WEAR LOGS HISTORY
+         * CHRONOLOGICAL DAILY WEAR LOGS HISTORY
          * Displays all daily clothing logs in chronological order by date
          * ==================================================================== */
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <h3 style={{ margin: '0 0 2px', fontSize: 16, fontFamily: 'var(--font-display)' }}>
-                Finalized Wear Logs Archive (SFR-13.2)
+                Finalized Wear Logs Archive
               </h3>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 Historical record of daily garments worn, locked at 00:00 midnight
@@ -518,9 +519,10 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                                   width: 26,
                                   height: 26,
                                   borderRadius: 4,
-                                  background: isHex ? item.image_url : undefined,
-                                  backgroundImage: isHex ? undefined : `url(${item.image_url})`,
-                                  backgroundSize: 'cover',
+                                  backgroundColor: isHex ? item.image_url : 'var(--surface-2)',
+                                  backgroundImage: isHex ? undefined : `url("${item.image_url}")`,
+                                  backgroundSize: 'contain',
+                                  backgroundRepeat: 'no-repeat',
                                   backgroundPosition: 'center',
                                   display: 'inline-block'
                                 }}

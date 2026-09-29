@@ -30,7 +30,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // CNFR-3: Google OAuth 2.0 Sign-In & Rapid Registration (< 5 steps)
+  // Google OAuth 2.0 Sign-In & Rapid Registration (< 5 steps)
   const handleGoogleOAuth = async () => {
     setIsSubmitting(true);
     setErrorMsg(null);
@@ -191,17 +191,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     }
   };
 
-  // Quick switch for panel demonstration
-  const handleQuickDemoLogin = (userId: string) => {
-    const all = mockDatabase.getAllUsers();
-    const user = all.find(u => u.user_id === userId || u.user_id === 'a0000000-0000-0000-0000-000000000001');
-    if (user) {
-      mockDatabase.setCurrentUserId(user.user_id);
-      toast(`Switched to demo profile: ${user.first_name} ${user.last_name}`);
-      onLoginSuccess(user, false);
-    }
-  };
-
   return (
     <div className="center-shell">
       <div className="card" style={{ maxWidth: 440, width: '100%', padding: '28px 24px', boxShadow: 'var(--shadow)' }}>
@@ -275,7 +264,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           </button>
         </div>
 
-        {/* CNFR-3: Google OAuth 2.0 Sign-In & Rapid Registration (< 5 steps) */}
+        {/* Google OAuth 2.0 Sign-In & Rapid Registration (< 5 steps) */}
         <div style={{ marginBottom: 16 }}>
           <button
             type="button"
@@ -424,7 +413,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             </label>
             <input
               type={authMode === 'login' ? 'text' : 'email'}
-              placeholder={authMode === 'login' ? 'mario@example.com or RP-MARI-1024' : 'your.email@example.com'}
+              placeholder={authMode === 'login' ? 'your.email@example.com or friend code' : 'your.email@example.com'}
               value={emailOrCode}
               onChange={(e) => setEmailOrCode(e.target.value)}
               required
@@ -464,34 +453,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             <ArrowRight className="ico" style={{ marginLeft: 6 }} />
           </button>
         </form>
-
-        {/* Quick Demo Login (Helpful during panel defense) */}
-        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>
-            🎯 Thesis Defense Demo Profiles:
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <button
-              type="button"
-              className="btn btn-g"
-              style={{ fontSize: 11.5, padding: '6px 8px', justifyContent: 'center' }}
-              onClick={() => handleQuickDemoLogin('a0000000-0000-0000-0000-000000000001')}
-            >
-              Mario (Lender)
-            </button>
-            <button
-              type="button"
-              className="btn btn-g"
-              style={{ fontSize: 11.5, padding: '6px 8px', justifyContent: 'center' }}
-              onClick={() => handleQuickDemoLogin('a0000000-0000-0000-0000-000000000002')}
-            >
-              Liu (Borrower)
-            </button>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '8px 0 0', textAlign: 'center' }}>
-            Tip: Switch between Mario &amp; Liu to demonstrate peer-to-peer wardrobe sharing.
-          </p>
-        </div>
 
       </div>
     </div>

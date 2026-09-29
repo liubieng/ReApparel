@@ -131,8 +131,8 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                         width: 48,
                         height: 48,
                         borderRadius: 6,
-                        background: isHex ? item?.image_url : 'var(--surface-2)',
-                        backgroundImage: isHex ? undefined : `url(${item?.image_url})`,
+                        backgroundColor: isHex ? item?.image_url : 'var(--surface-2)',
+                        backgroundImage: isHex ? undefined : `url("${item?.image_url}")`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         flexShrink: 0
@@ -210,8 +210,8 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                         width: 48,
                         height: 48,
                         borderRadius: 6,
-                        background: item?.image_url?.startsWith('#') ? item.image_url : 'var(--surface-2)',
-                        backgroundImage: item?.image_url?.startsWith('#') ? undefined : `url(${item?.image_url})`,
+                        backgroundColor: item?.image_url?.startsWith('#') ? item.image_url : 'var(--surface-2)',
+                        backgroundImage: item?.image_url?.startsWith('#') ? undefined : `url("${item?.image_url}")`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         flexShrink: 0

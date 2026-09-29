@@ -9,17 +9,15 @@ import { UserCircle, ShieldCheck, Leaf, Shirt, Trash2, ArrowRight } from 'lucide
  * 
  * CAPSTONE DEFENSE CONTEXT:
  * - Displays active user identity and sustainability statistics.
- * - Quick Switch User dropdown: allows switching between demo profiles (e.g. Mario & Liu)
- *   without logging out, facilitating real-time demonstration of peer-to-peer lending.
  * - Account Deletion Safeguard: Prevents deleting an account if active/unreturned borrows exist.
  */
 
 interface ProfileViewProps {
   currentUser: User;
-  allUsers: User[];
+  allUsers?: User[];
   garments: ClothingItem[];
   borrows: Borrow[];
-  onSwitchUser: (userId: string) => Promise<void>;
+  onSwitchUser?: (userId: string) => Promise<void>;
   onDeleteAccount: () => void;
   toast: (msg: string) => void;
 }
@@ -47,7 +45,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>User Profile</h2>
         <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-          Manage your account, view sustainability impact, and switch profiles for testing
+          Manage your account and view wardrobe sustainability impact
         </div>
       </div>
 
@@ -90,34 +88,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <span style={{ color: 'var(--text-muted)' }}>Total Cumulative Wears:</span>
               <strong style={{ color: 'var(--primary)' }}>{totalWears} wears</strong>
             </div>
-          </div>
-        </div>
-
-        {/* Quick User Switcher Card (Crucial for Defense) */}
-        <div className="card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 8px', fontSize: 15, fontFamily: 'var(--font-display)' }}>
-            🎯 Fast User Switcher (Defense Demo)
-          </h3>
-          <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-            Switch directly between accounts to demonstrate multi-user friend requests and borrowing flows without re-logging in.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {allUsers.map(user => {
-              const isActive = user.user_id === currentUser.user_id;
-              return (
-                <button
-                  key={user.user_id}
-                  type="button"
-                  className={`btn ${isActive ? 'btn-p' : 'btn-g'}`}
-                  style={{ justifyContent: 'space-between', fontSize: 12, padding: '7px 12px' }}
-                  onClick={() => onSwitchUser(user.user_id)}
-                >
-                  <span>{user.first_name} {user.last_name} ({user.friend_code})</span>
-                  {isActive ? <span>(Active)</span> : <span>Switch →</span>}
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>

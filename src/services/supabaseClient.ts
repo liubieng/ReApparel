@@ -194,6 +194,33 @@ function loadInitialMockState(): MockDatabaseState {
         safeStorage.setItem(cleanedDeletedUsersKey, 'true');
       }
 
+      // Clean up seed demo accounts mario@example.com and liu@example.com from localStorage cache
+      if (parsed.users && Array.isArray(parsed.users)) {
+        parsed.users = parsed.users.filter((u: User) => {
+          const email = (u.email || '').toLowerCase();
+          const friendCode = (u.friend_code || '').toUpperCase();
+          return email !== 'mario@example.com' && email !== 'liu@example.com' && friendCode !== 'RP-MARI-1024' && friendCode !== 'RP-LIUC-2048';
+        });
+        const demoUids = new Set(['a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'u-mario-01', 'u-liu-02']);
+        if (parsed.clothing_items) {
+          parsed.clothing_items = parsed.clothing_items.filter((i: ClothingItem) => !demoUids.has(i.user_id));
+        }
+        if (parsed.bsas_assessments) {
+          parsed.bsas_assessments = parsed.bsas_assessments.filter((a: BSASAssessment) => !demoUids.has(a.user_id));
+        }
+        if (parsed.daily_clothing_logs) {
+          parsed.daily_clothing_logs = parsed.daily_clothing_logs.filter((l: DailyClothingLog) => !demoUids.has(l.user_id));
+        }
+        const activeUser = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER);
+        if (activeUser && demoUids.has(activeUser)) {
+          if (parsed.users.length > 0) {
+            safeStorage.setItem(STORAGE_KEY_ACTIVE_USER, parsed.users[0].user_id);
+          } else {
+            safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
+          }
+        }
+      }
+
       // If clothing_items has no items at all (e.g. wiped state), seed with initial items
       if (parsed.clothing_items.length === 0) {
         parsed.clothing_items = [...INITIAL_CLOTHING_ITEMS];
@@ -246,15 +273,13 @@ function loadInitialMockState(): MockDatabaseState {
 
 // Canonical UUID & User Matching Helpers
 export function toCanonicalUserId(uid: string | null | undefined): string {
-  if (!uid || uid === 'guest' || uid === 'u-mario-01') return 'a0000000-0000-0000-0000-000000000001';
-  if (uid === 'u-liu-02') return 'a0000000-0000-0000-0000-000000000002';
+  if (!uid || uid === 'guest') return '';
   return uid;
 }
 
 export function isSameUser(uidA: string | null | undefined, uidB: string | null | undefined): boolean {
   if (!uidA || !uidB) return false;
-  if (uidA === uidB) return true;
-  return toCanonicalUserId(uidA) === toCanonicalUserId(uidB);
+  return uidA === uidB;
 }
 
 export function generateUUID(): string {
@@ -594,7 +619,7 @@ class MockDatabaseEngine {
 
   public addAssessment(score: number, breakdown?: BSASAssessment['breakdown'], userId?: string): BSASAssessment {
     const risk_level = score >= 4 ? 'Indicative' : 'Non-Indicative';
-    const targetUid = userId || this.currentUserId || this.state.users[0]?.user_id || 'u-mario-01';
+    const targetUid = userId || this.currentUserId || this.state.users[0]?.user_id || '';
     const newAssessment: BSASAssessment = {
       assessment_id: Date.now(),
       user_id: targetUid,
@@ -782,7 +807,7 @@ class MockDatabaseEngine {
 
     this.state.friend_requests.unshift(newReq);
 
-    // Create notification for recipient (e.g. Mario gets notified that Liu sent a friend request)
+    // Create notification for recipient
     if (!this.state.notifications) this.state.notifications = [];
     this.state.notifications.unshift({
       id: `notif-fr-${Date.now()}`,

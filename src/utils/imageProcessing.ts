@@ -242,21 +242,6 @@ export async function removeBackgroundClientSide(
               }
             }
 
-            // 3. Smooth lighting gradient falloff (allows gentle background fade while stopping at garment edge)
-            if (!isBg && tolerance >= 30) {
-              const localDist = perceptualColorDistance(nR, nG, nB, curR, curG, curB);
-              if (localDist <= Math.max(10, tolerance * 0.35)) {
-                let minDist = 999;
-                for (let c = 0; c < bgClusters.length; c++) {
-                  const d = perceptualColorDistance(nR, nG, nB, bgClusters[c].r, bgClusters[c].g, bgClusters[c].b);
-                  if (d < minDist) minDist = d;
-                }
-                if (minDist <= tolerance * 1.25) {
-                  isBg = true;
-                }
-              }
-            }
-
             if (isBg) {
               visited[nIdx] = 1;
               queue[tail++] = nIdx;
@@ -266,11 +251,27 @@ export async function removeBackgroundClientSide(
           }
         }
 
-        // Apply Transparency to all confirmed background pixels
+        // Apply Transparency to confirmed background pixels
         for (let i = 0; i < totalPixels; i++) {
           if (visited[i] === 1) {
             data[i * 4 + 3] = 0;
           }
+        }
+
+        // Verify how many visible pixels remain
+        let visiblePixels = 0;
+        for (let i = 0; i < totalPixels; i++) {
+          if (data[i * 4 + 3] > 30) {
+            visiblePixels++;
+          }
+        }
+
+        const visibleRatio = visiblePixels / totalPixels;
+        // Critical safeguard: if background removal erased the subject (< 10% visible pixels),
+        // abort transparency and preserve the original uploaded image!
+        if (visibleRatio < 0.10) {
+          const rawUrl = typeof imageSource === 'string' ? imageSource : img.src;
+          return resolve({ dataUrl: rawUrl, blob: new Blob(), sampledBg: primaryBg });
         }
 
         // Anti-aliased Edge Feathering to eliminate jagged fringes
@@ -296,7 +297,7 @@ export async function removeBackgroundClientSide(
         }
 
         // Frame perimeter despeckle: clear any tiny residual outer border pixels
-        const borderBand = 3;
+        const borderBand = 2;
         for (let x = 0; x < width; x++) {
           for (let b = 0; b < borderBand; b++) {
             data[(b * width + x) * 4 + 3] = 0;

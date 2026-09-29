@@ -236,24 +236,7 @@ export const BSAS_RESPONSE_OPTIONS = [
 // Alias for backwards-compatibility
 export const BSAS_QUESTIONS = BSAS_28_ITEMS;
 
-export const INITIAL_USERS: User[] = [
-  {
-    user_id: 'a0000000-0000-0000-0000-000000000001',
-    email: 'mario@example.com',
-    first_name: 'Mario',
-    last_name: 'Lee',
-    friend_code: 'RP-MARI-1024',
-    created_at: '2026-09-01T00:00:00.000Z'
-  },
-  {
-    user_id: 'a0000000-0000-0000-0000-000000000002',
-    email: 'liu@example.com',
-    first_name: 'Liu',
-    last_name: 'Chen',
-    friend_code: 'RP-LIUC-2048',
-    created_at: '2026-09-02T00:00:00.000Z'
-  }
-];
+export const INITIAL_USERS: User[] = [];
 
 // Curated Core Color Families specification
 export interface CuratedColorFamily {

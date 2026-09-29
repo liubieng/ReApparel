@@ -395,7 +395,7 @@ export default function App() {
     );
   }
 
-  // SFR-4.2: 30-Day BSAS Assessment Cooldown & Notification Status
+  // 30-Day BSAS Assessment Cooldown & Notification Status
   const latestAssessment = assessments[0];
   const isBSASDue = !latestAssessment || (
     Math.floor((Date.now() - new Date(latestAssessment.taken_at).getTime() + simulatedDaysOffset * 86400000) / 86400000) >= 30
@@ -441,6 +441,7 @@ export default function App() {
               onOpenAddModal={() => setIsAddGarmentOpen(true)}
               onEditGarment={(g) => setEditingGarment(g)}
               onDeleteGarment={(g) => setDeletingGarment(g)}
+              onNavigateToRecovery={() => setView('recovery')}
               toast={toast}
             />
           )}
@@ -470,6 +471,9 @@ export default function App() {
               }}
               onStartRetakeAssessment={() => setView('bsas')}
               onNavigateToCloset={() => setView('closet')}
+              onNavigateToDailyLog={() => setView('daily-log')}
+              onEditGarment={(g) => setEditingGarment(g)}
+              onOpenAddGarment={() => setIsAddGarmentOpen(true)}
             />
           )}
 
@@ -560,7 +564,7 @@ export default function App() {
       <AddItemModal
         isOpen={isAddGarmentOpen}
         onClose={() => setIsAddGarmentOpen(false)}
-        userId={currentUser?.user_id || 'a0000000-0000-0000-0000-000000000001'}
+        userId={currentUser?.user_id || ''}
         onAddItem={handleAddGarment}
         toast={toast}
       />
