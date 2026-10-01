@@ -14,12 +14,10 @@ import { BrainCircuit, ShieldCheck, ArrowRight, BookOpen, Leaf, Sparkles } from 
 
 interface BSASIntroViewProps {
   onStartAssessment: () => void;
-  onSkipToCloset: () => void;
 }
 
 export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
-  onStartAssessment,
-  onSkipToCloset
+  onStartAssessment
 }) => {
   return (
     <div className="center-shell">
@@ -76,13 +74,13 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
             7 Clinical Behavioral Dimensions Evaluated (4 Items Each):
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11.5, color: 'var(--text-muted)' }}>
-            <div>1. <strong>Salience</strong> (Preoccupation)</div>
-            <div>2. <strong>Mood Modification</strong> (Coping)</div>
-            <div>3. <strong>Conflict</strong> (Interpersonal)</div>
-            <div>4. <strong>Tolerance</strong> (Escalation)</div>
-            <div>5. <strong>Withdrawal</strong> (Restlessness)</div>
-            <div>6. <strong>Relapse</strong> (Loss of Control)</div>
-            <div style={{ gridColumn: 'span 2' }}>7. <strong>Problems</strong> (Financial/Personal Harm)</div>
+            <div>1. <strong>Salience</strong></div>
+            <div>2. <strong>Mood Modification</strong></div>
+            <div>3. <strong>Conflict</strong></div>
+            <div>4. <strong>Tolerance</strong></div>
+            <div>5. <strong>Withdrawal</strong></div>
+            <div>6. <strong>Relapse</strong></div>
+            <div style={{ gridColumn: 'span 2' }}>7. <strong>Problems</strong></div>
           </div>
         </div>
 
@@ -98,6 +96,9 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
           marginBottom: 24
         }}>
           <strong>Clinical Scoring (Psychology Tools):</strong> 5-point Likert scale (Completely Disagree to Completely Agree). Scoring <em>Agree</em> or <em>Completely Agree</em> endorses a symptom. Endorsing 4 or more criteria classifies the assessment as <em>Indicative Risk</em>.
+          <div style={{ marginTop: 6, color: 'var(--text)', fontWeight: 500 }}>
+            <em>This is not a diagnosis. It is an assessment for self-reflection.</em>
+          </div>
         </div>
 
         {/* Action Buttons */}
@@ -109,15 +110,6 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
             onClick={onStartAssessment}
           >
             Start BSAS Check-In (28 Items) <ArrowRight className="ico" style={{ marginLeft: 6 }} />
-          </button>
-          
-          <button
-            type="button"
-            className="btn btn-g"
-            style={{ width: '100%', justifyContent: 'center', fontSize: 13 }}
-            onClick={onSkipToCloset}
-          >
-            Skip to Virtual Closet for Now
           </button>
         </div>
 

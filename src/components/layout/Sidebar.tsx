@@ -25,7 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'daily-log', label: 'Daily Outfit Log', icon: Calendar },
   { id: 'recovery', label: 'Recovery Progress', icon: Leaf },
   { id: 'requests', label: 'Lending & Requests', icon: HeartHandshake },
-  { id: 'friends', label: 'Friends & Loans', icon: Users },
+  { id: 'friends', label: 'Friends', icon: Users },
   { id: 'donations', label: 'Donation Map', icon: MapPin },
   { id: 'profile', label: 'Profile', icon: UserCircle },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -90,9 +90,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <strong style={{ fontSize: 16, fontFamily: 'var(--font-display)', display: 'block', color: 'var(--text)' }}>
               ReApparel
             </strong>
-            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', fontWeight: 700 }}>
-              BSAS Wardrobe Recovery
-            </span>
           </div>
         </div>
 

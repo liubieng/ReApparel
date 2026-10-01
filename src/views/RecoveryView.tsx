@@ -318,9 +318,12 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                 ? 'Clinical cutoff reached (>=4). Mindful borrowing and "Shop Your Closet" rediscovery recommended.'
                 : 'Shopping behaviors remain within healthy, non-compulsive thresholds (<4 criteria endorsed).'
             ) : (
-              'Complete your first 7-item check-in to establish your baseline score.'
+              'Complete your first check-in to establish your baseline score.'
             )}
           </p>
+          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+            This is not a diagnosis. It is an assessment for self-reflection.
+          </div>
         </div>
 
         {/* Card 2: Wardrobe Utilization Rate */}
@@ -541,6 +544,9 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                   </div>
                 );
               })}
+            </div>
+            <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>
+              This is not a diagnosis. It is an assessment for self-reflection.
             </div>
           </div>
         )}

@@ -3,7 +3,6 @@ import { Upload, X, Check, AlertCircle, Sparkles, ImagePlus } from 'lucide-react
 import { ClothingItem } from '../../types/database';
 import { 
   CATEGORIES, 
-  GARMENT_TYPES, 
   CURATED_COLOR_FAMILIES, 
   CuratedColorFamily,
   createGarmentSilhouette 
@@ -25,9 +24,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   onAddItem,
   toast
 }) => {
-  const [name, setName] = useState('');
   const [category, setCategory] = useState<string>('Tops');
-  const [garmentType, setGarmentType] = useState<string>('Shirt');
   const [selectedColor, setSelectedColor] = useState<string>('Neutral');
   const [selectedColorHex, setSelectedColorHex] = useState<string>('#64748b');
   const [images, setImages] = useState<string[]>([]);
@@ -90,24 +87,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   const handleSelectCategory = (cat: string) => {
     setCategory(cat);
     setFormWarning(null);
-    // Smart sync with garmentType
-    if (cat === 'Tops' || cat === 'Knitwear') setGarmentType('Shirt');
-    else if (cat === 'Bottoms') setGarmentType('Pants');
-    else if (cat === 'Outerwear') setGarmentType('Outerwear');
-    else if (cat === 'Shoes') setGarmentType('Shoes');
-    else if (cat === 'Dresses') setGarmentType('Dress');
-    else if (cat === 'Accessories') setGarmentType('One-Piece');
-  };
-
-  const handleSelectGarmentType = (gt: string) => {
-    setGarmentType(gt);
-    setFormWarning(null);
-    // Smart sync with category
-    if (gt === 'Shirt') setCategory('Tops');
-    else if (gt === 'Pants' || gt === 'Skirt' || gt === 'Shorts') setCategory('Bottoms');
-    else if (gt === 'Dress' || gt === 'One-Piece') setCategory('Dresses');
-    else if (gt === 'Outerwear') setCategory('Outerwear');
-    else if (gt === 'Shoes') setCategory('Shoes');
   };
 
   const handleSelectColorFamily = (family: CuratedColorFamily) => {
@@ -120,39 +99,33 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     e.preventDefault();
     setFormWarning(null);
 
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setFormWarning('Please enter a garment name.');
-      modalRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    // Resolve category and garmentType
+    // Resolve category, color, and automatic naming
     const finalCategory = category || 'Tops';
-    const finalType = garmentType || 'Shirt';
     const finalColor = selectedColor || 'Neutral';
     const finalColorHex = selectedColorHex || '#64748b';
+    const finalName = selectedColor ? `${selectedColor} ${finalCategory}` : finalCategory;
+    const finalType = finalCategory;
 
     // Generate crisp vector silhouette if no user photo uploaded
-    const silType = (finalCategory === 'Bottoms' || finalType === 'Pants' || finalType === 'Skirt' || finalType === 'Shorts')
+    const silType = (finalCategory === 'Bottoms')
       ? 'bottom'
-      : (finalCategory === 'Outerwear' || finalType === 'Outerwear')
+      : (finalCategory === 'Outerwear')
         ? 'outerwear'
-        : (finalCategory === 'Dresses' || finalType === 'Dress')
+        : (finalCategory === 'Dresses')
           ? 'dress'
-          : (finalCategory === 'Shoes' || finalType === 'Shoes')
+          : (finalCategory === 'Shoes')
             ? 'shoes'
             : 'top';
 
     const primaryImage = images.length > 0 
       ? images[0] 
-      : createGarmentSilhouette(finalColorHex, trimmedName, silType);
+      : createGarmentSilhouette(finalColorHex, finalName, silType);
 
     setIsSubmitting(true);
     try {
       await onAddItem({
         user_id: userId || 'a0000000-0000-0000-0000-000000000001',
-        name: trimmedName,
+        name: finalName,
         image_url: primaryImage,
         category: finalCategory,
         type_tag: finalType,
@@ -161,9 +134,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         images: images.length > 0 ? images : [primaryImage]
       });
 
-      toast(`"${trimmedName}" added to your virtual closet!`);
+      toast(`"${finalName}" added to your virtual closet!`);
       // Reset form fields
-      setName('');
       setImages([]);
       setFormWarning(null);
       onClose();
@@ -300,19 +272,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          {/* Garment Name */}
-          <div className="field">
-            <label>Garment Name *</label>
-            <input
-              type="text"
-              placeholder="e.g. Linen Relaxed Overshirt, Vintage Denim Jeans"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setFormWarning(null); }}
-              required
-              autoFocus
-            />
-          </div>
-
           {/* Category Selection */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -340,39 +299,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                     onClick={() => handleSelectCategory(cat)}
                   >
                     {cat} {isSelected ? '✓' : ''}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Garment Type Selection */}
-          <div className="field">
-            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Garment Type</span>
-              {garmentType && <span style={{ fontSize: 11.5, color: 'var(--primary)', fontWeight: 700 }}>✓ {garmentType}</span>}
-            </label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4, maxHeight: 110, overflowY: 'auto' }}>
-              {GARMENT_TYPES.map(gt => {
-                const isSelected = garmentType === gt;
-                return (
-                  <button
-                    key={gt}
-                    type="button"
-                    className={`pill ${isSelected ? 'on' : ''}`}
-                    style={{
-                      cursor: 'pointer',
-                      padding: '4px 10px',
-                      fontSize: 11.5,
-                      borderRadius: 14,
-                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
-                      color: isSelected ? '#ffffff' : 'var(--text)',
-                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      fontWeight: isSelected ? 600 : 400
-                    }}
-                    onClick={() => handleSelectGarmentType(gt)}
-                  >
-                    {gt} {isSelected ? '✓' : ''}
                   </button>
                 );
               })}

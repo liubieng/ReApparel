@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { BrainCircuit, CheckCircle2, ArrowLeft, X, Sparkles } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, ArrowLeft, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
 import { BSASAssessment } from '../../types/database';
 
 /**
@@ -28,6 +28,7 @@ import { BSASAssessment } from '../../types/database';
  *   4: Completely Agree
  * - An item is endorsed when rated >= 3 ("Agree" or "Completely Agree").
  * - Endorsing >= 4 of the 7 diagnostic criteria indicates addiction risk.
+ * - Note: This is not a diagnosis. It is an assessment for self-reflection.
  */
 
 import { 
@@ -41,15 +42,15 @@ export { BSAS_28_ITEMS, BSAS_RESPONSE_OPTIONS };
 
 interface BSASAssessmentModalProps {
   onComplete: (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>) => Promise<void>;
-  onCancel: () => void;
+  onCancel?: () => void;
 }
 
 export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
-  onComplete,
-  onCancel
+  onComplete
 }) => {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [unansweredError, setUnansweredError] = useState<string | null>(null);
   const [animationClass, setAnimationClass] = useState<string>('bsas-slide-in-next');
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -59,31 +60,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
   const selectedScore = answers[currentIndex];
   const progressPercent = Math.round(((currentIndex + 1) / BSAS_28_ITEMS.length) * 100);
 
-  // Directly advance upon clicking an answer with an animation transition
-  const handleSelectAnswer = (score: number) => {
-    if (isTransitioning || isSubmitting) return;
-
-    // Save answer immediately so the UI reflects the user's tap
-    const updatedAnswers = { ...answers, [currentIndex]: score };
-    setAnswers(updatedAnswers);
-
-    // If more questions remain, animate to next question
-    if (currentIndex < BSAS_28_ITEMS.length - 1) {
-      setIsTransitioning(true);
-      setAnimationClass('bsas-slide-out-next');
-
-      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-      transitionTimeoutRef.current = setTimeout(() => {
-        setCurrentIndex(prev => prev + 1);
-        setAnimationClass('bsas-slide-in-next');
-        setTimeout(() => {
-          setIsTransitioning(false);
-        }, 150);
-      }, 180);
-      return;
-    }
-
-    // Final question (Item 28 of 28): Complete diagnostic scoring
+  const finalizeAssessment = (finalAnswers: Record<number, number>) => {
     setIsSubmitting(true);
     if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
 
@@ -91,7 +68,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
       try {
         // Endorsement check: An item is endorsed when answered with >= 3 ("Agree" or "Completely Agree")
         const isDimEndorsed = (indices: number[]) => {
-          return indices.some(idx => (updatedAnswers[idx] ?? 0) >= 3);
+          return indices.some(idx => (finalAnswers[idx] ?? 0) >= 3);
         };
 
         const salienceEndorsed = isDimEndorsed([0, 1, 2, 3]);
@@ -122,9 +99,75 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
     }, 240);
   };
 
+  // Directly advance upon clicking an answer with an animation transition
+  const handleSelectAnswer = (score: number) => {
+    if (isTransitioning || isSubmitting) return;
+    setUnansweredError(null);
+
+    // Save answer immediately so the UI reflects the user's tap
+    const updatedAnswers = { ...answers, [currentIndex]: score };
+    setAnswers(updatedAnswers);
+
+    // If more questions remain, animate to next question
+    if (currentIndex < BSAS_28_ITEMS.length - 1) {
+      setIsTransitioning(true);
+      setAnimationClass('bsas-slide-out-next');
+
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = setTimeout(() => {
+        setCurrentIndex(prev => prev + 1);
+        setAnimationClass('bsas-slide-in-next');
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 150);
+      }, 180);
+      return;
+    }
+
+    // Final question (Item 28 of 28): Complete diagnostic scoring
+    finalizeAssessment(updatedAnswers);
+  };
+
+  // Next Question / Submit handler with validation
+  const handleNext = () => {
+    if (isTransitioning || isSubmitting) return;
+
+    if (answers[currentIndex] === undefined) {
+      setUnansweredError('Please select an answer for this question before proceeding.');
+      return;
+    }
+    setUnansweredError(null);
+
+    if (currentIndex < BSAS_28_ITEMS.length - 1) {
+      setIsTransitioning(true);
+      setAnimationClass('bsas-slide-out-next');
+
+      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+      transitionTimeoutRef.current = setTimeout(() => {
+        setCurrentIndex(prev => prev + 1);
+        setAnimationClass('bsas-slide-in-next');
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 150);
+      }, 180);
+      return;
+    }
+
+    // Validate that all 28 items are answered
+    const missingIdx = BSAS_28_ITEMS.findIndex((_, idx) => answers[idx] === undefined);
+    if (missingIdx !== -1) {
+      setUnansweredError(`Question ${missingIdx + 1} is unanswered. Please answer all questions.`);
+      setCurrentIndex(missingIdx);
+      return;
+    }
+
+    finalizeAssessment(answers);
+  };
+
   // Navigate back to previous question with reverse slide animation
   const handlePrevious = () => {
     if (currentIndex === 0 || isTransitioning || isSubmitting) return;
+    setUnansweredError(null);
 
     setIsTransitioning(true);
     setAnimationClass('bsas-slide-out-prev');
@@ -162,29 +205,34 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
               Bergen Shopping Addiction Scale (BSAS)
             </strong>
           </div>
-          
-          <button
-            type="button"
-            onClick={onCancel}
-            title="Close check-in"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              padding: 4,
-              color: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <X style={{ width: 18, height: 18 }} />
-          </button>
         </div>
 
         {/* Instructions banner */}
         <p style={{ margin: '0 0 14px', fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>
           Thoughts, feelings, and actions in the <strong>last 12 months</strong>. Tap an answer to advance.
+          <span style={{ display: 'block', marginTop: 4, fontStyle: 'italic', color: 'var(--text)' }}>
+            This is not a diagnosis. It is an assessment for self-reflection.
+          </span>
         </p>
+
+        {/* Unanswered Error Alert */}
+        {unansweredError && (
+          <div style={{
+            padding: '8px 12px',
+            borderRadius: 6,
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            fontSize: 12,
+            marginBottom: 14,
+            border: '1px solid var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            <AlertCircle className="ico" style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <span>{unansweredError}</span>
+          </div>
+        )}
 
         {/* Progress Bar & Counter */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 11.5 }}>
@@ -237,7 +285,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
             {currentIndex + 1}. "{currentItem.text}"
           </h3>
 
-          {/* Clean, Clickable Response Alternatives (Drag Slider Completely Removed) */}
+          {/* Clean, Clickable Response Alternatives */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
             {BSAS_RESPONSE_OPTIONS.map(({ val, label, badge }) => {
               const isSelected = selectedScore === val;
@@ -285,7 +333,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
             <Sparkles style={{ width: 32, height: 32, color: 'var(--primary)', animation: 'spin 2s linear infinite', marginBottom: 12 }} />
             <h4 style={{ margin: '0 0 6px', fontSize: 16 }}>Scoring Your Responses...</h4>
             <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)' }}>
-              Evaluating clinical thresholds across the 7 Bergen behavioral dimensions.
+              Evaluating clinical thresholds across the 7 Bergen behavioral dimensions. This is not a diagnosis; it is an assessment for self-reflection.
             </p>
           </div>
         )}
@@ -311,12 +359,13 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
           
           <button
             type="button"
-            className="btn btn-g"
-            disabled={isSubmitting}
-            onClick={onCancel}
-            style={{ fontSize: 12, padding: '6px 12px', color: 'var(--text-muted)' }}
+            className="btn btn-p"
+            disabled={isTransitioning || isSubmitting}
+            onClick={handleNext}
+            style={{ fontSize: 12, padding: '6px 16px' }}
           >
-            Exit Check-In
+            {currentIndex === BSAS_28_ITEMS.length - 1 ? 'Submit Assessment' : 'Next Question'}
+            <ArrowRight className="ico" style={{ width: 13, height: 13, marginLeft: 4 }} />
           </button>
         </div>
 

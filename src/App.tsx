@@ -376,7 +376,6 @@ export default function App() {
         {toastMessage && <div className="toast">{toastMessage}</div>}
         <BSASIntroView
           onStartAssessment={() => setView('bsas')}
-          onSkipToCloset={() => setView('closet')}
         />
       </>
     );
