@@ -75,9 +75,12 @@ export interface SupabaseConfig {
   isConfigured: boolean;
 }
 
+const DEFAULT_FALLBACK_URL = 'https://mgkcnewvfdpjemiexptm.supabase.co';
+const DEFAULT_FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1na2NuZXd2ZmRwamVtaWV4cHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1ODQwNzYsImV4cCI6MjEwNjE2MDA3Nn0.vdMZDM6Nsu7xk7bdvRpWTGceYJ9fgIzQd5cJTfN73pQ';
+
 export function getStoredSupabaseConfig(): SupabaseConfig {
-  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || '';
-  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || '';
+  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || DEFAULT_FALLBACK_URL;
+  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || DEFAULT_FALLBACK_KEY;
   const storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
   const storedKey = safeStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
 
