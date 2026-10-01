@@ -196,10 +196,13 @@ BEGIN
         WHERE log_id = r.log_id;
 
         finalized_count := finalized_count + 1;
-    END LOOP;
-    RETURN finalized_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, pg_temp;
+
+-- Revoke public execution of maintenance cron job from client roles
+REVOKE EXECUTE ON FUNCTION finalize_daily_clothing_logs() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION finalize_daily_clothing_logs() TO postgres, service_role;
 
 -- Schedule midnight run via pg_cron (runs at 00:01 daily)
 -- SELECT cron.schedule('midnight_finalization_job', '1 0 * * *', 'SELECT finalize_daily_clothing_logs()');
@@ -279,7 +282,7 @@ CREATE POLICY "Donation flags insert by authenticated" ON donation_flag FOR INSE
 -- --------------------------------------------------------------------
 -- Compatibility Views for Exact Spec Nomenclature
 -- --------------------------------------------------------------------
-CREATE OR REPLACE VIEW "USER" AS SELECT * FROM users;
+CREATE OR REPLACE VIEW "USER" WITH (security_invoker = true) AS SELECT * FROM users;
 
 -- --------------------------------------------------------------------
 -- Seed Data: TAG Catalog (Categories & 14 Curated Core Color Families)
