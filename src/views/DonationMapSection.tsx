@@ -34,7 +34,7 @@ interface DonationMapProps {
  * ============================================================================
  * 
  * CAPSTONE DEFENSE ARCHITECTURE:
- * - Coordinates Textile Donation & Recycling Drop-off Centers (SDG 12.5).
+ * - Coordinates Textile Donation & Recycling Drop-off Centers.
  * - Live Webscrape Verification: Ensures only real, ongoing clothing drives are rendered.
  * - Modular Subcomponents: CascadingFilters, MapContainer, OpportunityDrawer, OpportunityCard, FlagModal.
  */

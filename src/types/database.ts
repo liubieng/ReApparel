@@ -1,6 +1,6 @@
 /**
  * ReApparel Database Types & Entity Models
- * Aligned with UN SDG 12 & Normalized Supabase PostgreSQL Schema
+ * Aligned with Normalized Supabase PostgreSQL Schema
  */
 
 export interface User {

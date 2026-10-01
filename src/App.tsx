@@ -49,7 +49,7 @@ import { DatabaseModal } from './components/modals/DatabaseModal';
  *   1. Auth & Onboarding (AuthView, BSASIntroView, BSASAssessmentModal)
  *   2. Virtual Wardrobe & Wear Maximization (VirtualClosetView, AddItemModal, EditItemModal)
  *   3. Daily Outfit Tracking & Midnight Cron Finalization (DailyLogView)
- *   4. Longitudinal BSAS Recovery Tracking & SDG 12 Analytics (RecoveryView)
+ *   4. Longitudinal BSAS Recovery Tracking & Analytics (RecoveryView)
  *   5. Peer-to-Peer Garment Lending with Conflict Guard (FriendsView, BorrowModal, LendingDashboardView)
  *   6. Geolocation Textile Drop-off & Scraping (DonationMapSection)
  *   7. Hybrid Storage Orchestration (mockDatabase <-> Supabase PostgreSQL)
@@ -553,7 +553,7 @@ export default function App() {
             </div>
           </div>
           <span style={{ color: 'var(--text-muted)' }}>
-            UN Sustainable Development Goal 12 &middot; Target 12.5
+            Mindful Wardrobe &middot; Shopping Recovery
           </span>
         </footer>
       </div>

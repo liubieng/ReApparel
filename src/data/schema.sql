@@ -1,6 +1,6 @@
 -- ====================================================================
 -- ReApparel Database Schema Migration
--- Aligned with UN SDG 12: Responsible Consumption and Production
+-- Responsible Consumption and Wardrobe Recovery
 -- Target: PostgreSQL / Supabase
 -- ====================================================================
 

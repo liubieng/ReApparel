@@ -430,7 +430,7 @@ export const closetService = {
     const leastWorn = [...items].sort((a, b) => (a.wear_count || 0) - (b.wear_count || 0)).slice(0, 5);
     const unwornList = items.filter(i => (i.wear_count || 0) === 0);
 
-    // UN SDG 12 environmental formulas:
+    // Environmental impact formulas:
     // Extending the life of an existing garment by 9 months reduces carbon, waste and water footprints by ~20-30%
     // Each reworn garment averted purchase saves ~6.5kg CO2 and ~2,700 liters of water
     const co2AvertedKg = Math.round(totalWears * 2.8);

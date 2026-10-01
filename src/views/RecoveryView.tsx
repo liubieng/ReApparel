@@ -38,7 +38,7 @@ import { createGarmentSilhouette } from '../data/seedData';
  * 3. Longitudinal Recovery Chart & Clinical Diagnostics:
  *    - Renders a score progression chart showing reduction of compulsive tendencies.
  *    - Criteria breakdown analyzing specific psychological dimensions.
- * 4. UN SDG 12 Wardrobe Circularity Metrics & Frequency Ranking:
+ * 4. Wardrobe Circularity Metrics & Frequency Ranking:
  *    - Tracks wardrobe utilization rate, total wardrobe wears, and wear distribution.
  * 5. Anti-Impulse "Shop Your Closet" Curation:
  *    - Displays one unworn (0 wears) and one least-worn clothing item from each category.
@@ -102,7 +102,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     };
   }, [latest, simulatedDaysOffset]);
 
-  // Wardrobe Utilization Metrics (SDG 12)
+  // Wardrobe Utilization Metrics
   const wardrobeStats = useMemo<{
     total: number;
     wornCount: number;
@@ -235,7 +235,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
             Recovery Progress &amp; Impact
           </h2>
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            Longitudinal BSAS tracking, UN SDG 12 circularity, and anti-impulse wardrobe rediscovery
+            Longitudinal BSAS tracking, wardrobe circularity, and anti-impulse wardrobe rediscovery
           </div>
         </div>
 
@@ -249,7 +249,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
               onClick={onStartRetakeAssessment}
             >
               <BrainCircuit className="ico" style={{ width: 14, height: 14 }} />
-              <span>Take Check-In Now</span>
+              <span>Take BSAS Now</span>
             </button>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -323,12 +323,12 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
           </p>
         </div>
 
-        {/* Card 2: Wardrobe Utilization Rate (SDG 12) */}
+        {/* Card 2: Wardrobe Utilization Rate */}
         <div className="card" style={{ padding: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
             <div>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                SDG 12 Utilization Rate
+                Wardrobe Utilization Rate
               </span>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, fontFamily: 'var(--font-display)', color: 'var(--primary)' }}>
                 {wardrobeStats.rate}% Worn

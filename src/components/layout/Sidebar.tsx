@@ -91,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ReApparel
             </strong>
             <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', fontWeight: 700 }}>
-              SDG 12 &middot; BSAS Recovery
+              BSAS Wardrobe Recovery
             </span>
           </div>
         </div>

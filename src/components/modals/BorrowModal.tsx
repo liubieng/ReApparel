@@ -8,7 +8,7 @@ import { ClothingItem, User, Borrow } from '../../types/database';
  * ============================================================================
  * 
  * CAPSTONE DEFENSE CONTEXT:
- * - Implements peer-to-peer wardrobe sharing to reduce overconsumption (SDG 12).
+ * - Implements peer-to-peer wardrobe sharing to reduce overconsumption.
  * - CONFLICT DETECTION ALGORITHM:
  *   Ensures that no two approved loans for the same clothing item overlap in dates.
  *   Interval Overlap Formula:

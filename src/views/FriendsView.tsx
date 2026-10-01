@@ -22,7 +22,7 @@ import { closetService } from '../services/closetService';
  * ============================================================================
  * 
  * CAPSTONE DEFENSE CONTEXT & METHODOLOGY:
- * - Implements peer-to-peer wardrobe sharing (SDG 12: Circular Fashion Economy).
+ * - Implements peer-to-peer wardrobe sharing (Circular Fashion Economy).
  * - Borrowing items for temporary events avoids fast-fashion one-time purchases.
  * - Allows users to share their unique Friend Code, connect accounts, and browse
  *   each other's virtual wardrobes to borrow garments.
