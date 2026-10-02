@@ -100,7 +100,7 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${opportunity.latitude},${opportunity.longitude}`}
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([opportunity.address, opportunity.city, opportunity.province, opportunity.country].filter(Boolean).join(', '))}`}
           target="_blank"
           rel="noreferrer"
           className="btn btn-p"

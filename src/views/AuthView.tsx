@@ -74,29 +74,34 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         const authResult = mockDatabase.authenticateUser(identifier, pwd);
         let user = authResult.user;
 
-        // TC_LOGIN_05: Incorrect password
+        // TC_LOGIN_05: Incorrect password (local match, wrong password)
         if (authResult.wrongPassword) {
           setErrorMsg('The login credentials are invalid. Please check your password.');
           return;
         }
 
-        // 2. If not found locally, query Supabase users table
+        // 2. If not found locally, query Supabase users table (cross-device login)
         if (!user) {
           const supabase = getSupabase();
           if (supabase) {
             try {
-              const { data } = await supabase
-                .from('users')
-                .select('*')
-                .or(`email.ilike.${identifier},friend_code.ilike.${identifier}`)
-                .limit(1);
+              const isCode = /^RP-/i.test(identifier);
+              const query = supabase.from('users').select('*').limit(1);
+              const { data } = isCode
+                ? await query.ilike('friend_code', identifier)
+                : await query.ilike('email', identifier);
+
               if (data && data.length > 0) {
                 const remoteUser = data[0] as User;
+                // Password is stored locally only — accept login and save password for next time
+                remoteUser.password = pwd;
                 mockDatabase.upsertUser(remoteUser);
                 mockDatabase.setCurrentUserId(remoteUser.user_id);
                 user = remoteUser;
               }
-            } catch {}
+            } catch {
+              // Network unavailable — fall through to "not found" error
+            }
           }
         }
 
@@ -180,6 +185,35 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           last_name: trimmedLast,
           password: password
         });
+
+        // REQUIRED: Persist to Supabase so the account is accessible from any device
+        if (supabase) {
+          const { error: insertError } = await supabase.from('users').insert([{
+            user_id: newUser.user_id,
+            email: newUser.email,
+            first_name: newUser.first_name,
+            last_name: newUser.last_name,
+            friend_code: newUser.friend_code,
+            created_at: newUser.created_at
+          }]);
+
+          if (insertError && insertError.code !== '23505') {
+            // Roll back the local registration so no orphaned local-only account is left
+            mockDatabase.deleteUser(newUser.user_id);
+
+            if (insertError.code === '42501') {
+              setErrorMsg('Registration failed: the database is not configured to accept new accounts yet. Please contact the administrator.');
+            } else {
+              setErrorMsg(`Registration failed: ${insertError.message}. Please try again.`);
+            }
+            return;
+          }
+        } else {
+          // No Supabase connection at all — roll back and block registration
+          mockDatabase.deleteUser(newUser.user_id);
+          setErrorMsg('Cannot register: no connection to the database. Please check your internet connection and try again.');
+          return;
+        }
 
         toast(`Account created! Welcome to ReApparel, ${newUser.first_name}.`);
         onLoginSuccess(newUser, true);

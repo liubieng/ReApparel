@@ -132,7 +132,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
     setIsSendingRequest(true);
     try {
-      const res = friendsService.sendFriendRequest(code);
+      const res = await friendsService.sendFriendRequest(code);
       toast(res.message);
       if (res.success) {
         setFriendCodeInput('');

@@ -430,20 +430,6 @@ class MockDatabaseEngine {
     this.setCurrentUserId(newUser.user_id);
     this.notify();
 
-    // Sync newly registered user to Supabase users table if connected
-    const supabase = getSupabase();
-    if (supabase) {
-      try {
-        supabase.from('users').insert([{
-          user_id: newUser.user_id,
-          email: newUser.email,
-          first_name: newUser.first_name,
-          last_name: newUser.last_name,
-          friend_code: newUser.friend_code
-        }]).then(() => {}, () => {});
-      } catch {}
-    }
-
     return newUser;
   }
 

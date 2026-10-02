@@ -211,6 +211,8 @@ export default function App() {
       const log = await closetService.getTodayLog();
       setTodayLog(log);
 
+      await friendsService.fetchAndMergeUsersFromSupabase();
+      setAllUsers(mockDatabase.getAllUsers());
       setFriends(friendsService.getConnectedFriends());
       setFriendRequests(friendsService.getFriendRequests());
       setBorrows(friendsService.getBorrows());
@@ -234,6 +236,7 @@ export default function App() {
     }
     const allLogs = await closetService.getDailyLogs();
     setDailyLogs(allLogs);
+    await mapsService.fetchAndMergeFromSupabase();
     setOpportunities(mapsService.getDonationOpportunities());
   }, []);
 
