@@ -186,6 +186,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           password: password
         });
 
+<<<<<<< HEAD
         // REQUIRED: Persist to Supabase so the account is accessible from any device
         if (supabase) {
           const { error: insertError } = await supabase.from('users').insert([{
@@ -213,6 +214,31 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           mockDatabase.deleteUser(newUser.user_id);
           setErrorMsg('Cannot register: no connection to the database. Please check your internet connection and try again.');
           return;
+=======
+        // Immediately persist to Supabase and await the result
+        if (supabase) {
+          try {
+            const { error: insertError } = await supabase.from('users').insert([{
+              user_id: newUser.user_id,
+              email: newUser.email,
+              first_name: newUser.first_name,
+              last_name: newUser.last_name,
+              friend_code: newUser.friend_code,
+              created_at: newUser.created_at
+            }]);
+
+            if (insertError) {
+              // Ignore duplicate-key errors (user somehow already exists remotely)
+              if (insertError.code !== '23505') {
+                // Non-fatal: user is saved locally; warn but proceed
+                console.warn('Supabase user sync warning:', insertError.message);
+              }
+            }
+          } catch (syncErr) {
+            // Network failure — user is saved locally; app still works offline
+            console.warn('Could not sync user to Supabase:', syncErr);
+          }
+>>>>>>> 26be69a9aa349aa40e8557cc4d001aa5a4558e08
         }
 
         toast(`Account created! Welcome to ReApparel, ${newUser.first_name}.`);
