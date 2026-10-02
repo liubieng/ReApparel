@@ -556,11 +556,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
                       <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--primary-strong)' }}>
                         {item.dimension} • Item {item.itemNumberInDimension} of 4
                       </span>
-                      {itemAns !== undefined && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>
-                          ✓ Answered
-                        </span>
-                      )}
+
                     </div>
 
                     <h4 style={{ fontSize: 14, margin: '0 0 12px', fontWeight: 600 }}>

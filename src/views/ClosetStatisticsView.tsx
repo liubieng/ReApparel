@@ -50,7 +50,7 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
     setSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'));
   };
 
-  const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Accessories'];
+  const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Knitwear'];
 
   const availableColors = useMemo(() => {
     const set = new Set<string>();

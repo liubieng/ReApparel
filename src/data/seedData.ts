@@ -276,7 +276,7 @@ export const NORMAL_CLOTHING_COLORS: CuratedColorFamily[] = [
   { name: 'Red', hex: '#dc2626' }
 ];
 
-export const CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear', 'Accessories'] as const;
+export const CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear'] as const;
 export const GARMENT_TYPES = ['Shirt', 'Pants', 'Skirt', 'Shorts', 'Dress', 'One-Piece', 'Shoes', 'Outerwear'] as const;
 
 // SVG Silhouette Helper for crisp vector garments
@@ -302,7 +302,7 @@ export const INITIAL_TAGS: Tag[] = [
   { tag_id: 4, tag_name: 'Shoes', tag_type: 'Category' },
   { tag_id: 5, tag_name: 'Dresses', tag_type: 'Category' },
   { tag_id: 6, tag_name: 'Knitwear', tag_type: 'Category' },
-  { tag_id: 7, tag_name: 'Accessories', tag_type: 'Category' },
+
   { tag_id: 8, tag_name: 'Shirt', tag_type: 'Category' },
   { tag_id: 9, tag_name: 'Pants', tag_type: 'Category' },
   { tag_id: 10, tag_name: 'Skirt', tag_type: 'Category' },

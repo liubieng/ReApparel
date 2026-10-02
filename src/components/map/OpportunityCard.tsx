@@ -78,17 +78,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           >
             <Flag className="ico" style={{ width: 12, height: 12 }} /> Flag
           </button>
-          <button
-            type="button"
-            className="btn btn-p"
-            style={{ padding: '3px 10px', fontSize: 11 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-          >
-            View on Map
-          </button>
+
         </div>
       </div>
     </div>
