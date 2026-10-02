@@ -1,15 +1,17 @@
 import React from 'react';
-import { BrainCircuit, ShieldCheck, ArrowRight, BookOpen, Leaf, Sparkles } from 'lucide-react';
+import { Shirt, Info, ArrowRight } from 'lucide-react';
 
 /**
  * ============================================================================
- * BSAS ONBOARDING INTRO VIEW (BSASIntroView.tsx)
+ * BSAS QUESTIONNAIRE PROMPT VIEW (BSASIntroView.tsx)
  * ============================================================================
  * 
- * CAPSTONE DEFENSE CONTEXT:
- * - Bergen Shopping Addiction Scale (BSAS) developed by Andreassen et al. (2015).
- * - Serves as the behavioral diagnostic instrument in the ReApparel system.
- * - Educates the user on why self-assessment matters before entering the wardrobe.
+ * Implements wireframe layout from Figure .2.1 & .2.2 (SDD Pages 36, 37, 38):
+ * - Center Logo / Hanger icon
+ * - Heading: "A quick check-in"
+ * - Subheading: "Before we build your closet, take the Bergen Shopping Addiction Scale Questionnaire..."
+ * - Info Box: "ⓘ This is a self-reflection tool, not a medical diagnosis..."
+ * - Button: "Begin" (or "Take BSAS Now")
  */
 
 interface BSASIntroViewProps {
@@ -21,97 +23,81 @@ export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
 }) => {
   return (
     <div className="center-shell">
-      <div className="card" style={{ maxWidth: 520, width: '100%', padding: '32px 24px', boxShadow: 'var(--shadow)' }}>
+      <div className="card" style={{ maxWidth: 460, width: '100%', padding: '36px 28px', textAlign: 'center', borderRadius: 16, boxShadow: 'var(--shadow)' }}>
         
-        {/* Header Icon */}
+        {/* Header Icon (Figure .2.1 & .2.2) */}
         <div style={{
           width: 52,
           height: 52,
-          borderRadius: 16,
-          background: 'var(--surface-2)',
-          color: 'var(--primary)',
-          display: 'flex',
+          borderRadius: '50%',
+          background: 'var(--primary)',
+          color: '#ffffff',
+          display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 16,
-          border: '1px solid var(--border)'
+          marginBottom: 16
         }}>
-          <BrainCircuit style={{ width: 28, height: 28 }} />
+          <Shirt style={{ width: 26, height: 26 }} />
         </div>
 
-        {/* Title & Research Attribution */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontFamily: 'var(--font-display)' }}>
-            Mindful Wardrobe Check-In
-          </h2>
-          <span style={{
-            fontSize: 10,
-            textTransform: 'uppercase',
-            fontWeight: 700,
-            padding: '2px 6px',
-            borderRadius: 4,
-            background: 'var(--surface-2)',
-            color: 'var(--primary)',
-            border: '1px solid var(--border)'
-          }}>
-            BSAS Scale
-          </span>
-        </div>
+        {/* Title */}
+        <h2 style={{ 
+          margin: '0 0 12px', 
+          fontSize: 22, 
+          fontFamily: 'var(--font-display)',
+          fontWeight: 600,
+          color: 'var(--text)'
+        }}>
+          A quick check-in
+        </h2>
 
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 16 }}>
-          Grounded in the <strong>Bergen Shopping Addiction Scale (BSAS)</strong> (Andreassen et al., 2015), this 28-item diagnostic assessment evaluates your shopping motivations across seven core dimensions of compulsive consumption.
+        {/* Subtitle / Description */}
+        <p style={{ 
+          fontSize: 13, 
+          color: 'var(--text-muted)', 
+          lineHeight: 1.5, 
+          marginBottom: 20,
+          maxWidth: 380,
+          marginLeft: 'auto',
+          marginRight: 'auto'
+        }}>
+          Before we build your closet, take the Bergen Shopping Addiction Scale Questionnaire &ndash; a short reflection used to understand shopping habits.
         </p>
 
-        {/* 7 Diagnostic Dimensions List */}
+        {/* Info Box Callout (Figure .2.2) */}
         <div style={{
           background: 'var(--surface-2)',
           borderRadius: 10,
           padding: '12px 16px',
-          marginBottom: 20,
-          border: '1px solid var(--border)'
+          marginBottom: 26,
+          border: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+          textAlign: 'left'
         }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text)' }}>
-            7 Clinical Behavioral Dimensions Evaluated (4 Items Each):
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11.5, color: 'var(--text-muted)' }}>
-            <div>1. <strong>Salience</strong></div>
-            <div>2. <strong>Mood Modification</strong></div>
-            <div>3. <strong>Conflict</strong></div>
-            <div>4. <strong>Tolerance</strong></div>
-            <div>5. <strong>Withdrawal</strong></div>
-            <div>6. <strong>Relapse</strong></div>
-            <div style={{ gridColumn: 'span 2' }}>7. <strong>Problems</strong></div>
-          </div>
+          <Info style={{ width: 18, height: 18, color: 'var(--text-muted)', flexShrink: 0, marginTop: 2 }} />
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            This is a self-reflection tool, not a medical diagnosis. If shopping is causing you distress, consider speaking with a counselor or healthcare provider.
+          </p>
         </div>
 
-        {/* Scoring Methodology Note for Defense Panel */}
-        <div style={{
-          fontSize: 12,
-          color: 'var(--text-muted)',
-          lineHeight: 1.4,
-          padding: '10px 12px',
-          background: 'var(--surface)',
-          borderLeft: '3px solid var(--primary)',
-          borderRadius: 4,
-          marginBottom: 24
-        }}>
-          <strong>Clinical Scoring (Psychology Tools):</strong> 5-point Likert scale (Completely Disagree to Completely Agree). Scoring <em>Agree</em> or <em>Completely Agree</em> endorses a symptom. Endorsing 4 or more criteria classifies the assessment as <em>Indicative Risk</em>.
-          <div style={{ marginTop: 6, color: 'var(--text)', fontWeight: 500 }}>
-            <em>This is not a diagnosis. It is an assessment for self-reflection.</em>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button
-            type="button"
-            className="btn btn-p"
-            style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 14 }}
-            onClick={onStartAssessment}
-          >
-            Start BSAS Check-In (28 Items) <ArrowRight className="ico" style={{ marginLeft: 6 }} />
-          </button>
-        </div>
+        {/* Action Button: Begin (Figure .2.2) */}
+        <button
+          type="button"
+          className="btn btn-p"
+          style={{ 
+            width: '100%', 
+            justifyContent: 'center', 
+            padding: '10px 16px', 
+            fontSize: 14, 
+            fontWeight: 600,
+            borderRadius: 20 
+          }}
+          onClick={onStartAssessment}
+        >
+          Begin
+        </button>
 
       </div>
     </div>

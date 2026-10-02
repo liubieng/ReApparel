@@ -1,4 +1,4 @@
-import { mockDatabase } from './supabaseClient';
+import { mockDatabase, getSupabase } from './supabaseClient';
 import { DonationOpportunity, DonationFlag } from '../types/database';
 
 export const mapsService = {
@@ -7,11 +7,31 @@ export const mapsService = {
   },
 
   addFlag(donationId: number, flagType: DonationFlag['flag_type'], notes?: string): DonationFlag {
-    return mockDatabase.addDonationFlag(donationId, flagType, notes);
+    const flag = mockDatabase.addDonationFlag(donationId, flagType, notes);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        supabase.from('donation_flag').insert([{
+          donation_id: flag.donation_id,
+          user_id: flag.user_id,
+          flag_type: flag.flag_type,
+          notes: flag.notes,
+          flagged_at: flag.flagged_at
+        }]).then(() => {}, () => {});
+      } catch {}
+    }
+    return flag;
   },
 
   addDonationOpportunity(opp: Omit<DonationOpportunity, 'donation_id'>): DonationOpportunity {
-    return mockDatabase.addDonationOpportunity(opp);
+    const created = mockDatabase.addDonationOpportunity(opp);
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        supabase.from('donation_opportunity').insert([created]).then(() => {}, () => {});
+      } catch {}
+    }
+    return created;
   },
 
   setDonationOpportunities(opps: DonationOpportunity[]): void {

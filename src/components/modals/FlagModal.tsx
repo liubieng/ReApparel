@@ -17,16 +17,27 @@ export const FlagModal: React.FC<FlagModalProps> = ({
   const [flagType, setFlagType] = useState<DonationFlagType>('Inactive');
   const [flagNotes, setFlagNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen || !opportunity) return null;
+
+  const handleClose = () => {
+    setFlagNotes('');
+    setErrorMsg(null);
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMsg(null);
     try {
       await onSubmitFlag(flagType, flagNotes.trim() || undefined);
       setFlagNotes('');
+      setErrorMsg(null);
       onClose();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to submit report. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -36,7 +47,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
     <div
       className="modalScrim"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div className="modal" style={{ maxWidth: 420 }}>
@@ -44,7 +55,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
           <h3 style={{ margin: 0 }}>Report Donation Location</h3>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}
           >
             ✕
@@ -54,6 +65,12 @@ export const FlagModal: React.FC<FlagModalProps> = ({
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>
           Help keep the community informed about <strong>{opportunity.name}</strong>.
         </p>
+
+        {errorMsg && (
+          <div style={{ padding: '8px 12px', borderRadius: 6, background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: 12, marginBottom: 12, border: '1px solid var(--danger)' }}>
+            {errorMsg}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="field">
@@ -123,7 +140,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
               type="button"
               className="btn btn-g"
               style={{ flex: 1, justifyContent: 'center' }}
-              onClick={onClose}
+              onClick={handleClose}
             >
               Cancel
             </button>

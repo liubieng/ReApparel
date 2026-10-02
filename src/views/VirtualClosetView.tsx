@@ -17,6 +17,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { CURATED_COLOR_FAMILIES, createGarmentSilhouette } from '../data/seedData';
+import { ClothingItem } from '../types/database';
 
 interface VirtualClosetViewProps {
   garments: ClothingItem[];
@@ -164,196 +165,91 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   }, [garments]);
 
   return (
-    <div>
-      {/* View Header and Action Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>
-            Virtual Closet
-          </h2>
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            {garments.length} total garments registered &middot; {filteredGarments.length} currently displayed
-          </div>
-        </div>
+    <div style={{ position: 'relative', minHeight: '80vh', paddingBottom: 60 }}>
+      {/* Filter Bar (Figure .5.1: [All] [Type/Category] [Color]) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        <button
+          type="button"
+          className={`pill ${selectedTypes.size === 0 && selectedColors.size === 0 ? 'on' : ''}`}
+          style={{
+            cursor: 'pointer',
+            padding: '6px 14px',
+            fontSize: 12.5,
+            borderRadius: 20,
+            background: (selectedTypes.size === 0 && selectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
+            color: (selectedTypes.size === 0 && selectedColors.size === 0) ? '#ffffff' : 'var(--text)',
+            border: (selectedTypes.size === 0 && selectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
+            fontWeight: 600
+          }}
+          onClick={clearAllFilters}
+        >
+          All
+        </button>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-p"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12.5 }}
-            onClick={onOpenAddModal}
-          >
-            <Plus className="ico" style={{ width: 15, height: 15 }} />
-            <span>Add Garment</span>
-          </button>
-        </div>
-      </div>
+        {/* Categories / Types */}
+        {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
+          const isSelected = selectedTypes.has(cat);
+          return (
+            <button
+              key={cat}
+              type="button"
+              className={`pill ${isSelected ? 'on' : ''}`}
+              style={{
+                cursor: 'pointer',
+                padding: '6px 14px',
+                fontSize: 12.5,
+                borderRadius: 20,
+                background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                color: isSelected ? '#ffffff' : 'var(--text)',
+                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                fontWeight: isSelected ? 600 : 500
+              }}
+              onClick={() => toggleTypeFilter(cat)}
+            >
+              {cat}
+            </button>
+          );
+        })}
 
-      {/* Top Shop Your Closet Anti-Impulse Prompt Banner linking to Recovery */}
-      {unwornTotal > 0 && onNavigateToRecovery && (
-        <div style={{
-          padding: '10px 14px',
-          borderRadius: 8,
-          background: 'linear-gradient(135deg, rgba(62, 107, 69, 0.08) 0%, rgba(214, 199, 161, 0.15) 100%)',
-          border: '1px solid var(--primary-soft)',
-          marginBottom: 14,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 10,
-          flexWrap: 'wrap'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sparkles style={{ width: 16, height: 16, color: 'var(--primary)' }} />
-            <span style={{ fontSize: 12.5, color: 'var(--text)' }}>
-              <strong>Shop Your Closet Prompt:</strong> You have <strong>{unwornTotal} unworn</strong> and <strong>{leastWornTotal} least-worn</strong> garments waiting to be styled before buying new!
-            </span>
-          </div>
+        {/* Color Dropdown/Pills - Including All Curated Colors (TC_FILTER_02, TC_FILTER_05, TC_FILTER_06) */}
+        <select
+          aria-label="Filter by Color"
+          className="field"
+          style={{
+            margin: 0,
+            padding: '5px 10px',
+            fontSize: 12,
+            borderRadius: 20,
+            background: 'var(--surface-2)',
+            color: 'var(--text)',
+            border: selectedColors.size > 0 ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+            cursor: 'pointer'
+          }}
+          value={Array.from(selectedColors)[0] || 'all'}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === 'all') setSelectedColors(new Set());
+            else setSelectedColors(new Set([val]));
+          }}
+        >
+          <option value="all">All Colors</option>
+          {CURATED_COLOR_FAMILIES.map(family => (
+            <option key={family.name} value={family.name}>
+              Color: {family.name}
+            </option>
+          ))}
+        </select>
+
+        {hasActiveFilters && (
           <button
             type="button"
             className="btn btn-g"
-            style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--primary)', borderColor: 'var(--primary-soft)' }}
-            onClick={onNavigateToRecovery}
+            style={{ fontSize: 11.5, padding: '4px 10px', marginLeft: 'auto', color: 'var(--danger)' }}
+            onClick={clearAllFilters}
           >
-            Shop Your Closet in Recovery Progress &rarr;
+            <RotateCcw className="ico" style={{ width: 12, height: 12 }} /> Reset
           </button>
-        </div>
-      )}
-
-          {/* Search & Filter Bar */}
-          <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
-        
-        {/* Search Input */}
-        <div style={{ position: 'relative', marginBottom: 12 }}>
-          <Search className="ico" style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)', width: 15, height: 15 }} />
-          <input
-            type="text"
-            placeholder="Search garments by name, category, or color..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: 32, fontSize: 13 }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              className="icobtn"
-              onClick={() => setSearchQuery('')}
-              style={{ position: 'absolute', right: 8, top: 6 }}
-            >
-              <X className="ico" style={{ width: 14, height: 14 }} />
-            </button>
-          )}
-        </div>
-
-        {/* Multi-Attribute Filter Badges */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          
-          {/* 1. Category Filter (Active Wardrobe Only) */}
-          {wardrobeCategories.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', minWidth: 70 }}>
-                Category:
-              </span>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {wardrobeCategories.map(({ name, count }) => {
-                  const isSelected = selectedTypes.has(name);
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      className={`pill ${isSelected ? 'on' : ''}`}
-                      style={{
-                        fontSize: 11,
-                        padding: '3px 8px',
-                        cursor: 'pointer',
-                        borderRadius: 12,
-                        background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
-                        color: isSelected ? '#ffffff' : 'var(--text)',
-                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)'
-                      }}
-                      onClick={() => toggleTypeFilter(name)}
-                    >
-                      {name} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 2. Curated Color Families Filter (Active Wardrobe Only) */}
-          {wardrobeColors.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', minWidth: 70 }}>
-                Color:
-              </span>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {wardrobeColors.map(({ name, hex, count }) => {
-                  const isSelected = selectedColors.has(name);
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      className="btn btn-g"
-                      style={{
-                        fontSize: 11,
-                        padding: '2px 8px',
-                        borderRadius: 12,
-                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
-                        background: isSelected ? 'var(--surface-2)' : 'var(--surface)'
-                      }}
-                      onClick={() => toggleColorFilter(name)}
-                    >
-                      <span style={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: '50%',
-                        background: hex,
-                        display: 'inline-block',
-                        marginRight: 4,
-                        border: '1px solid rgba(0,0,0,0.1)'
-                      }} />
-                      <span>{name} ({count})</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 3. Wear Activity Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Utilization:
-              </span>
-              {(['all', 'unworn', 'low', 'active'] as const).map(w => (
-                <button
-                  key={w}
-                  type="button"
-                  className={`btn ${wearFilter === w ? 'btn-p' : 'btn-g'}`}
-                  style={{ fontSize: 11, padding: '3px 8px' }}
-                  onClick={() => setWearFilter(w)}
-                >
-                  {w === 'unworn' ? 'Unworn (0)' : w === 'low' ? 'Low (1–2)' : w === 'active' ? 'Active (3+)' : 'All'}
-                </button>
-              ))}
-            </div>
-
-            {hasActiveFilters && (
-              <button
-                type="button"
-                className="btn btn-g"
-                style={{ fontSize: 11, padding: '3px 8px', color: 'var(--danger)' }}
-                onClick={clearAllFilters}
-              >
-                <RotateCcw className="ico" style={{ width: 11, height: 11 }} /> Reset Filters
-              </button>
-            )}
-          </div>
-
-        </div>
-
+        )}
       </div>
 
       {/* Garments Grid */}
@@ -361,10 +257,10 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
         <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
           <Shirt style={{ width: 44, height: 44, color: 'var(--text-muted)', opacity: 0.4, margin: '0 auto 12px' }} />
           <h3 style={{ fontSize: 16, margin: '0 0 6px', fontFamily: 'var(--font-display)' }}>
-            No Garments Found
+            No Matching Clothing Items Found
           </h3>
           <p style={{ fontSize: 12.5, color: 'var(--text-muted)', maxWidth: 360, margin: '0 auto 16px' }}>
-            {hasActiveFilters ? 'No items in your wardrobe match the selected filter criteria.' : 'Your virtual closet is currently empty. Start logging what you own!'}
+            {hasActiveFilters ? 'No clothing items were found matching the selected filter criteria.' : 'Your virtual closet is currently empty. Start logging what you own!'}
           </p>
           {hasActiveFilters ? (
             <button type="button" className="btn btn-g" onClick={clearAllFilters}>
@@ -390,12 +286,14 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
               <div
                 key={garment.item_id}
                 className="card"
+                onClick={() => onEditGarment(garment)}
                 style={{
                   padding: 12,
                   display: 'flex',
                   flexDirection: 'column',
                   position: 'relative',
                   overflow: 'hidden',
+                  cursor: 'pointer',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease'
                 }}
               >
@@ -443,11 +341,56 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
                       }}
                     />
                   )}
+                  {/* Top-Right Card Actions */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 6,
+                    display: 'flex',
+                    gap: 4,
+                    zIndex: 2
+                  }}>
+                    <button
+                      type="button"
+                      className="icobtn"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text)',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                      }}
+                      title="Edit Garment"
+                      onClick={(e) => { e.stopPropagation(); onEditGarment(garment); }}
+                    >
+                      <Pencil className="ico" style={{ width: 12, height: 12, margin: 0 }} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icobtn"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--danger)',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                      }}
+                      title="Delete Garment"
+                      onClick={(e) => { e.stopPropagation(); onDeleteGarment(garment); }}
+                    >
+                      <Trash2 className="ico" style={{ width: 12, height: 12, margin: 0 }} />
+                    </button>
+                  </div>
+
                   {/* Wear Count Badge */}
                   <span style={{
                     position: 'absolute',
                     top: 6,
-                    right: 6,
+                    left: 6,
                     fontSize: 10,
                     fontWeight: 700,
                     padding: '2px 6px',
@@ -459,55 +402,22 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
                   </span>
                 </div>
 
-                {/* Garment Details */}
+                {/* Garment Details & Tags matching Figure .5.1 */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <strong style={{ fontSize: 13.5, marginBottom: 4, lineHeight: 1.3, color: 'var(--text)' }}>
-                    {garment.name}
-                  </strong>
-
                   {/* Tags */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
                     {garment.category && (
-                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', fontWeight: 500 }}>
                         {garment.category}
                       </span>
                     )}
-                    {garment.type_tag && garment.type_tag !== garment.category && (
-                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>
-                        {garment.type_tag}
-                      </span>
-                    )}
                     {garment.color && (
-                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: garment.color_tag || '#64748b' }} />
+                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: garment.color_tag || '#64748b' }} />
                         {garment.color}
                       </span>
                     )}
                   </div>
-
-                  {/* Card Actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        type="button"
-                        className="icobtn"
-                        title="Edit Garment"
-                        onClick={() => onEditGarment(garment)}
-                      >
-                        <Pencil className="ico" style={{ width: 13, height: 13 }} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icobtn"
-                        style={{ color: 'var(--danger)' }}
-                        title="Delete Garment"
-                        onClick={() => onDeleteGarment(garment)}
-                      >
-                        <Trash2 className="ico" style={{ width: 13, height: 13 }} />
-                      </button>
-                    </div>
-                  </div>
-
                 </div>
 
               </div>
@@ -515,6 +425,17 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
           })}
         </div>
       )}
+
+      {/* Floating Action Button (+) matching Figure .5.1 */}
+      <button
+        type="button"
+        className="closet-fab"
+        onClick={onOpenAddModal}
+        aria-label="Add Garment"
+        title="Add Garment"
+      >
+        <Plus style={{ width: 28, height: 28, strokeWidth: 2.5 }} />
+      </button>
 
     </div>
   );

@@ -6,6 +6,42 @@ export interface LocationInfo {
   longitude: number;
 }
 
+export const REGIONS = [
+  'Central Visayas',
+  'National Capital Region (NCR)',
+  'Western Visayas',
+  'Davao Region',
+  'Ilocos Region'
+];
+
+export const BARANGAYS_BY_REGION: Record<string, string[]> = {
+  'Central Visayas': [
+    'Daro',
+    'Bantayan',
+    'Tinago',
+    'Tubod',
+    'Piapi',
+    'Mangnao',
+    'Looc'
+  ],
+  'National Capital Region (NCR)': [
+    'Bel-Air',
+    'Poblacion',
+    'San Lorenzo',
+    'San Antonio'
+  ],
+  'Western Visayas': [
+    'Mandurriao',
+    'Jaro',
+    'Molo'
+  ],
+  'Davao Region': [
+    'Poblacion',
+    'Buhangin',
+    'Talomo'
+  ]
+};
+
 export const COUNTRIES = [
   'Philippines',
   'United States',
@@ -202,6 +238,10 @@ export const CITIES_BY_PROVINCE: Record<string, string[]> = {
 export const PRESET_COORDINATES: Record<string, { lat: number; lng: number }> = {
   // Dumaguete and Negros Oriental
   'Dumaguete City': { lat: 9.3068, lng: 123.3054 },
+  'Daro': { lat: 9.3142, lng: 123.3005 },
+  'Bantayan': { lat: 9.3245, lng: 123.3082 },
+  'Tinago': { lat: 9.3090, lng: 123.3110 },
+  'Central Visayas': { lat: 9.8169, lng: 123.5970 },
   'Bais City': { lat: 9.5911, lng: 123.1219 },
   'Tanjay City': { lat: 9.5167, lng: 123.1500 },
   'Bayawan City': { lat: 9.3667, lng: 122.8000 },

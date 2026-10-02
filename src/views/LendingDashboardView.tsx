@@ -30,6 +30,7 @@ interface LendingDashboardViewProps {
   borrows: Borrow[];
   onCancelBorrow: (borrowId: number, startDate: string) => void;
   onRespondBorrow: (borrowId: number, newStatus: 'Accepted' | 'Rejected' | 'Returned') => void;
+  onNavigateToFriends?: () => void;
   toast: (msg: string) => void;
 }
 
@@ -38,6 +39,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
   borrows,
   onCancelBorrow,
   onRespondBorrow,
+  onNavigateToFriends,
   toast
 }) => {
   const [activeTab, setActiveTab] = useState<'yours' | 'friends'>('yours');
@@ -69,49 +71,46 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
   };
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>
-            Lending &amp; Borrow Requests
-          </h2>
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            Peer-to-peer wardrobe sharing schedules and loan confirmations
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      {/* 2-Column Split matching Figure .9.1: Your Requests & Friends Requests */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: 24,
+        alignItems: 'start'
+      }}>
+        {/* COLUMN 1: Your Requests ∨ */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontFamily: 'var(--font-display)' }}>
+              Your Requests
+            </h3>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {myRequests.length} total
+            </span>
           </div>
-        </div>
-      </div>
 
-      {/* Tabs Switcher */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 18, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-        <button
-          type="button"
-          className={`btn ${activeTab === 'yours' ? 'btn-p' : 'btn-g'}`}
-          style={{ fontSize: 13 }}
-          onClick={() => setActiveTab('yours')}
-        >
-          My Borrow Requests ({myRequests.length})
-        </button>
-        <button
-          type="button"
-          className={`btn ${activeTab === 'friends' ? 'btn-p' : 'btn-g'}`}
-          style={{ fontSize: 13 }}
-          onClick={() => setActiveTab('friends')}
-        >
-          Friends' Requests for My Clothes ({friendsRequests.length})
-        </button>
-      </div>
-
-      {/* Content for TAB 1: My Borrow Requests */}
-      {activeTab === 'yours' && (
-        <div>
           {myRequests.length === 0 ? (
-            <div className="card" style={{ padding: 36, textAlign: 'center', color: 'var(--text-muted)' }}>
-              <Shirt style={{ width: 36, height: 36, opacity: 0.3, margin: '0 auto 8px' }} />
-              <p style={{ margin: 0, fontSize: 13 }}>You haven't requested to borrow any items yet.</p>
+            <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <Shirt style={{ width: 40, height: 40, opacity: 0.35, margin: '0 auto 10px' }} />
+              <h4 style={{ margin: '0 0 6px', fontSize: 15, color: 'var(--text)' }}>No requests yet</h4>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 320, marginInline: 'auto' }}>
+                You haven't requested to borrow any items yet. Explore your friends' shared closets to request garments!
+              </p>
+              {onNavigateToFriends && (
+                <button
+                  type="button"
+                  className="btn btn-p"
+                  style={{ fontSize: 12.5, marginInline: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  onClick={onNavigateToFriends}
+                >
+                  <Users className="ico" style={{ width: 14, height: 14 }} />
+                  <span>Browse Friends' Closets</span>
+                </button>
+              )}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {myRequests.map(borrow => {
                 const item = borrow.item;
                 const isHex = item?.image_url?.startsWith('#');
@@ -123,53 +122,90 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                 return (
                   <div
                     key={borrow.borrow_id}
-                    className="card"
-                    style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}
+                    style={{
+                      padding: 14,
+                      borderRadius: 10,
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10
+                    }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      {/* Item Image */}
                       <div style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 6,
-                        backgroundColor: isHex ? item?.image_url : 'var(--surface-2)',
+                        width: 64,
+                        height: 64,
+                        borderRadius: 8,
+                        backgroundColor: isHex ? item?.image_url : 'var(--surface)',
                         backgroundImage: isHex ? undefined : `url("${item?.image_url}")`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        border: '1px solid var(--border)'
                       }} />
-                      <div>
-                        <strong style={{ fontSize: 13.5, display: 'block', color: 'var(--text)' }}>
+
+                      {/* Details & Requestee */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <div style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: 'var(--text)',
+                            color: 'var(--surface)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 10,
+                            fontWeight: 700
+                          }}>
+                            {borrow.lender?.first_name ? borrow.lender.first_name[0] : 'F'}
+                          </div>
+                          <strong style={{ fontSize: 12.5, color: 'var(--text)' }}>
+                            {borrow.lender ? `${borrow.lender.first_name} ${borrow.lender.last_name}` : 'Friend'}
+                          </strong>
+                        </div>
+
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
                           {item?.name || `Garment #${borrow.item_id}`}
-                        </strong>
-                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                          Schedule: <strong>{borrow.start_date}</strong> to <strong>{borrow.end_date}</strong>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                          <div style={{ background: 'var(--surface)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                            Borrow: <strong>{borrow.start_date}</strong>
+                          </div>
+                          <div style={{ background: 'var(--surface)', padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                            Return: <strong>{borrow.end_date}</strong>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {/* Status Badge */}
+                    {/* Status Pill (Figure .9.1) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTop: '1px solid var(--border)' }}>
                       <span style={{
-                        fontSize: 11,
+                        fontSize: 10.5,
                         fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
                         padding: '3px 8px',
                         borderRadius: 6,
-                        background: isAccepted ? 'rgba(34, 197, 94, 0.1)' : isPending ? 'rgba(234, 179, 8, 0.1)' : 'var(--surface-2)',
-                        color: isAccepted ? '#16a34a' : isPending ? '#ca8a04' : isRejected ? 'var(--danger)' : 'var(--text-muted)',
-                        border: `1px solid ${isAccepted ? '#16a34a' : isPending ? '#ca8a04' : 'var(--border)'}`
+                        background: isAccepted ? 'rgba(34, 197, 94, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : 'var(--danger-soft)',
+                        color: isAccepted ? '#16a34a' : isPending ? '#ca8a04' : 'var(--danger)'
                       }}>
-                        {borrow.status}
+                        STATUS: {borrow.status.toUpperCase()}
                       </span>
 
-                      {/* Cancel Button if pending */}
                       {isPending && (
                         <button
                           type="button"
                           className="btn btn-g"
-                          style={{ fontSize: 11, padding: '4px 8px', color: 'var(--danger)' }}
+                          style={{ fontSize: 11, padding: '3px 8px', color: 'var(--danger)' }}
                           onClick={() => onCancelBorrow(borrow.borrow_id, borrow.start_date)}
                         >
-                          Cancel Request
+                          Cancel
                         </button>
                       )}
                     </div>
@@ -179,71 +215,110 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
             </div>
           )}
         </div>
-      )}
 
-      {/* Content for TAB 2: Friends' Requests for My Clothes */}
-      {activeTab === 'friends' && (
-        <div>
+        {/* COLUMN 2: Friends Requests ∨ */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontFamily: 'var(--font-display)' }}>
+              Friends Requests
+            </h3>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {friendsRequests.length} total
+            </span>
+          </div>
+
           {friendsRequests.length === 0 ? (
-            <div className="card" style={{ padding: 36, textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ padding: 36, textAlign: 'center', color: 'var(--text-muted)' }}>
               <Shirt style={{ width: 36, height: 36, opacity: 0.3, margin: '0 auto 8px' }} />
               <p style={{ margin: 0, fontSize: 13 }}>No friends are currently requesting to borrow your garments.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {friendsRequests.map(borrow => {
                 const item = borrow.item;
                 const borrower = borrow.borrower;
                 const borrowerName = borrower ? `${borrower.first_name} ${borrower.last_name}` : 'A friend';
                 const isPending = borrow.status === 'Pending';
                 const isAccepted = borrow.status === 'Accepted' || (borrow.status as string) === 'approved';
-                const isReturned = borrow.status === 'Returned';
 
                 return (
                   <div
                     key={borrow.borrow_id}
-                    className="card"
-                    style={{ padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}
+                    style={{
+                      padding: 14,
+                      borderRadius: 10,
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10
+                    }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      {/* Item Image */}
                       <div style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 6,
-                        backgroundColor: item?.image_url?.startsWith('#') ? item.image_url : 'var(--surface-2)',
+                        width: 64,
+                        height: 64,
+                        borderRadius: 8,
+                        backgroundColor: item?.image_url?.startsWith('#') ? item.image_url : 'var(--surface)',
                         backgroundImage: item?.image_url?.startsWith('#') ? undefined : `url("${item?.image_url}")`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        border: '1px solid var(--border)'
                       }} />
-                      <div>
-                        <strong style={{ fontSize: 13.5, display: 'block', color: 'var(--text)' }}>
-                          {borrowerName} wants to borrow "{item?.name || 'Garment'}"
-                        </strong>
-                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
+
+                      {/* Details & Requester */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <div style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: 'var(--primary)',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 10,
+                            fontWeight: 700
+                          }}>
+                            {borrower?.first_name ? borrower.first_name[0] : 'U'}
+                          </div>
+                          <strong style={{ fontSize: 12.5, color: 'var(--text)' }}>
+                            {borrowerName}
+                          </strong>
+                        </div>
+
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+                          "{item?.name || 'Garment'}"
+                        </div>
+
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           Dates: <strong>{borrow.start_date}</strong> to <strong>{borrow.end_date}</strong>
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Action Buttons: [Accept] [Deny] matching Figure .9.1 */}
+                    <div style={{ display: 'flex', gap: 8, paddingTop: 6, borderTop: '1px solid var(--border)', justifyContent: 'flex-end' }}>
                       {isPending ? (
                         <>
                           <button
                             type="button"
                             className="btn btn-p"
-                            style={{ fontSize: 11.5, padding: '4px 10px' }}
+                            style={{ fontSize: 11.5, padding: '5px 14px' }}
                             onClick={() => handleAcceptWithConflictCheck(borrow)}
                           >
-                            Accept Request
+                            Accept
                           </button>
                           <button
                             type="button"
                             className="btn btn-g"
-                            style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--danger)' }}
+                            style={{ fontSize: 11.5, padding: '5px 14px', color: 'var(--danger)' }}
                             onClick={() => onRespondBorrow(borrow.borrow_id, 'Rejected')}
                           >
-                            Decline
+                            Deny
                           </button>
                         </>
                       ) : isAccepted ? (
@@ -268,8 +343,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
             </div>
           )}
         </div>
-      )}
-
+      </div>
     </div>
   );
 };

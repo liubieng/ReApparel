@@ -66,7 +66,6 @@ src/
 │   ├── closetService.ts             # Business logic for Garments, BSAS assessments, & Daily Logs
 │   ├── friendsService.ts            # Business logic for Connections and Borrow Schedules
 │   ├── mapsService.ts               # Business logic for Donation drop-off hubs & flags
-│   ├── donationScraperService.ts    # Live Gemini AI web scraping client
 │   └── supabaseClient.ts            # Hybrid Offline MockDatabase & Live Supabase PostgreSQL client
 ├── types/
 │   └── database.ts                  # TypeScript Entity Models matching the 11 Relational Tables
@@ -229,8 +228,8 @@ ReApparel's database design follows strict 3rd Normal Form (3NF) principles acro
 
 ---
 
-### Question 12: "How does your Donation Map find active drop-off centers?"
-> **Model Answer**: "In `DonationMapSection.tsx` and `server.ts`, we implement a web scraper powered by Google Gemini with live Google Search groundings. It filters for active September 2026 drives in the user's selected country, province, and city, while crowdsourced flags allow the community to report inactive or inaccurate locations."
+### Question 12: "How does your Donation Map manage active drop-off centers?"
+> **Model Answer**: "In `DonationMapSection.tsx`, `AddDonationModal.tsx`, and `mapsService.ts`, we implement a community-driven crowdsourcing architecture. Users can directly post ongoing clothing donation drives, church collections, and disaster relief drop-offs with precise barangay coordinates and accepted garments. The community can view, search, and actively moderate these drives using crowd flags (`Inactive` or `Inaccurate`), ensuring map reliability without brittle web scrapers."
 
 ---
 

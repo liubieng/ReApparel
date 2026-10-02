@@ -34,7 +34,7 @@ export const friendsService = {
                 sender_id: latest.sender_id,
                 receiver_id: latest.receiver_id,
                 status: latest.status
-              }]).then(() => {}).catch(() => {});
+              }]).then(() => {}, () => {});
             }
           }
         } catch {}
@@ -54,8 +54,7 @@ export const friendsService = {
             .from('friend_request')
             .update({ status: req.status, updated_at: req.updated_at })
             .match({ sender_id: req.sender_id, receiver_id: req.receiver_id })
-            .then(() => {})
-            .catch(() => {});
+            .then(() => {}, () => {});
         }
       } catch {}
     }
@@ -118,7 +117,7 @@ export const friendsService = {
             start_date: borrow.start_date,
             end_date: borrow.end_date,
             status: borrow.status
-          }]).then(() => {}).catch(() => {});
+          }]).then(() => {}, () => {});
         }
       } catch {}
     }
@@ -134,8 +133,7 @@ export const friendsService = {
           .from('borrow')
           .update({ status })
           .eq('borrow_id', borrowId)
-          .then(() => {})
-          .catch(() => {});
+          .then(() => {}, () => {});
       } catch {}
     }
   },
@@ -146,5 +144,13 @@ export const friendsService = {
 
   clearNotifications(userId?: string) {
     mockDatabase.clearNotifications(userId);
+  },
+
+  markNotificationAsRead(notificationId: string) {
+    mockDatabase.markNotificationAsRead(notificationId);
+  },
+
+  deleteNotification(notificationId: string) {
+    mockDatabase.deleteNotification(notificationId);
   }
 };

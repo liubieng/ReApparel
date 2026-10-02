@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
 import { CATEGORIES, GARMENT_TYPES, CURATED_COLOR_FAMILIES } from '../../data/seedData';
@@ -31,6 +31,18 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   );
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (garment) {
+      setName(garment.name);
+      setCategory(garment.category || '');
+      setGarmentType(garment.type_tag || '');
+      setColor(garment.color || '');
+      setColorHex(garment.color_tag || '');
+      setImages(garment.images && garment.images.length > 0 ? garment.images : [garment.image_url]);
+      setUpdateError(null);
+    }
+  }, [garment]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,6 +79,9 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -75,19 +90,35 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
     }
 
     const primaryImage = images[0] || garment.image_url;
+    setIsSubmitting(true);
+    setUpdateError(null);
 
-    await onUpdateItem(garment.item_id, {
-      name: name.trim(),
-      category,
-      type_tag: garmentType,
-      color,
-      color_tag: colorHex,
-      image_url: primaryImage,
-      images
-    });
+    try {
+      await onUpdateItem(garment.item_id, {
+        name: name.trim(),
+        category,
+        type_tag: garmentType,
+        color,
+        color_tag: colorHex,
+        image_url: primaryImage,
+        images
+      });
 
-    toast(`Updated "${name.trim()}"`);
-    onClose();
+      toast(`Updated "${name.trim()}"`);
+      onClose();
+    } catch (err: any) {
+      setUpdateError('The system encountered an error updating this garment. Please retry or cancel.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSimulateFailure = () => {
+    setUpdateError('Simulated error: The clothing item update could not be completed.');
+  };
+
+  const handleRetry = () => {
+    setUpdateError(null);
   };
 
   return (
@@ -100,6 +131,43 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             <X className="ico" />
           </button>
         </div>
+
+        {/* Update Failure Alert with Retry and Cancel Options (TC_EDIT_06, TC_EDIT_07) */}
+        {updateError && (
+          <div style={{
+            padding: '12px 14px',
+            borderRadius: 8,
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+            border: '1px solid var(--danger)',
+            marginBottom: 16
+          }}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+              Alert: Clothing Item Update Failed
+            </div>
+            <div style={{ fontSize: 12, marginBottom: 10, color: 'var(--text)' }}>
+              {updateError}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-p"
+                style={{ fontSize: 11.5, padding: '5px 14px' }}
+                onClick={handleRetry}
+              >
+                Retry Edit
+              </button>
+              <button
+                type="button"
+                className="btn btn-g"
+                style={{ fontSize: 11.5, padding: '5px 14px' }}
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {/* Photos */}
@@ -234,9 +302,20 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button type="button" className="btn btn-g" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-p">Save Changes</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn btn-g"
+              style={{ fontSize: 11, color: 'var(--text-muted)' }}
+              onClick={handleSimulateFailure}
+              title="Test Case: Simulate failed item update"
+            >
+              Simulate Update Failure
+            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn btn-g" onClick={onClose} disabled={isSubmitting}>Cancel</button>
+              <button type="submit" className="btn btn-p" disabled={isSubmitting}>Save Changes</button>
+            </div>
           </div>
         </form>
 

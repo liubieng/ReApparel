@@ -10,7 +10,9 @@ import {
   LogOut, 
   MapPin,
   Sparkles,
-  Database
+  Database,
+  Bell,
+  X
 } from 'lucide-react';
 import { User } from '../../types/database';
 
@@ -24,9 +26,10 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'closet', label: 'Virtual Closet', icon: Shirt },
   { id: 'daily-log', label: 'Daily Outfit Log', icon: Calendar },
   { id: 'recovery', label: 'Recovery Progress', icon: Leaf },
-  { id: 'requests', label: 'Lending & Requests', icon: HeartHandshake },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'requests', label: 'Requests', icon: HeartHandshake },
   { id: 'friends', label: 'Friends', icon: Users },
-  { id: 'donations', label: 'Donation Map', icon: MapPin },
+  { id: 'donations', label: 'Donation Options', icon: MapPin },
   { id: 'profile', label: 'Profile', icon: UserCircle },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -38,6 +41,7 @@ interface SidebarProps {
   pendingRequestsCount?: number;
   pendingBorrowsCount?: number;
   pendingFriendsCount?: number;
+  unreadNotificationsCount?: number;
   isBSASDue?: boolean;
   onSelectView: (viewId: string) => void;
   onCloseMobile: () => void;
@@ -52,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingRequestsCount = 0,
   pendingBorrowsCount,
   pendingFriendsCount = 0,
+  unreadNotificationsCount = 0,
   isBSASDue = false,
   onSelectView,
   onCloseMobile,
@@ -60,37 +65,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const borrowsCount = pendingBorrowsCount !== undefined ? pendingBorrowsCount : pendingRequestsCount;
 
+  // Prevent background scrolling while mobile drawer is open
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   return (
     <>
       {/* Mobile Backdrop */}
       {isOpen && (
         <div 
           className="mobile-backdrop"
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 40 }}
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.45)', 
+            zIndex: 40,
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)'
+          }}
           onClick={onCloseMobile}
         />
       )}
 
-      <nav className={`side ${isOpen ? 'open' : ''}`}>
+      <nav className={`side ${isOpen ? 'open' : ''}`} style={{ zIndex: 50 }}>
         {/* Brand Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <div style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: 'var(--primary)',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Shirt style={{ width: 20, height: 20 }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: 'var(--primary)',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <Shirt style={{ width: 20, height: 20 }} />
+            </div>
+            <div>
+              <strong style={{ fontSize: 16, fontFamily: 'var(--font-display)', display: 'block', color: 'var(--text)' }}>
+                ReApparel
+              </strong>
+            </div>
           </div>
-          <div>
-            <strong style={{ fontSize: 16, fontFamily: 'var(--font-display)', display: 'block', color: 'var(--text)' }}>
-              ReApparel
-            </strong>
-          </div>
+
+          {/* Close button for mobile touch */}
+          <button
+            type="button"
+            className="mobile-close-btn"
+            onClick={onCloseMobile}
+            aria-label="Close navigation"
+            style={{
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '6px',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <X style={{ width: 16, height: 16 }} />
+          </button>
         </div>
 
         {/* Navigation Items */}
@@ -99,8 +147,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const Icon = item.icon;
             const isActive = currentView === item.id;
             const isRequests = item.id === 'requests';
+            const isNotifications = item.id === 'notifications';
             const isFriends = item.id === 'friends';
-            const badgeCount = isRequests ? borrowsCount : isFriends ? pendingFriendsCount : 0;
+            const badgeCount = isRequests ? borrowsCount : isNotifications ? (borrowsCount + pendingFriendsCount + unreadNotificationsCount) : isFriends ? pendingFriendsCount : 0;
 
             return (
               <button

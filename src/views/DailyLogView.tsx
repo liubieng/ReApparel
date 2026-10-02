@@ -13,7 +13,9 @@ import {
   RotateCcw,
   Check,
   AlertCircle,
-  History
+  History,
+  Edit3,
+  ArrowLeft
 } from 'lucide-react';
 import { DailyClothingLog, ClothingItem } from '../types/database';
 
@@ -21,9 +23,10 @@ interface DailyLogViewProps {
   todayLog: DailyClothingLog;
   dailyLogs?: DailyClothingLog[];
   closetGarments: ClothingItem[];
-  onToggleGarmentInOutfit: (garment: ClothingItem) => Promise<void>;
-  onFinalizeLog: () => Promise<void>;
-  onDeleteLog: () => Promise<void>;
+  onToggleGarmentInOutfit: (garment: ClothingItem, targetLogId?: number) => Promise<void>;
+  onFinalizeLog: (targetLogId?: number) => Promise<void>;
+  onDeleteLog: (targetLogId?: number) => Promise<void>;
+  onCreateNewOutfit?: (dateStr: string, title: string) => Promise<DailyClothingLog | void>;
   onSimulateMidnight: () => Promise<void>;
   onNavigateToCloset: () => void;
   toast: (msg: string) => void;
@@ -36,19 +39,43 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   onToggleGarmentInOutfit,
   onFinalizeLog,
   onDeleteLog,
+  onCreateNewOutfit,
   onSimulateMidnight,
   onNavigateToCloset,
   toast
 }) => {
   const [activeTab, setActiveTab] = useState<'today' | 'history'>('today');
+  const [activeLogId, setActiveLogId] = useState<number>(todayLog.log_id);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const selectedItems = todayLog.items || [];
-  const isLocked = todayLog.is_finalized;
+  const [isAddingOutfit, setIsAddingOutfit] = useState(false);
+  const [newOutfitTitle, setNewOutfitTitle] = useState('');
 
-  // Display all daily clothing logs in chronological order by date
-  const finalizedLogs = useMemo(() => {
-    // Include finalized logs or logs with items
+  // Find currently active log being viewed or edited
+  const activeLog = useMemo(() => {
+    return dailyLogs.find(l => l.log_id === activeLogId) || todayLog;
+  }, [dailyLogs, activeLogId, todayLog]);
+
+  // Keep activeLogId in sync when todayLog initializes with real database ID
+  React.useEffect(() => {
+    if (activeLogId === 0 && todayLog.log_id !== 0) {
+      setActiveLogId(todayLog.log_id);
+    }
+  }, [todayLog.log_id, activeLogId]);
+
+  const isEditingHistorical = activeLog.log_date !== todayLog.log_date;
+  const isLocked = activeLog.is_finalized;
+  const selectedItems = activeLog.items || [];
+
+  // Outfits logged for today (TC_USAGE_06)
+  const todayOutfits = useMemo(() => {
+    const list = dailyLogs.filter(l => l.log_date === todayLog.log_date);
+    if (list.length === 0) return [todayLog];
+    return list;
+  }, [dailyLogs, todayLog]);
+
+  // All logs sorted chronologically for wear history
+  const allLogsSorted = useMemo(() => {
     const logs = dailyLogs.filter(l => l.is_finalized || (l.items && l.items.length > 0));
     return [...logs].sort((a, b) => {
       return sortOrder === 'desc' 
@@ -59,12 +86,12 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
 
   const handleFinalize = async () => {
     if (selectedItems.length === 0) {
-      toast('Please select at least one garment you wore today.');
+      toast('Please select at least one garment you wore.');
       return;
     }
     setIsSubmitting(true);
     try {
-      await onFinalizeLog();
+      await onFinalizeLog(activeLog.log_id);
     } finally {
       setIsSubmitting(false);
     }
@@ -83,16 +110,38 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     }
   };
 
+  const handleDeleteActiveLog = async () => {
+    const logId = activeLog.log_id;
+    await onDeleteLog(logId);
+    setActiveLogId(todayLog.log_id);
+  };
+
+  const handleCreateOutfit = async () => {
+    const title = newOutfitTitle.trim() || `Outfit #${todayOutfits.length + 1}`;
+    if (onCreateNewOutfit) {
+      const created = await onCreateNewOutfit(todayLog.log_date, title);
+      if (created && typeof created === 'object' && 'log_id' in created && (created as any).log_id) {
+        setActiveLogId((created as any).log_id);
+      }
+    }
+    setNewOutfitTitle('');
+    setIsAddingOutfit(false);
+  };
+
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div>
           <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>
             Daily Outfit Log
           </h2>
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            Date: <strong>{todayLog.log_date}</strong> &middot; Track what you wore today to boost wear count metrics
+            {isEditingHistorical ? (
+              <span>Editing outfit record for date: <strong style={{ color: 'var(--primary)' }}>{activeLog.log_date}</strong> (Original date preserved)</span>
+            ) : (
+              <span>Date: <strong>{todayLog.log_date}</strong> &middot; Track what you wore today to boost wear count metrics</span>
+            )}
           </div>
         </div>
 
@@ -132,7 +181,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
           onClick={() => setActiveTab('today')}
         >
           <Calendar className="ico" style={{ width: 14, height: 14 }} />
-          <span>Today's Outfit ({selectedItems.length})</span>
+          <span>{isEditingHistorical ? `Editing Log (${activeLog.log_date})` : "Today's Outfit Entries"} ({selectedItems.length})</span>
         </button>
         <button
           type="button"
@@ -141,18 +190,125 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
           onClick={() => setActiveTab('history')}
         >
           <History className="ico" style={{ width: 14, height: 14 }} />
-          <span>Finalized Wear History ({finalizedLogs.length})</span>
+          <span>Wear History &amp; Logs ({allLogsSorted.length})</span>
         </button>
       </div>
 
       {activeTab === 'today' ? (
         <>
+          {/* Multiple Outfit Entries Selector (TC_USAGE_06) */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+            marginBottom: 14,
+            padding: '8px 12px',
+            background: 'var(--surface-2)',
+            borderRadius: 8,
+            border: '1px solid var(--border)'
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+              {isEditingHistorical ? `Editing Historical Log:` : "Today's Outfits:"}
+            </span>
+
+            {isEditingHistorical ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span className="pill on" style={{ fontSize: 12, fontWeight: 700 }}>
+                  {activeLog.title || 'Outfit'} &middot; {activeLog.log_date}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-g"
+                  style={{ fontSize: 11, padding: '3px 8px' }}
+                  onClick={() => setActiveLogId(todayLog.log_id)}
+                >
+                  <ArrowLeft className="ico" style={{ width: 11, height: 11 }} /> Return to Today's Outfits
+                </button>
+              </div>
+            ) : (
+              <>
+                {todayOutfits.map((log, index) => {
+                  const isCurrent = log.log_id === activeLog.log_id;
+                  const count = (log.items || []).length;
+                  const title = log.title || (index === 0 ? 'Morning Outfit' : `Evening Outfit #${index + 1}`);
+                  return (
+                    <button
+                      key={log.log_id}
+                      type="button"
+                      className={`btn ${isCurrent ? 'btn-p' : 'btn-g'}`}
+                      style={{ fontSize: 12, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      onClick={() => setActiveLogId(log.log_id)}
+                    >
+                      <span>{title}</span>
+                      <span style={{
+                        background: isCurrent ? 'rgba(255,255,255,0.3)' : 'var(--surface-3)',
+                        padding: '1px 6px',
+                        borderRadius: 10,
+                        fontSize: 10.5,
+                        fontWeight: 700
+                      }}>
+                        {count}
+                      </span>
+                      {log.is_finalized && <CheckCircle2 style={{ width: 12, height: 12 }} />}
+                    </button>
+                  );
+                })}
+
+                {/* TC_USAGE_06: Add second / multiple outfit on same day */}
+                {!isAddingOutfit ? (
+                  <button
+                    type="button"
+                    className="btn btn-g"
+                    style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 20 }}
+                    onClick={() => setIsAddingOutfit(true)}
+                  >
+                    <Plus className="ico" style={{ width: 12, height: 12 }} />
+                    <span>+ Log Another Outfit Today</span>
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="text"
+                      placeholder="e.g. Evening Outfit / Workout"
+                      value={newOutfitTitle}
+                      onChange={(e) => setNewOutfitTitle(e.target.value)}
+                      style={{ padding: '3px 8px', fontSize: 12, borderRadius: 6, margin: 0, width: 180 }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-p"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                      onClick={handleCreateOutfit}
+                    >
+                      Save Outfit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-g"
+                      style={{ fontSize: 11, padding: '3px 6px' }}
+                      onClick={() => {
+                        setIsAddingOutfit(false);
+                        setNewOutfitTitle('');
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Today's Selected Outfit Summary Card */}
           <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Shirt className="ico" style={{ color: 'var(--primary)' }} />
-                <strong style={{ fontSize: 14 }}>Today's Outfit Items ({selectedItems.length})</strong>
+                <strong style={{ fontSize: 14 }}>
+                  {activeLog.title || (isEditingHistorical ? 'Historical Outfit' : "Today's Outfit")} ({selectedItems.length} {selectedItems.length === 1 ? 'item' : 'items'})
+                </strong>
               </div>
               
               {!isLocked && selectedItems.length > 0 && (
@@ -160,9 +316,9 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                   type="button"
                   className="btn btn-g"
                   style={{ fontSize: 11, padding: '3px 8px', color: 'var(--danger)' }}
-                  onClick={onDeleteLog}
+                  onClick={handleDeleteActiveLog}
                 >
-                  <Trash2 className="ico" style={{ width: 11, height: 11 }} /> Clear Today's Log
+                  <Trash2 className="ico" style={{ width: 11, height: 11 }} /> Clear This Log
                 </button>
               )}
             </div>
@@ -176,10 +332,10 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 border: '1px dashed var(--border)'
               }}>
                 <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>
-                  You haven't logged any garments for today yet.
+                  No garments selected for this outfit record yet.
                 </p>
                 <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                  Tap any item in your wardrobe below to add it to today's outfit!
+                  Tap any item in your wardrobe below to add it to this outfit!
                 </span>
               </div>
             ) : (
@@ -222,8 +378,8 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                           type="button"
                           className="icobtn"
                           style={{ padding: 2, marginLeft: 4 }}
-                          onClick={() => onToggleGarmentInOutfit(item)}
-                          title="Remove from outfit"
+                          onClick={() => onToggleGarmentInOutfit(item, activeLog.log_id)}
+                          title="Remove from outfit (TC_EDIT_02)"
                         >
                           ✕
                         </button>
@@ -255,7 +411,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                     onClick={handleFinalize}
                   >
                     <Check className="ico" style={{ width: 14, height: 14 }} />
-                    <span>Finalize Outfit &amp; Update Wear Counts</span>
+                    <span>{isEditingHistorical ? 'Save & Finalize Record (Preserve Date)' : 'Finalize Outfit & Update Wear Counts'}</span>
                   </button>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -267,18 +423,18 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                       type="button"
                       className="btn btn-g"
                       style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                      onClick={onDeleteLog}
-                      title="Re-open today's log for continuous demonstration and testing"
+                      onClick={handleDeleteActiveLog}
+                      title="Re-open log for demonstration and testing"
                     >
                       <RotateCcw className="ico" style={{ width: 12, height: 12 }} />
-                      <span>Unlock / Reset Today's Log (Demo)</span>
+                      <span>Unlock / Reset Record (Demo)</span>
                     </button>
                   </div>
                 )}
               </div>
 
               {/* Defense Midnight Job Simulation */}
-              {!isLocked && (
+              {!isLocked && !isEditingHistorical && (
                 <button
                   type="button"
                   className="btn btn-g"
@@ -302,7 +458,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 Choose from Your Virtual Closet
               </h3>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Tap an item to toggle in/out of today's outfit
+                {isLocked ? 'Record is locked' : 'Tap an item to toggle in/out of selected outfit'}
               </span>
             </div>
 
@@ -328,7 +484,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                   return (
                     <div
                       key={garment.item_id}
-                      onClick={() => !isLocked && onToggleGarmentInOutfit(garment)}
+                      onClick={() => !isLocked && onToggleGarmentInOutfit(garment, activeLog.log_id)}
                       style={{
                         padding: 10,
                         borderRadius: 8,
@@ -395,17 +551,16 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
         </>
       ) : (
         /* ====================================================================
-         * CHRONOLOGICAL DAILY WEAR LOGS HISTORY
-         * Displays all daily clothing logs in chronological order by date
+         * CHRONOLOGICAL DAILY WEAR LOGS HISTORY (TC_EDIT_01 - TC_EDIT_04)
          * ==================================================================== */
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <div>
               <h3 style={{ margin: '0 0 2px', fontSize: 16, fontFamily: 'var(--font-display)' }}>
-                Finalized Wear Logs Archive
+                Wear History &amp; Logs Archive
               </h3>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Historical record of daily garments worn, locked at 00:00 midnight
+                Historical record of daily garments worn. Unfinalized records can be modified before lock.
               </div>
             </div>
 
@@ -430,7 +585,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
             </div>
           </div>
 
-          {finalizedLogs.length === 0 ? (
+          {allLogsSorted.length === 0 ? (
             <div className="card" style={{ padding: '36px 20px', textAlign: 'center' }}>
               <Calendar style={{ width: 40, height: 40, color: 'var(--text-muted)', opacity: 0.4, margin: '0 auto 10px' }} />
               <h4 style={{ margin: '0 0 6px', fontSize: 15 }}>No Archived Daily Logs Yet</h4>
@@ -443,7 +598,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {finalizedLogs.map(log => {
+              {allLogsSorted.map(log => {
                 const logItems = log.items || [];
                 const formattedDate = new Date(log.log_date + 'T00:00:00').toLocaleDateString(undefined, {
                   weekday: 'short',
@@ -459,6 +614,11 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                         <Calendar className="ico" style={{ width: 16, height: 16, color: 'var(--primary)' }} />
                         <strong style={{ fontSize: 14.5 }}>{formattedDate}</strong>
                         <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>({log.log_date})</span>
+                        {log.title && (
+                          <span className="pill" style={{ fontSize: 10.5, padding: '1px 6px' }}>
+                            {log.title}
+                          </span>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -486,9 +646,39 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                             </>
                           )}
                         </span>
+                        
                         <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
                           {logItems.length} {logItems.length === 1 ? 'garment' : 'garments'} worn
                         </span>
+
+                        {/* TC_EDIT_01 to TC_EDIT_04: Edit unfinalized log vs locked finalized */}
+                        {!log.is_finalized ? (
+                          <button
+                            type="button"
+                            className="btn btn-p"
+                            style={{ fontSize: 11.5, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => {
+                              setActiveLogId(log.log_id);
+                              setActiveTab('today');
+                              toast(`Opened unfinalized record for ${log.log_date} for editing.`);
+                            }}
+                            title="Edit unfinalized clothing usage record"
+                          >
+                            <Edit3 style={{ width: 12, height: 12 }} />
+                            <span>Edit Record</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-g"
+                            style={{ fontSize: 11, padding: '3px 8px', opacity: 0.65, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => toast('Finalized clothing logs are permanently locked and cannot be edited.')}
+                            title="Finalized logs are permanently locked"
+                          >
+                            <Lock style={{ width: 11, height: 11 }} />
+                            <span>Locked</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 

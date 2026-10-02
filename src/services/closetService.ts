@@ -105,7 +105,9 @@ export const closetService = {
                 item_id: data.item_id,
                 tag_id: t.tag_id
               }));
-              await supabase.from('item_tag').insert(tagsPayload).catch(() => {});
+              try {
+                await supabase.from('item_tag').insert(tagsPayload);
+              } catch {}
             }
             // Keep local ID in sync with PostgreSQL sequence
             mockDatabase.updateClothingItemId(localItem.item_id, data.item_id);
@@ -292,6 +294,10 @@ export const closetService = {
     return mockDatabase.getDailyLogs();
   },
 
+  async createDailyLog(dateString: string, title?: string): Promise<DailyClothingLog> {
+    return mockDatabase.createDailyLog(dateString, title);
+  },
+
   async updateTodayItems(logId: number, items: ClothingItem[]): Promise<DailyClothingLog | null> {
     const localLog = mockDatabase.updateTodayLogItems(logId, items);
 
@@ -320,7 +326,9 @@ export const closetService = {
                 log_id: remoteLog.log_id,
                 item_id: i.item_id
               }));
-              await supabase.from('daily_log_item').insert(logItems).catch(() => {});
+              try {
+                await supabase.from('daily_log_item').insert(logItems);
+              } catch {}
             }
           }
         }

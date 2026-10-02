@@ -36,7 +36,6 @@ interface MapContainerProps {
   onSelectOpp: (opp: DonationOpportunity) => void;
   onCloseInfoWindow: () => void;
   onFlagOpp: (opp: DonationOpportunity) => void;
-  isScraping: boolean;
   selectedLocationLabel: string;
 }
 
@@ -49,7 +48,6 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   onSelectOpp,
   onCloseInfoWindow,
   onFlagOpp,
-  isScraping,
   selectedLocationLabel
 }) => {
   return (
@@ -276,7 +274,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             </div>
           )}
 
-          {opportunities.length === 0 && !isScraping && (
+          {opportunities.length === 0 && (
             <div style={{
               position: 'absolute',
               top: '50%',

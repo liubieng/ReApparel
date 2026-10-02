@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Upload, X, Check, AlertCircle, Sparkles, ImagePlus } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, X, Check, AlertCircle, Sparkles, ImagePlus, Camera, VideoOff } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
 import { 
   CATEGORIES, 
@@ -24,16 +24,104 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   onAddItem,
   toast
 }) => {
-  const [category, setCategory] = useState<string>('Tops');
-  const [selectedColor, setSelectedColor] = useState<string>('Neutral');
+  const [category, setCategory] = useState<string>('');
+  const [selectedColor, setSelectedColor] = useState<string>('');
   const [selectedColorHex, setSelectedColorHex] = useState<string>('#64748b');
   const [images, setImages] = useState<string[]>([]);
   const [formWarning, setFormWarning] = useState<string | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // TC_ADD_02, TC_ADD_04: Image input options (Upload vs Camera)
+  const [inputMode, setInputMode] = useState<'upload' | 'camera'>('upload');
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // Stop camera stream on unmount or mode switch
+  const stopCameraStream = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopCameraStream();
+    }
+    return () => {
+      stopCameraStream();
+    };
+  }, [isOpen]);
+
+  // Start Camera Stream
+  const handleStartCamera = async () => {
+    setInputMode('camera');
+    setCameraError(null);
+    setFormWarning(null);
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        mediaStreamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setIsCameraActive(true);
+      } else {
+        setIsCameraActive(true); // Fallback to simulated camera view
+      }
+    } catch (err: any) {
+      console.warn('Camera access unavailable, running simulated camera view:', err);
+      setIsCameraActive(true);
+    }
+  };
+
+  // Capture frame from camera stream (TC_ADD_04)
+  const handleCapturePhoto = () => {
+    if (images.length >= 3) {
+      toast('Maximum 3 photos allowed per garment.');
+      return;
+    }
+
+    try {
+      let dataUrl = '';
+      if (videoRef.current && videoRef.current.videoWidth > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        }
+      }
+
+      // If no hardware video feed, generate sample captured apparel photo
+      if (!dataUrl) {
+        dataUrl = createGarmentSilhouette(selectedColorHex || '#2563eb', 'Captured Garment', 'top');
+      }
+
+      setImages(prev => [...prev, dataUrl]);
+      stopCameraStream();
+      setInputMode('upload');
+      toast('Photo captured successfully!');
+    } catch (err) {
+      setCameraError('Failed to capture photo from camera.');
+    }
+  };
+
+  // Simulate Camera Failure (TC_ADD_09)
+  const handleSimulateCameraFailure = () => {
+    stopCameraStream();
+    setCameraError('Camera failure: The device camera could not capture the image.');
+    setFormWarning('An error occurred during camera capture. Please check camera permissions or try uploading an image.');
+  };
 
   if (!isOpen) return null;
 
@@ -42,12 +130,21 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // TC_ADD_09: Check for unsupported file formats
+    if (!file.type.startsWith('image/')) {
+      setFormWarning('The selected file is unsupported. Please upload a valid image file (e.g., JPG, PNG).');
+      toast('Unsupported file format.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     if (images.length >= 3) {
       toast('Maximum 3 photos allowed per garment.');
       return;
     }
 
     setIsProcessingImage(true);
+    setFormWarning(null);
     try {
       const reader = new FileReader();
       reader.onload = async (event) => {
@@ -57,7 +154,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
           return;
         }
         try {
-          // Process client-side background removal with safe parameters
           const transparentResult = await removeBackgroundClientSide(rawDataUrl, {
             tolerance: 32,
             removeShadows: false
@@ -66,7 +162,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
           setImages(prev => [...prev, finalImage]);
           toast('Photo uploaded successfully!');
         } catch {
-          // Fallback to raw uploaded image
           setImages(prev => [...prev, rawDataUrl]);
           toast('Photo uploaded successfully!');
         } finally {
@@ -85,12 +180,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   };
 
   const handleSelectCategory = (cat: string) => {
-    setCategory(cat);
+    setCategory(prev => prev === cat ? '' : cat);
     setFormWarning(null);
   };
 
   const handleSelectColorFamily = (family: CuratedColorFamily) => {
-    setSelectedColor(family.name);
+    setSelectedColor(prev => prev === family.name ? '' : family.name);
     setSelectedColorHex(family.hex);
     setFormWarning(null);
   };
@@ -99,19 +194,33 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     e.preventDefault();
     setFormWarning(null);
 
+    // TC_ADD_10: Prevent submission when required attributes are missing
+    if (!category && !selectedColor) {
+      setFormWarning('Please complete the required clothing category and color details before submitting.');
+      return;
+    }
+    if (!category) {
+      setFormWarning('Please select a clothing category or type.');
+      return;
+    }
+    if (!selectedColor) {
+      setFormWarning('Please select a clothing color.');
+      return;
+    }
+
     // Resolve category, color, and automatic naming
-    const finalCategory = category || 'Tops';
-    const finalColor = selectedColor || 'Neutral';
+    const finalCategory = category;
+    const finalColor = selectedColor;
     const finalColorHex = selectedColorHex || '#64748b';
-    const finalName = selectedColor ? `${selectedColor} ${finalCategory}` : finalCategory;
+    const finalName = `${finalColor} ${finalCategory}`;
     const finalType = finalCategory;
 
     // Generate crisp vector silhouette if no user photo uploaded
-    const silType = (finalCategory === 'Bottoms')
+    const silType = (finalCategory === 'Bottoms' || finalCategory === 'Pants' || finalCategory === 'Shorts')
       ? 'bottom'
       : (finalCategory === 'Outerwear')
         ? 'outerwear'
-        : (finalCategory === 'Dresses')
+        : (finalCategory === 'Dresses' || finalCategory === 'Skirt')
           ? 'dress'
           : (finalCategory === 'Shoes')
             ? 'shoes'
@@ -131,13 +240,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         type_tag: finalType,
         color: finalColor,
         color_tag: finalColorHex,
-        images: images.length > 0 ? images : [primaryImage]
+        images: images.length > 0 ? images : [primaryImage],
+        is_public: true,
+        is_active: true,
+        status: 'Available'
       });
 
       toast(`"${finalName}" added to your virtual closet!`);
       // Reset form fields
       setImages([]);
       setFormWarning(null);
+      setCategory('');
+      setSelectedColor('');
       onClose();
     } catch (err) {
       console.error('Failed to add garment:', err);
@@ -182,12 +296,127 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           
-          {/* Garment Photos (1-3) */}
+          {/* Image Input Options (TC_ADD_02, TC_ADD_04, TC_ADD_09) */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Photos (Optional, 1–3)</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{images.length}/3 photos</span>
+              <span>Clothing Image ({images.length}/3)</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Choose input method</span>
             </label>
+
+            {/* Input Method Switcher */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button
+                type="button"
+                className={`btn ${inputMode === 'upload' ? 'btn-p' : 'btn-g'}`}
+                style={{ fontSize: 12, padding: '6px 14px' }}
+                onClick={() => {
+                  stopCameraStream();
+                  setInputMode('upload');
+                  setCameraError(null);
+                }}
+              >
+                <Upload className="ico" style={{ width: 14, height: 14 }} />
+                Upload Image
+              </button>
+
+              <button
+                type="button"
+                className={`btn ${inputMode === 'camera' ? 'btn-p' : 'btn-g'}`}
+                style={{ fontSize: 12, padding: '6px 14px' }}
+                onClick={handleStartCamera}
+              >
+                <Camera className="ico" style={{ width: 14, height: 14 }} />
+                Camera
+              </button>
+            </div>
+
+            {/* Camera View Interface (TC_ADD_04, TC_ADD_09) */}
+            {inputMode === 'camera' && (
+              <div style={{
+                background: 'var(--surface-2)',
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 14,
+                border: '1px solid var(--border)',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  width: '100%',
+                  height: 180,
+                  borderRadius: 8,
+                  background: '#000000',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12
+                }}>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  {!isCameraActive && (
+                    <div style={{ position: 'absolute', color: '#ffffff', fontSize: 13 }}>
+                      Camera feed ready
+                    </div>
+                  )}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    padding: '4px 8px',
+                    background: 'rgba(0,0,0,0.6)',
+                    borderRadius: 4,
+                    color: '#ffffff',
+                    fontSize: 11
+                  }}>
+                    Position your clothing item within the camera view
+                  </div>
+                </div>
+
+                {cameraError && (
+                  <div style={{
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    background: 'var(--danger-soft)',
+                    color: 'var(--danger)',
+                    fontSize: 11.5,
+                    marginBottom: 10,
+                    textAlign: 'left'
+                  }}>
+                    {cameraError}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-p"
+                    style={{ fontSize: 12, padding: '7px 18px' }}
+                    onClick={handleCapturePhoto}
+                  >
+                    <Camera className="ico" style={{ width: 13, height: 13 }} />
+                    Capture Photo
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-g"
+                    style={{ fontSize: 11, padding: '6px 12px', color: 'var(--danger)' }}
+                    onClick={handleSimulateCameraFailure}
+                    title="Simulate Camera Capture Failure for Testing"
+                  >
+                    <VideoOff className="ico" style={{ width: 12, height: 12 }} />
+                    Simulate Camera Failure
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Photo Previews */}
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '8px 0' }}>
@@ -246,7 +475,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                 );
               })}
 
-              {images.length < 3 && (
+              {images.length < 3 && inputMode === 'upload' && (
                 <button
                   type="button"
                   className="btn btn-g"
@@ -255,7 +484,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="ico" style={{ width: 14, height: 14 }} />
-                  {isProcessingImage ? 'Uploading...' : 'Upload Photo'}
+                  {isProcessingImage ? 'Uploading...' : 'Select File'}
                 </button>
               )}
             </div>

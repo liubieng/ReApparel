@@ -258,6 +258,8 @@ export const CURATED_COLOR_FAMILIES: CuratedColorFamily[] = [
   { name: 'Beige', hex: '#d6c7a1' },
   { name: 'Yellow', hex: '#eab308' },
   { name: 'Pink', hex: '#ec4899' },
+  { name: 'Violet', hex: '#8b5cf6' },
+  { name: 'Orange', hex: '#f97316' },
   { name: 'Neutral', hex: '#a8a29e' }
 ];
 
@@ -294,7 +296,7 @@ export const INITIAL_TAGS: Tag[] = [
   { tag_id: 11, tag_name: 'Shorts', tag_type: 'Category' },
   { tag_id: 12, tag_name: 'One-Piece', tag_type: 'Category' },
 
-  // 14 Curated Core Color Families (Prompt Specification)
+  // Curated Core Color Families
   { tag_id: 101, tag_name: 'Black', tag_type: 'Color', hex_color: '#18181b' },
   { tag_id: 102, tag_name: 'White', tag_type: 'Color', hex_color: '#f8fafc' },
   { tag_id: 103, tag_name: 'Gray', tag_type: 'Color', hex_color: '#64748b' },
@@ -308,7 +310,9 @@ export const INITIAL_TAGS: Tag[] = [
   { tag_id: 111, tag_name: 'Beige', tag_type: 'Color', hex_color: '#d6c7a1' },
   { tag_id: 112, tag_name: 'Yellow', tag_type: 'Color', hex_color: '#eab308' },
   { tag_id: 113, tag_name: 'Pink', tag_type: 'Color', hex_color: '#ec4899' },
-  { tag_id: 114, tag_name: 'Neutral', tag_type: 'Color', hex_color: '#a8a29e' }
+  { tag_id: 114, tag_name: 'Violet', tag_type: 'Color', hex_color: '#8b5cf6' },
+  { tag_id: 115, tag_name: 'Orange', tag_type: 'Color', hex_color: '#f97316' },
+  { tag_id: 116, tag_name: 'Neutral', tag_type: 'Color', hex_color: '#a8a29e' }
 ];
 
 export const INITIAL_CLOTHING_ITEMS: ClothingItem[] = [];

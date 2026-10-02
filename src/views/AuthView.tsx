@@ -37,15 +37,48 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
 
     if (authMode === 'login') {
       const identifier = emailOrCode.trim();
+      const pwd = password.trim();
+
+      // TC_LOGIN_06: Logging in without required credentials
+      if (!identifier && !pwd) {
+        setErrorMsg('Email address and password are required.');
+        return;
+      }
       if (!identifier) {
-        setErrorMsg('Please enter your email or friend code.');
+        setErrorMsg('Email address is required.');
+        return;
+      }
+      if (!pwd) {
+        setErrorMsg('Password is required.');
+        return;
+      }
+
+      // TC_LOGIN_04: Logging in with an invalid email address
+      const isFriendCode = /^RP-[A-Z0-9]+-\d+$/i.test(identifier) || /^RA-[A-Z0-9]+/i.test(identifier);
+      if (!isFriendCode) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(identifier)) {
+          setErrorMsg('Please enter a valid email address.');
+          return;
+        }
+      }
+
+      // TC_LOGIN_03: Password containing fewer than 8 characters
+      if (pwd.length < 8) {
+        setErrorMsg('Password is invalid. Password must contain at least 8 characters.');
         return;
       }
 
       setIsSubmitting(true);
       try {
-        // 1. Authenticate via local state
-        let user = mockDatabase.loginUser(identifier);
+        const authResult = mockDatabase.authenticateUser(identifier, pwd);
+        let user = authResult.user;
+
+        // TC_LOGIN_05: Incorrect password
+        if (authResult.wrongPassword) {
+          setErrorMsg('The login credentials are invalid. Please check your password.');
+          return;
+        }
 
         // 2. If not found locally, query Supabase users table
         if (!user) {
@@ -59,10 +92,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                 .limit(1);
               if (data && data.length > 0) {
                 const remoteUser = data[0] as User;
-                const all = mockDatabase.getAllUsers();
-                if (!all.some(u => u.user_id === remoteUser.user_id)) {
-                  all.push(remoteUser);
-                }
+                mockDatabase.upsertUser(remoteUser);
                 mockDatabase.setCurrentUserId(remoteUser.user_id);
                 user = remoteUser;
               }
@@ -85,12 +115,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
       const trimmedFirst = firstName.trim();
       const trimmedLast = lastName.trim();
 
-      if (!trimmedFirst || !trimmedEmail) {
-        setErrorMsg('First name and email are required.');
+      // TC_ACCOUNT_07: Creating an account without an email address
+      if (!trimmedEmail) {
+        setErrorMsg('Creating an account requires an email address.');
         return;
       }
 
-      if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      // TC_ACCOUNT_08: Creating an account without a password
+      if (!password) {
+        setErrorMsg('A password is required to create an account.');
+        return;
+      }
+
+      // TC_ACCOUNT_04: Password fewer than 8 characters
+      if (password.length < 8) {
+        setErrorMsg('Password must be at least 8 characters.');
+        return;
+      }
+
+      if (!trimmedFirst) {
+        setErrorMsg('First name is required.');
+        return;
+      }
+
+      // TC_ACCOUNT_06: Invalid email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
         setErrorMsg('Please enter a valid email address.');
         return;
       }
@@ -119,11 +169,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           } catch {}
         }
 
-        if (!password || password.length < 8) {
-          setErrorMsg('Password must be at least 8 characters.');
-          return;
-        }
-
         if (password !== confirmPassword) {
           setErrorMsg('Passwords do not match. Please verify your confirmation password.');
           return;
@@ -132,11 +177,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         const newUser = mockDatabase.registerUser({
           email: trimmedEmail,
           first_name: trimmedFirst,
-          last_name: trimmedLast
+          last_name: trimmedLast,
+          password: password
         });
 
         toast(`Account created! Welcome to ReApparel, ${newUser.first_name}.`);
-        // New users are directed to the BSAS baseline assessment first
         onLoginSuccess(newUser, true);
       } catch (err: any) {
         setErrorMsg(err?.message || `An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
@@ -150,57 +195,28 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     <div className="center-shell">
       <div className="card" style={{ maxWidth: 440, width: '100%', padding: '28px 24px', boxShadow: 'var(--shadow)' }}>
         
-        {/* Branding & Identity */}
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        {/* Branding & Identity (Figure .1.1 & .1.2) */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             width: 48,
             height: 48,
-            borderRadius: 14,
-            background: 'linear-gradient(135deg, var(--primary), var(--primary-soft))',
+            borderRadius: '50%',
+            background: 'var(--primary)',
             color: '#ffffff',
             marginBottom: 12
           }}>
-            <Shirt style={{ width: 26, height: 26 }} />
+            <Shirt style={{ width: 24, height: 24 }} />
           </div>
-          <h1 style={{ fontSize: 26, margin: '0 0 4px', fontFamily: 'var(--font-display)' }}>
+          <h1 style={{ fontSize: 24, margin: '0 0 6px', fontFamily: 'var(--font-display)' }}>
             ReApparel
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-            Responsible Closet Utilization &amp; Recovery Platform
+            A calmer home for your closet.
           </p>
         </div>
-
-        {/* Tab Switcher: Login vs Register */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 4,
-          padding: 4,
-          background: 'var(--surface-2)',
-          borderRadius: 8,
-          marginBottom: 20
-        }}>
-          <button
-            type="button"
-            className={`btn ${authMode === 'login' ? 'btn-p' : 'btn-g'}`}
-            style={{ justifyContent: 'center', fontSize: 13, border: 'none' }}
-            onClick={() => { setAuthMode('login'); setErrorMsg(null); }}
-          >
-            <LogIn className="ico" style={{ width: 14, height: 14 }} /> Sign In
-          </button>
-          <button
-            type="button"
-            className={`btn ${authMode === 'register' ? 'btn-p' : 'btn-g'}`}
-            style={{ justifyContent: 'center', fontSize: 13, border: 'none' }}
-            onClick={() => { setAuthMode('register'); setErrorMsg(null); }}
-          >
-            <UserPlus className="ico" style={{ width: 14, height: 14 }} /> Register
-          </button>
-        </div>
-
 
         {/* Error message alert */}
         {errorMsg && (
@@ -220,53 +236,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               <AlertCircle style={{ width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
               <span>{errorMsg}</span>
             </div>
-            {errorMsg.includes('already exists') && (
-              <button
-                type="button"
-                onClick={() => { setAuthMode('login'); setErrorMsg(null); }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--primary)',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  textDecoration: 'underline',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  padding: 0
-                }}
-              >
-                Click here to switch to Sign In &rarr;
-              </button>
-            )}
-            {errorMsg.includes('No account found') && (
-              <button
-                type="button"
-                onClick={() => { setAuthMode('register'); setErrorMsg(null); }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--primary)',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  textDecoration: 'underline',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  padding: 0
-                }}
-              >
-                Click here to Register a new account &rarr;
-              </button>
-            )}
           </div>
         )}
 
         {/* Authentication Form */}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {authMode === 'register' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
               <div className="field" style={{ margin: 0 }}>
-                <label>First Name *</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>First Name *</label>
                 <input
                   type="text"
                   placeholder="e.g. Maria"
@@ -276,7 +254,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                 />
               </div>
               <div className="field" style={{ margin: 0 }}>
-                <label>Last Name</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Last Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Santos"
@@ -287,21 +265,23 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             </div>
           )}
 
-          <div className="field">
-            <label>
-              {authMode === 'login' ? 'Email Address or Friend Code' : 'Email Address *'}
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Email
             </label>
             <input
               type={authMode === 'login' ? 'text' : 'email'}
-              placeholder={authMode === 'login' ? 'your.email@example.com or friend code' : 'your.email@example.com'}
+              placeholder="you@example.com"
               value={emailOrCode}
               onChange={(e) => setEmailOrCode(e.target.value)}
               required
             />
           </div>
 
-          <div className="field">
-            <label>{authMode === 'register' ? 'Password *' : 'Password'}</label>
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Password
+            </label>
             <input
               type="password"
               placeholder="••••••••"
@@ -313,8 +293,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           </div>
 
           {authMode === 'register' && (
-            <div className="field">
-              <label>Confirm Password *</label>
+            <div className="field" style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Confirm Password *
+              </label>
               <input
                 type="password"
                 placeholder="••••••••"
@@ -325,15 +307,67 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             </div>
           )}
 
+          {/* Full-width submit button */}
           <button
             type="submit"
+            disabled={isSubmitting}
             className="btn btn-p"
-            style={{ width: '100%', justifyContent: 'center', padding: '10px 14px', fontSize: 14, marginTop: 8 }}
+            style={{ 
+              width: '100%', 
+              justifyContent: 'center', 
+              padding: '10px 14px', 
+              fontSize: 14, 
+              fontWeight: 600,
+              borderRadius: 20,
+              marginTop: 10 
+            }}
           >
-            {authMode === 'login' ? 'Sign In to Wardrobe' : 'Create Free Account'}
-            <ArrowRight className="ico" style={{ marginLeft: 6 }} />
+            {authMode === 'login' ? 'Log in' : 'Create account'}
           </button>
         </form>
+
+        {/* Switch mode link (Figure .1.2: "New to Verdant? Create an account") */}
+        <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          {authMode === 'login' ? (
+            <>
+              New to ReApparel?{' '}
+              <button
+                type="button"
+                onClick={() => { setAuthMode('register'); setErrorMsg(null); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: 0,
+                  textDecoration: 'underline'
+                }}
+              >
+                Create an account
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={() => { setAuthMode('login'); setErrorMsg(null); }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: 0,
+                  textDecoration: 'underline'
+                }}
+              >
+                Log in
+              </button>
+            </>
+          )}
+        </div>
 
       </div>
     </div>

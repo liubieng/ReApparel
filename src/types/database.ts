@@ -11,6 +11,7 @@ export interface User {
   friend_code: string;
   created_at: string;
   avatar_url?: string;
+  password?: string;
 }
 
 export type RiskLevel = 'Indicative' | 'Non-Indicative';
@@ -50,6 +51,10 @@ export interface ClothingItem {
   length_tag?: string | null;
   color_tag?: string;
   images?: string[];
+  is_public?: boolean;
+  is_active?: boolean;
+  status?: 'Available' | 'Borrowed' | 'Inactive';
+  size?: string;
 }
 
 export type TagType = 'Category' | 'Color';
@@ -74,6 +79,7 @@ export interface DailyClothingLog {
   is_finalized: boolean;
   finalized_at: string | null;
   items?: ClothingItem[];
+  title?: string;
 }
 
 export interface DailyLogItem {
@@ -134,10 +140,12 @@ export interface DonationOpportunity {
   active_window?: string;
   is_last_30_days?: boolean;
   drive_dates?: string;
-  scraped_at?: string;
+  posted_at?: string;
   country?: string;
   province?: string;
   city?: string;
+  region?: string;
+  barangay?: string;
 }
 
 export type DonationFlagType = 'Inactive' | 'Inaccurate';

@@ -24,13 +24,14 @@ import {
 } from '../types/database';
 
 // Configuration keys
-const STORAGE_KEY_SUPABASE_URL = 'reapparel_supabase_url';
-const STORAGE_KEY_SUPABASE_KEY = 'reapparel_supabase_key';
-const STORAGE_KEY_ACTIVE_USER = 'reapparel_active_user_id';
-const STORAGE_KEY_MOCK_DATA = 'reapparel_prod_database_v2';
+export const STORAGE_KEY_SUPABASE_URL = 'reapparel_supabase_url';
+export const STORAGE_KEY_SUPABASE_KEY = 'reapparel_supabase_key';
+export const STORAGE_KEY_ACTIVE_USER = 'reapparel_active_user_id';
+export const STORAGE_KEY_ACTIVE_VIEW = 'reapparel_active_view';
+export const STORAGE_KEY_MOCK_DATA = 'reapparel_prod_database_v2';
 
 // Safe storage helper for SSR and headless execution
-const safeStorage = {
+export const safeStorage = {
   getItem: (key: string): string | null => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -144,6 +145,15 @@ function loadInitialMockState(): MockDatabaseState {
     try {
       const parsed = JSON.parse(stored);
       if (!parsed.notifications) parsed.notifications = [];
+      // Clean up any stale dummy notification items that might have been saved in localStorage
+      if (Array.isArray(parsed.notifications)) {
+        parsed.notifications = parsed.notifications.filter((n: AppNotification) => {
+          const txt = `${n.title || ''} ${n.message || ''}`.toLowerCase();
+          return !txt.includes('circular fashion partner') &&
+                 !txt.includes('carbon footprint') &&
+                 !txt.includes('start exploring and adding');
+        });
+      }
       if (!parsed.item_tags) parsed.item_tags = [];
       // Ensure tags include all seeded categories & 14 curated color families
       if (parsed.tags) {
@@ -153,9 +163,25 @@ function loadInitialMockState(): MockDatabaseState {
           }
         });
       }
-      // Strictly only retain active live-scraped donation drives for the area (NO seeded or dummy data)
-      parsed.donation_opportunities = (parsed.donation_opportunities || []).filter((opp: DonationOpportunity) => Boolean(opp.is_live_drive));
-      parsed.donation_flags = [];
+      
+      // Clean slate donation pool: Purge all seed/mock donation opportunities from localStorage
+      const cleanDonationPoolKey = 'reapparel_clean_donation_pool_v2';
+      if (!safeStorage.getItem(cleanDonationPoolKey)) {
+        parsed.donation_opportunities = [];
+        parsed.donation_flags = [];
+        safeStorage.setItem(cleanDonationPoolKey, 'true');
+      } else if (!parsed.donation_opportunities) {
+        parsed.donation_opportunities = [];
+      } else {
+        parsed.donation_opportunities = parsed.donation_opportunities.filter((o: DonationOpportunity) => {
+          const name = (o.name || '').toLowerCase();
+          return !name.includes('in peace') &&
+                 !name.includes('linksy') &&
+                 !name.includes('dumaguete animal sanctuary') &&
+                 !name.includes('bantayan community');
+        });
+      }
+      parsed.donation_flags = parsed.donation_flags || [];
 
       // CRITICAL RECOVERY: Ensure any garments registered in daily_clothing_logs are always
       // present in clothing_items so they are never missing from the virtual closet!
@@ -322,8 +348,45 @@ class MockDatabaseEngine {
 
   public getCurrentUser(): User | null {
     if (!this.currentUserId) return null;
-    const user = this.state.users.find(u => u.user_id === this.currentUserId);
+    const user = this.state.users.find(u => u.user_id === this.currentUserId || isSameUser(u.user_id, this.currentUserId));
     return user || null;
+  }
+
+  public upsertUser(user: User): void {
+    const idx = this.state.users.findIndex(
+      u => u.user_id === user.user_id || isSameUser(u.user_id, user.user_id) || u.email.toLowerCase() === user.email.toLowerCase()
+    );
+    if (idx !== -1) {
+      this.state.users[idx] = { ...this.state.users[idx], ...user };
+    } else {
+      this.state.users.push(user);
+    }
+    this.notify();
+  }
+
+  public async syncCurrentUserWithSupabase(): Promise<User | null> {
+    if (!this.currentUserId) return null;
+    const local = this.getCurrentUser();
+    if (local) return local;
+
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('user_id', this.currentUserId)
+          .limit(1);
+        if (!error && data && data.length > 0) {
+          const remoteUser = data[0] as User;
+          this.upsertUser(remoteUser);
+          return remoteUser;
+        }
+      } catch (e) {
+        console.warn('Error fetching current user from Supabase:', e);
+      }
+    }
+    return null;
   }
 
   public setCurrentUserId(userId: string | null) {
@@ -341,7 +404,7 @@ class MockDatabaseEngine {
     return this.state.users.some(u => u.email.toLowerCase() === emailClean);
   }
 
-  public registerUser(userData: { email: string; first_name: string; last_name: string }): User {
+  public registerUser(userData: { email: string; first_name: string; last_name: string; password?: string }): User {
     const emailClean = userData.email.trim().toLowerCase();
     const existing = this.state.users.find(u => u.email.toLowerCase() === emailClean);
     if (existing) {
@@ -359,7 +422,8 @@ class MockDatabaseEngine {
       first_name: userData.first_name.trim(),
       last_name: userData.last_name.trim(),
       friend_code: newFriendCode,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      password: userData.password
     };
 
     this.state.users.push(newUser);
@@ -376,25 +440,38 @@ class MockDatabaseEngine {
           first_name: newUser.first_name,
           last_name: newUser.last_name,
           friend_code: newUser.friend_code
-        }]).then(() => {}).catch(() => {});
+        }]).then(() => {}, () => {});
       } catch {}
     }
 
     return newUser;
   }
 
-  public loginUser(emailOrCode: string): User | null {
+  public findUserByIdentifier(emailOrCode: string): User | null {
     const search = emailOrCode.trim().toLowerCase();
-    const found = this.state.users.find(
+    return this.state.users.find(
       u => u.email.toLowerCase() === search || 
            u.friend_code.toLowerCase() === search ||
            `${u.first_name} ${u.last_name}`.toLowerCase() === search
-    );
-    if (found) {
-      this.setCurrentUserId(found.user_id);
-      return found;
+    ) || null;
+  }
+
+  public authenticateUser(emailOrCode: string, password?: string): { user: User | null; wrongPassword?: boolean } {
+    const found = this.findUserByIdentifier(emailOrCode);
+    if (!found) return { user: null };
+    if (found.password && password && found.password !== password) {
+      return { user: null, wrongPassword: true };
     }
-    return null;
+    if (!found.password && password) {
+      found.password = password;
+    }
+    this.setCurrentUserId(found.user_id);
+    return { user: found };
+  }
+
+  public loginUser(emailOrCode: string, password?: string): User | null {
+    const res = this.authenticateUser(emailOrCode, password);
+    return res.user;
   }
 
   public getAllUsers(): User[] {
@@ -632,6 +709,19 @@ class MockDatabaseEngine {
       breakdown
     };
     this.state.bsas_assessments.unshift(newAssessment);
+    
+    // Add real notification for BSAS assessment
+    if (!this.state.notifications) this.state.notifications = [];
+    this.state.notifications.unshift({
+      id: `notif-bsas-${Date.now()}`,
+      user_id: targetUid,
+      title: 'BSAS assessment logged',
+      message: `Your BSAS assessment baseline has been logged successfully (Score: ${score}/28, ${risk_level}).`,
+      time: 'Just now',
+      type: 'system',
+      read: false
+    });
+
     this.notify();
     return newAssessment;
   }
@@ -690,6 +780,22 @@ class MockDatabaseEngine {
       this.notify();
     }
     return log;
+  }
+
+  public createDailyLog(dateString: string, title?: string): DailyClothingLog {
+    const targetUid = this.currentUserId || 'a0000000-0000-0000-0000-000000000001';
+    const newLog: DailyClothingLog = {
+      log_id: Date.now() + Math.floor(Math.random() * 1000),
+      user_id: toCanonicalUserId(targetUid),
+      log_date: dateString,
+      title: title || 'Outfit Entry',
+      is_finalized: false,
+      finalized_at: null,
+      items: []
+    };
+    this.state.daily_clothing_logs.unshift(newLog);
+    this.notify();
+    return newLog;
   }
 
   public updateTodayLogItems(logId: number, items: ClothingItem[]): DailyClothingLog | null {
@@ -804,7 +910,7 @@ class MockDatabaseEngine {
       request_id: Date.now(),
       sender_id: currentUser.user_id,
       receiver_id: targetUser.user_id,
-      status: 'pending',
+      status: 'accepted',
       updated_at: new Date().toISOString()
     };
 
@@ -815,8 +921,8 @@ class MockDatabaseEngine {
     this.state.notifications.unshift({
       id: `notif-fr-${Date.now()}`,
       user_id: targetUser.user_id,
-      title: `${currentUser.first_name} sent a friend request to ${targetUser.first_name}`,
-      message: `${currentUser.first_name} ${currentUser.last_name} (${currentUser.friend_code}) sent you a friend request.`,
+      title: `${currentUser.first_name} added you as a friend!`,
+      message: `${currentUser.first_name} ${currentUser.last_name} (${currentUser.friend_code}) connected with you using your friend code.`,
       time: 'Just now',
       type: 'friend_request',
       read: false,
@@ -828,7 +934,7 @@ class MockDatabaseEngine {
     });
 
     this.notify();
-    return { success: true, message: `Friend request sent to ${targetUser.first_name} ${targetUser.last_name}!` };
+    return { success: true, message: `Connected with ${targetUser.first_name} ${targetUser.last_name}! Added to your friends list.` };
   }
 
   public respondToFriendRequest(requestId: number, newStatus: 'accepted' | 'rejected') {
@@ -877,6 +983,23 @@ class MockDatabaseEngine {
     }
   }
 
+  public markNotificationAsRead(notificationId: string) {
+    if (this.state.notifications) {
+      const n = this.state.notifications.find(item => item.id === notificationId);
+      if (n) {
+        n.read = true;
+        this.notify();
+      }
+    }
+  }
+
+  public deleteNotification(notificationId: string) {
+    if (this.state.notifications) {
+      this.state.notifications = this.state.notifications.filter(item => item.id !== notificationId);
+      this.notify();
+    }
+  }
+
   public getBorrows(): Borrow[] {
     return this.state.borrows.map(b => {
       const item = this.state.clothing_items.find(i => i.item_id === b.item_id);
@@ -897,6 +1020,23 @@ class MockDatabaseEngine {
       created_at: new Date().toISOString()
     };
     this.state.borrows.unshift(newBorrow);
+
+    // Notify lender of incoming borrow request
+    const item = this.state.clothing_items.find(i => i.item_id === itemId);
+    const borrower = this.getCurrentUser();
+    if (item && item.user_id) {
+      if (!this.state.notifications) this.state.notifications = [];
+      this.state.notifications.unshift({
+        id: `notif-req-${Date.now()}`,
+        user_id: item.user_id,
+        title: `New borrow request!`,
+        message: `${borrower?.first_name || 'A friend'} requested to borrow "${item.name}" from ${startDate} to ${endDate}.`,
+        time: 'Just now',
+        type: 'borrow',
+        read: false
+      });
+    }
+
     this.notify();
     return newBorrow;
   }
@@ -906,6 +1046,13 @@ class MockDatabaseEngine {
     if (b) {
       b.status = status;
       const item = this.state.clothing_items.find(i => i.item_id === b.item_id);
+      if (item) {
+        if (status === 'Accepted') {
+          item.status = 'Borrowed';
+        } else if (status === 'Returned' || status === 'Rejected') {
+          item.status = 'Available';
+        }
+      }
       const lender = this.getCurrentUser();
       if (!this.state.notifications) this.state.notifications = [];
       if (status === 'Accepted') {
@@ -924,6 +1071,16 @@ class MockDatabaseEngine {
           user_id: b.borrower_id,
           title: `Item marked as returned`,
           message: `"${item?.name || 'clothing item'}" has been marked as returned to ${lender?.first_name || 'owner'}. Thank you for mindful borrowing!`,
+          time: 'Just now',
+          type: 'borrow',
+          read: false
+        });
+      } else if (status === 'Rejected') {
+        this.state.notifications.unshift({
+          id: `notif-dec-${Date.now()}`,
+          user_id: b.borrower_id,
+          title: `Borrow request declined`,
+          message: `${lender?.first_name || 'Owner'} was unable to approve your request for "${item?.name || 'clothing item'}".`,
           time: 'Just now',
           type: 'borrow',
           read: false
@@ -1270,7 +1427,9 @@ export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; 
               item_id: data.item_id,
               tag_id: t.tag_id
             }));
-            await supabase.from('item_tag').insert(tagsPayload).catch(() => {});
+            try {
+              await supabase.from('item_tag').insert(tagsPayload);
+            } catch {}
           }
         }
       }

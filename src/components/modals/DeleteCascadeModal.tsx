@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
 
@@ -15,10 +15,21 @@ export const DeleteCascadeModal: React.FC<DeleteCascadeModalProps> = ({
   onClose,
   onConfirmDelete
 }) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+
   if (!isOpen || !garment) return null;
 
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onConfirmDelete(garment.item_id);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <div className="modalScrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modalScrim" onClick={(e) => { if (e.target === e.currentTarget && !isDeleting) onClose(); }}>
       <div className="modal" style={{ maxWidth: 420, width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <div style={{
@@ -43,17 +54,18 @@ export const DeleteCascadeModal: React.FC<DeleteCascadeModalProps> = ({
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" className="btn btn-g" onClick={onClose}>
+          <button type="button" className="btn btn-g" disabled={isDeleting} onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
             className="btn btn-p"
-            style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}
-            onClick={() => onConfirmDelete(garment.item_id)}
+            disabled={isDeleting}
+            style={{ background: 'var(--danger)', borderColor: 'var(--danger)', opacity: isDeleting ? 0.7 : 1 }}
+            onClick={handleDelete}
           >
             <Trash2 className="ico" style={{ width: 13, height: 13 }} />
-            <span>Yes, Delete Item</span>
+            <span>{isDeleting ? 'Deleting...' : 'Yes, Delete Item'}</span>
           </button>
         </div>
       </div>

@@ -47,6 +47,14 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
   const [toDate, setToDate] = useState(defaultTo);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setFromDate(new Date().toISOString().slice(0, 10));
+      setToDate(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+      setErrorMsg(null);
+    }
+  }, [isOpen, garment?.item_id]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);

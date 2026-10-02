@@ -4,6 +4,10 @@ import { Search, Navigation, RefreshCw } from 'lucide-react';
 interface CascadingFiltersProps {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+  selectedRegion: string;
+  setSelectedRegion: (r: string) => void;
+  selectedBarangay: string;
+  setSelectedBarangay: (b: string) => void;
   selectedCountry: string;
   setSelectedCountry: (c: string) => void;
   selectedProvince: string;
@@ -18,8 +22,8 @@ interface CascadingFiltersProps {
   setOnlyActiveDrives: (val: boolean) => void;
   onLocateMe: () => void;
   locatingUser: boolean;
-  isScraping: boolean;
-  onTriggerScrape: (country?: string, province?: string, city?: string) => void;
+  availableRegions: string[];
+  availableBarangays: string[];
   availableCountries: string[];
   availableProvinces: string[];
   availableCities: string[];
@@ -28,6 +32,10 @@ interface CascadingFiltersProps {
 export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
   searchQuery,
   setSearchQuery,
+  selectedRegion,
+  setSelectedRegion,
+  selectedBarangay,
+  setSelectedBarangay,
   selectedCountry,
   setSelectedCountry,
   selectedProvince,
@@ -42,14 +50,16 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
   setOnlyActiveDrives,
   onLocateMe,
   locatingUser,
-  isScraping,
-  onTriggerScrape,
+  availableRegions,
+  availableBarangays,
   availableCountries,
   availableProvinces,
   availableCities
 }) => {
   const isFiltered = Boolean(
     searchQuery ||
+    selectedRegion !== 'all' ||
+    selectedBarangay !== 'all' ||
     selectedCountry !== 'Philippines' ||
     selectedProvince !== 'all' ||
     selectedCity !== 'all' ||
@@ -59,6 +69,8 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
   );
 
   const handleReset = () => {
+    setSelectedRegion('all');
+    setSelectedBarangay('all');
     setSelectedCountry('Philippines');
     setSelectedProvince('all');
     setSelectedCity('all');
@@ -66,7 +78,6 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
     setSelectedCategory('all');
     setMaxDistanceKm('all');
     setOnlyActiveDrives(false);
-    onTriggerScrape('Philippines', 'all', 'all');
   };
 
   return (
@@ -106,8 +117,45 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
         </button>
       </div>
 
-      {/* Cascading Dropdowns: Country -> Province -> City -> Distance */}
+      {/* Cascading Dropdowns: Region -> Barangay -> Country -> Province -> City -> Distance */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
+        {/* Region Dropdown (TC_DONATE_01, 02) */}
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Region</label>
+          <select
+            value={selectedRegion}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSelectedRegion(val);
+              setSelectedBarangay('all');
+            }}
+            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
+          >
+            <option value="all">All Regions</option>
+            {availableRegions.map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Barangay Dropdown (TC_DONATE_01, 03, 05) */}
+        <div>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Barangay</label>
+          <select
+            value={selectedBarangay}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSelectedBarangay(val);
+            }}
+            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
+          >
+            <option value="all">All Barangays</option>
+            {availableBarangays.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Country</label>
           <select
@@ -117,7 +165,6 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
               setSelectedCountry(val);
               setSelectedProvince('all');
               setSelectedCity('all');
-              onTriggerScrape(val, 'all', 'all');
             }}
             style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
           >
@@ -128,18 +175,17 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
         </div>
 
         <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Province / Region</label>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Province / Area</label>
           <select
             value={selectedProvince}
             onChange={(e) => {
               const val = e.target.value;
               setSelectedProvince(val);
               setSelectedCity('all');
-              onTriggerScrape(selectedCountry, val, 'all');
             }}
             style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
           >
-            <option value="all">All Provinces / Regions</option>
+            <option value="all">All Provinces</option>
             {availableProvinces.map(p => (
               <option key={p} value={p}>{p}</option>
             ))}
@@ -153,7 +199,6 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
             onChange={(e) => {
               const val = e.target.value;
               setSelectedCity(val);
-              onTriggerScrape(selectedCountry, selectedProvince, val);
             }}
             disabled={selectedProvince === 'all'}
             style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
@@ -216,13 +261,6 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
           </button>
         )}
       </div>
-
-      {isScraping && (
-        <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)' }}>
-          <RefreshCw className="ico" style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
-          <span>Webscraping active clothing donation drives in <strong>{selectedCity !== 'all' ? selectedCity : selectedProvince !== 'all' ? selectedProvince : selectedCountry !== 'all' ? selectedCountry : 'the selected area'}</strong>...</span>
-        </div>
-      )}
     </div>
   );
 };

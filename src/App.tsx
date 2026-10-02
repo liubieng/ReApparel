@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { mockDatabase, getStoredSupabaseConfig } from './services/supabaseClient';
+import { 
+  mockDatabase, 
+  getStoredSupabaseConfig, 
+  safeStorage, 
+  STORAGE_KEY_ACTIVE_USER, 
+  STORAGE_KEY_ACTIVE_VIEW 
+} from './services/supabaseClient';
 import { closetService } from './services/closetService';
 import { friendsService } from './services/friendsService';
 import { mapsService } from './services/mapsService';
@@ -12,7 +18,8 @@ import {
   DailyClothingLog, 
   FriendRequest, 
   Borrow, 
-  DonationOpportunity 
+  DonationOpportunity,
+  AppNotification 
 } from './types/database';
 
 // Modular view components
@@ -26,6 +33,8 @@ import { LendingDashboardView } from './views/LendingDashboardView';
 import { ProfileView } from './views/ProfileView';
 import { SettingsView } from './views/SettingsView';
 import { DonationMapSection } from './views/DonationMapSection';
+import { NotificationsView } from './views/NotificationsView';
+import { ClosetStatisticsView } from './views/ClosetStatisticsView';
 
 // Layout & Modal dialog components
 import { Sidebar } from './components/layout/Sidebar';
@@ -37,6 +46,7 @@ import { BorrowModal } from './components/modals/BorrowModal';
 import { DeleteCascadeModal } from './components/modals/DeleteCascadeModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { DatabaseModal } from './components/modals/DatabaseModal';
+import { BrainCircuit } from 'lucide-react';
 
 /**
  * ============================================================================
@@ -51,27 +61,61 @@ import { DatabaseModal } from './components/modals/DatabaseModal';
  *   3. Daily Outfit Tracking & Midnight Cron Finalization (DailyLogView)
  *   4. Longitudinal BSAS Recovery Tracking & Analytics (RecoveryView)
  *   5. Peer-to-Peer Garment Lending with Conflict Guard (FriendsView, BorrowModal, LendingDashboardView)
- *   6. Geolocation Textile Drop-off & Scraping (DonationMapSection)
+ *   6. Community Clothing Donation Drives & Geolocation (DonationMapSection)
  *   7. Hybrid Storage Orchestration (mockDatabase <-> Supabase PostgreSQL)
  */
+
+// Valid authenticated view routes
+const VALID_VIEWS = new Set([
+  'closet', 
+  'daily-log', 
+  'recovery', 
+  'closet-statistics', 
+  'notifications', 
+  'requests', 
+  'friends', 
+  'donations', 
+  'profile', 
+  'settings',
+  'bsasIntro',
+  'bsas'
+]);
 
 export default function App() {
   // Theme State (Persisted in localStorage)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('reapparel_theme') as 'light' | 'dark') || 'light';
+    return (safeStorage.getItem('reapparel_theme') as 'light' | 'dark') || 'light';
   });
 
-  // Current Active Route / View
-  const [view, setView] = useState<string>('login');
+  // Current Active Route / View (Persisted in localStorage across page reloads)
+  const [view, setView] = useState<string>(() => {
+    const user = mockDatabase.getCurrentUser();
+    const hasActiveId = Boolean(safeStorage.getItem(STORAGE_KEY_ACTIVE_USER));
+    // If no user is logged in, start on login view
+    if (!user && !hasActiveId) {
+      return 'login';
+    }
+    const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
+    if (saved && VALID_VIEWS.has(saved)) {
+      return saved;
+    }
+    return 'closet';
+  });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Core Entity State
   const [currentUser, setCurrentUser] = useState<User | null>(mockDatabase.getCurrentUser());
+  const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(() => {
+    const activeId = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER);
+    const user = mockDatabase.getCurrentUser();
+    return Boolean(activeId && !user);
+  });
   const [allUsers, setAllUsers] = useState<User[]>(mockDatabase.getAllUsers());
   const [garments, setGarments] = useState<ClothingItem[]>([]);
   const [friends, setFriends] = useState<User[]>([]);
   const [borrows, setBorrows] = useState<Borrow[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [opportunities, setOpportunities] = useState<DonationOpportunity[]>([]);
   const [assessments, setAssessments] = useState<BSASAssessment[]>([]);
   const [todayLog, setTodayLog] = useState<DailyClothingLog>({
@@ -121,8 +165,17 @@ export default function App() {
   // Synchronize CSS Theme Variable
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem('reapparel_theme', theme);
+    safeStorage.setItem('reapparel_theme', theme);
   }, [theme]);
+
+  // Synchronize Active View State in LocalStorage
+  useEffect(() => {
+    if (currentUser && view && view !== 'login') {
+      safeStorage.setItem(STORAGE_KEY_ACTIVE_VIEW, view);
+    } else if (!currentUser || view === 'login') {
+      safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
+    }
+  }, [view, currentUser]);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
@@ -130,11 +183,24 @@ export default function App() {
 
   // Master Data Refresh Callback
   const loadData = useCallback(async () => {
-    const user = mockDatabase.getCurrentUser();
+    let user = mockDatabase.getCurrentUser();
+    if (!user && safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
+      user = await mockDatabase.syncCurrentUserWithSupabase();
+    }
     setCurrentUser(user);
+    setIsAuthInitializing(false);
     setAllUsers(mockDatabase.getAllUsers());
 
     if (user) {
+      // Ensure authenticated users are transitioned away from the login screen
+      setView(prev => {
+        if (prev === 'login') {
+          const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
+          return (saved && VALID_VIEWS.has(saved)) ? saved : 'closet';
+        }
+        return prev;
+      });
+
       const items = await closetService.getItems(user.user_id);
       setGarments(items);
 
@@ -147,7 +213,13 @@ export default function App() {
       setFriends(friendsService.getConnectedFriends());
       setFriendRequests(friendsService.getFriendRequests());
       setBorrows(friendsService.getBorrows());
+      setNotifications(friendsService.getNotifications(user.user_id));
     } else {
+      if (safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
+        mockDatabase.setCurrentUserId(null);
+      }
+      safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
+      setView('login');
       const items = await closetService.getItems();
       setGarments(items);
       const userAssessments = await closetService.getAssessments();
@@ -157,6 +229,7 @@ export default function App() {
       setFriends([]);
       setFriendRequests([]);
       setBorrows([]);
+      setNotifications([]);
     }
     const allLogs = await closetService.getDailyLogs();
     setDailyLogs(allLogs);
@@ -183,7 +256,9 @@ export default function App() {
     if (isNewUser) {
       setView('bsasIntro'); // New users complete baseline check-in
     } else {
-      setView('closet');
+      const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
+      const targetView = (saved && VALID_VIEWS.has(saved) && saved !== 'login') ? saved : 'closet';
+      setView(targetView);
     }
   };
 
@@ -198,18 +273,19 @@ export default function App() {
   // Logout Flow
   const handleLogout = () => {
     mockDatabase.setCurrentUserId(null);
+    safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
     setCurrentUser(null);
     setView('login');
     toast('Logged out successfully.');
   };
 
   // BSAS Check-In Completed
-  const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>) => {
+  const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>, targetView: 'closet' | 'recovery' = 'closet') => {
     const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || 'a0000000-0000-0000-0000-000000000001';
     await closetService.submitAssessment(score, breakdown, activeUid);
     await loadData();
     toast(score >= 4 ? 'Check-in saved: Indicative risk identified' : 'Check-in saved: Non-Indicative risk level');
-    setView('recovery');
+    setView(targetView);
   };
 
   // Garment Management: Add, Edit, Delete, Quick Wear Increment
@@ -235,32 +311,43 @@ export default function App() {
   };
 
   // Daily Outfit Log Handlers
-  const handleToggleGarmentInOutfit = async (garment: ClothingItem) => {
-    if (todayLog.is_finalized) {
-      toast("Today's outfit is already locked & finalized.");
+  const handleToggleGarmentInOutfit = async (garment: ClothingItem, targetLogId?: number) => {
+    const targetId = targetLogId || todayLog.log_id;
+    const targetLog = dailyLogs.find(l => l.log_id === targetId) || todayLog;
+    if (targetLog.is_finalized) {
+      toast("This outfit record is already locked & finalized.");
       return;
     }
-    const current = todayLog.items || [];
+    const current = targetLog.items || [];
     const exists = current.some(i => i.item_id === garment.item_id);
     const updated = exists 
       ? current.filter(i => i.item_id !== garment.item_id)
       : [...current, garment];
 
-    await closetService.updateTodayItems(todayLog.log_id, updated);
+    await closetService.updateTodayItems(targetId, updated);
     await loadData();
-    toast(exists ? `Removed ${garment.name} from today's outfit` : `Added ${garment.name} to today's outfit`);
+    toast(exists ? `Removed ${garment.name} from outfit` : `Added ${garment.name} to outfit`);
   };
 
-  const handleFinalizeDailyLog = async () => {
-    await closetService.finalizeDailyLog(todayLog.log_id);
+  const handleFinalizeDailyLog = async (targetLogId?: number) => {
+    const targetId = targetLogId || todayLog.log_id;
+    await closetService.finalizeDailyLog(targetId);
     await loadData();
     toast("Outfit finalized! Cumulative wear counts updated.");
   };
 
-  const handleDeleteDailyLog = async () => {
-    await closetService.deleteDailyLog(todayLog.log_id);
+  const handleDeleteDailyLog = async (targetLogId?: number) => {
+    const targetId = targetLogId || todayLog.log_id;
+    await closetService.deleteDailyLog(targetId);
     await loadData();
-    toast("Today's outfit log cleared.");
+    toast("Outfit record cleared / unlocked.");
+  };
+
+  const handleCreateDailyLog = async (dateStr: string, title: string) => {
+    const newLog = await closetService.createDailyLog(dateStr, title);
+    await loadData();
+    toast(`Created new outfit record: ${title}`);
+    return newLog;
   };
 
   const handleSimulateMidnight = async () => {
@@ -285,6 +372,7 @@ export default function App() {
   // Borrow Request & Lending Actions
   const handleSubmitBorrow = (itemId: number, fromDate: string, toDate: string) => {
     friendsService.requestBorrow(itemId, fromDate, toDate);
+    setBorrowContext(null);
     setView('requests');
     loadData();
   };
@@ -332,6 +420,8 @@ export default function App() {
       onConfirm: async () => {
         try {
           await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
+          mockDatabase.setCurrentUserId(null);
+          safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
           setCurrentUser(null);
           setView('login');
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -342,6 +432,29 @@ export default function App() {
         }
       }
     });
+  };
+
+  // Notification Management Handlers
+  const handleClearNotifications = () => {
+    if (currentUser) {
+      friendsService.clearNotifications(currentUser.user_id);
+      setNotifications([]);
+      toast('Notifications cleared');
+    }
+  };
+
+  const handleDeleteNotification = (notifId: string) => {
+    friendsService.deleteNotification(notifId);
+    if (currentUser) {
+      setNotifications(friendsService.getNotifications(currentUser.user_id));
+    }
+  };
+
+  const handleMarkNotificationRead = (notifId: string) => {
+    friendsService.markNotificationAsRead(notifId);
+    if (currentUser) {
+      setNotifications(friendsService.getNotifications(currentUser.user_id));
+    }
   };
 
   // Pending Counts for Nav Badges
@@ -355,9 +468,31 @@ export default function App() {
       b.status === 'Pending'
   ).length;
 
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
   // --------------------------------------------------------------------------
   // STANDALONE / ONBOARDING SCREENS
   // --------------------------------------------------------------------------
+
+  // 0. Session Initializing Screen (prevents flicker of login view during active session hydration)
+  if (isAuthInitializing) {
+    return (
+      <div className="center-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            border: '3px solid var(--border)',
+            borderTopColor: 'var(--primary)',
+            borderRadius: '50%',
+            margin: '0 auto 12px',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+          <p style={{ margin: 0, fontSize: 13 }}>Restoring your wardrobe...</p>
+        </div>
+      </div>
+    );
+  }
 
   // 1. Auth View
   if (view === 'login' || !currentUser) {
@@ -415,6 +550,7 @@ export default function App() {
         currentUser={currentUser}
         pendingBorrowsCount={pendingBorrowsCount}
         pendingFriendsCount={pendingFriendsCount}
+        unreadNotificationsCount={unreadNotificationsCount}
         isBSASDue={isBSASDue}
         onSelectView={(viewId) => { setView(viewId); setIsMobileSidebarOpen(false); }}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -424,12 +560,14 @@ export default function App() {
 
       {/* Main Viewport */}
       <div className="main">
-        {/* Mobile Top Header */}
+        {/* Mobile & Desktop Top Header with User Chip */}
         <Header
           currentView={view}
           theme={theme}
+          currentUser={currentUser}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           onToggleTheme={toggleTheme}
+          onNavigateToProfile={() => setView('profile')}
         />
 
         {/* View Router */}
@@ -453,6 +591,7 @@ export default function App() {
               onToggleGarmentInOutfit={handleToggleGarmentInOutfit}
               onFinalizeLog={handleFinalizeDailyLog}
               onDeleteLog={handleDeleteDailyLog}
+              onCreateNewOutfit={handleCreateDailyLog}
               onSimulateMidnight={handleSimulateMidnight}
               onNavigateToCloset={() => setView('closet')}
               toast={toast}
@@ -463,6 +602,7 @@ export default function App() {
             <RecoveryView
               assessments={assessments}
               garments={garments}
+              borrows={borrows}
               simulatedDaysOffset={simulatedDaysOffset}
               onSimulateCooldownAdvance={() => {
                 setSimulatedDaysOffset(prev => prev + 30);
@@ -471,8 +611,34 @@ export default function App() {
               onStartRetakeAssessment={() => setView('bsas')}
               onNavigateToCloset={() => setView('closet')}
               onNavigateToDailyLog={() => setView('daily-log')}
+              onNavigateToStatistics={() => setView('closet-statistics')}
               onEditGarment={(g) => setEditingGarment(g)}
               onOpenAddGarment={() => setIsAddGarmentOpen(true)}
+            />
+          )}
+
+          {view === 'closet-statistics' && (
+            <ClosetStatisticsView
+              garments={garments}
+              onNavigateToRecovery={() => setView('recovery')}
+              onNavigateToCloset={() => setView('closet')}
+            />
+          )}
+
+          {view === 'notifications' && currentUser && (
+            <NotificationsView
+              currentUser={currentUser}
+              borrows={borrows}
+              friendRequests={friendRequests}
+              notifications={notifications}
+              onAcceptBorrow={(borrowId) => handleRespondBorrow(borrowId, 'Accepted')}
+              onDenyBorrow={(borrowId) => handleRespondBorrow(borrowId, 'Rejected')}
+              onAcceptFriend={(requestId) => handleAcceptFriendRequest(requestId)}
+              onDenyFriend={(requestId) => handleRejectFriendRequest(requestId)}
+              onNavigateToRequests={() => setView('requests')}
+              onClearNotifications={handleClearNotifications}
+              onDeleteNotification={handleDeleteNotification}
+              onMarkNotificationRead={handleMarkNotificationRead}
             />
           )}
 
@@ -482,6 +648,7 @@ export default function App() {
               borrows={borrows}
               onCancelBorrow={handleCancelBorrow}
               onRespondBorrow={handleRespondBorrow}
+              onNavigateToFriends={() => setView('friends')}
               toast={toast}
             />
           )}
@@ -493,7 +660,16 @@ export default function App() {
               friendRequests={friendRequests}
               onAcceptFriendRequest={handleAcceptFriendRequest}
               onRejectFriendRequest={handleRejectFriendRequest}
-              onInitiateBorrow={(friend, item) => setBorrowContext({ friend, garment: item })}
+              onInitiateBorrow={(friend, item) => {
+                const isBorrowed = item.status === 'Borrowed' || 
+                                   item.is_active === false || 
+                                   item.tags?.some(t => (typeof t === 'string' ? t : t.tag_name) === 'Borrowed');
+                if (isBorrowed) {
+                  toast('This garment is currently borrowed or inactive and cannot be requested.');
+                  return;
+                }
+                setBorrowContext({ friend, garment: item });
+              }}
               onRefreshData={loadData}
               toast={toast}
             />
@@ -501,15 +677,6 @@ export default function App() {
 
           {view === 'donations' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h2 style={{ margin: 0, fontSize: 22, fontFamily: 'var(--font-display)' }}>
-                  Donation Drop-Off Map &amp; Live Drives
-                </h2>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {opportunities.length} drop-off hubs verified
-                </span>
-              </div>
-
               <DonationMapSection
                 opportunities={opportunities}
                 currentUserLocation={null}
@@ -521,14 +688,19 @@ export default function App() {
             </div>
           )}
 
-          {view === 'profile' && (
+          {view === 'profile' && currentUser && (
             <ProfileView
               currentUser={currentUser}
               allUsers={allUsers}
               garments={garments}
               borrows={borrows}
+              assessments={assessments}
+              friendsCount={friends.length}
               onSwitchUser={handleSwitchUser}
               onDeleteAccount={handleDeleteAccount}
+              onLogout={handleLogout}
+              onNavigateToView={(v) => setView(v)}
+              onStartRetakeAssessment={() => setView('bsas')}
               toast={toast}
             />
           )}
@@ -538,6 +710,7 @@ export default function App() {
               theme={theme}
               onToggleTheme={toggleTheme}
               onOpenDatabaseModal={() => setIsDatabaseModalOpen(true)}
+              onDeleteAccount={handleDeleteAccount}
               toast={toast}
             />
           )}
@@ -612,6 +785,58 @@ export default function App() {
         onConfigUpdated={loadData}
         toast={toast}
       />
+
+      {/* Mandatory Monthly BSAS Retake Overlay / Restriction (TC_RET_01, TC_RET_02) */}
+      {isBSASDue && assessments.length > 0 && view !== 'bsas' && (
+        <div className="modalScrim" style={{ zIndex: 1100, background: 'rgba(0, 0, 0, 0.75)' }}>
+          <div className="modal" style={{ maxWidth: 520, width: '100%', textAlign: 'center', padding: 28, borderRadius: 16 }}>
+            <div style={{
+              width: 56,
+              height: 56,
+              borderRadius: '50%',
+              background: 'var(--primary-soft, rgba(5, 150, 105, 0.15))',
+              color: 'var(--primary, #059669)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px'
+            }}>
+              <BrainCircuit style={{ width: 32, height: 32 }} />
+            </div>
+
+            <h3 style={{ margin: '0 0 8px', fontSize: 20, fontFamily: 'var(--font-display)' }}>
+              Mandatory Monthly BSAS Retake Due
+            </h3>
+            
+            <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
+              Your previous BSAS assessment was completed over <strong>30 days ago</strong>. A mandatory monthly retake is required to assess your current shopping habits before normal access is granted.
+            </p>
+
+            <div style={{
+              padding: '12px 16px',
+              borderRadius: 8,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              fontSize: 12.5,
+              color: 'var(--text-muted)',
+              marginBottom: 20,
+              textAlign: 'left'
+            }}>
+              <strong style={{ color: 'var(--text)', display: 'block', marginBottom: 4 }}>Notice:</strong>
+              The BSAS assessment is required to be retaken before normal access to your virtual closet, friend sharing, and logging is granted.
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-p"
+              style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, justifyContent: 'center', borderRadius: 24 }}
+              onClick={() => setView('bsas')}
+            >
+              Take Mandatory BSAS Assessment Now
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
