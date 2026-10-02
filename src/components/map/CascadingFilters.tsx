@@ -1,79 +1,67 @@
 import React from 'react';
-import { Search, Navigation, RefreshCw } from 'lucide-react';
+import { Search, Navigation, MapPin } from 'lucide-react';
 
 interface CascadingFiltersProps {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  selectedRegion: string;
-  setSelectedRegion: (r: string) => void;
-  selectedBarangay: string;
-  setSelectedBarangay: (b: string) => void;
-  selectedCountry: string;
-  setSelectedCountry: (c: string) => void;
-  selectedProvince: string;
-  setSelectedProvince: (p: string) => void;
-  selectedCity: string;
-  setSelectedCity: (ct: string) => void;
-  selectedCategory: string;
-  setSelectedCategory: (cat: string) => void;
   maxDistanceKm: number | 'all';
   setMaxDistanceKm: (dist: number | 'all') => void;
+  selectedCategory: string;
+  setSelectedCategory: (cat: string) => void;
   onlyActiveDrives: boolean;
   setOnlyActiveDrives: (val: boolean) => void;
   onLocateMe: () => void;
   locatingUser: boolean;
-  availableRegions: string[];
-  availableBarangays: string[];
-  availableCountries: string[];
-  availableProvinces: string[];
-  availableCities: string[];
+  userLocation?: { lat: number; lng: number } | null;
+  // Optional for backward compatibility with callers
+  selectedRegion?: string;
+  setSelectedRegion?: (r: string) => void;
+  selectedBarangay?: string;
+  setSelectedBarangay?: (b: string) => void;
+  selectedCountry?: string;
+  setSelectedCountry?: (c: string) => void;
+  selectedProvince?: string;
+  setSelectedProvince?: (p: string) => void;
+  selectedCity?: string;
+  setSelectedCity?: (ct: string) => void;
+  availableRegions?: string[];
+  availableBarangays?: string[];
+  availableCountries?: string[];
+  availableProvinces?: string[];
+  availableCities?: string[];
 }
 
 export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
   searchQuery,
   setSearchQuery,
-  selectedRegion,
-  setSelectedRegion,
-  selectedBarangay,
-  setSelectedBarangay,
-  selectedCountry,
-  setSelectedCountry,
-  selectedProvince,
-  setSelectedProvince,
-  selectedCity,
-  setSelectedCity,
-  selectedCategory,
-  setSelectedCategory,
   maxDistanceKm,
   setMaxDistanceKm,
+  selectedCategory,
+  setSelectedCategory,
   onlyActiveDrives,
   setOnlyActiveDrives,
   onLocateMe,
   locatingUser,
-  availableRegions,
-  availableBarangays,
-  availableCountries,
-  availableProvinces,
-  availableCities
+  userLocation,
+  setSelectedRegion,
+  setSelectedBarangay,
+  setSelectedCountry,
+  setSelectedProvince,
+  setSelectedCity
 }) => {
   const isFiltered = Boolean(
     searchQuery ||
-    selectedRegion !== 'all' ||
-    selectedBarangay !== 'all' ||
-    selectedCountry !== 'Philippines' ||
-    selectedProvince !== 'all' ||
-    selectedCity !== 'all' ||
     selectedCategory !== 'all' ||
     maxDistanceKm !== 'all' ||
     onlyActiveDrives
   );
 
   const handleReset = () => {
-    setSelectedRegion('all');
-    setSelectedBarangay('all');
-    setSelectedCountry('Philippines');
-    setSelectedProvince('all');
-    setSelectedCity('all');
+    if (setSelectedRegion) setSelectedRegion('all');
+    if (setSelectedBarangay) setSelectedBarangay('all');
+    if (setSelectedCountry) setSelectedCountry('Philippines');
+    if (setSelectedProvince) setSelectedProvince('all');
+    if (setSelectedCity) setSelectedCity('all');
     setSearchQuery('');
     setSelectedCategory('all');
     setMaxDistanceKm('all');
@@ -83,12 +71,12 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
   return (
     <div className="card" style={{ padding: '14px 16px', marginBottom: 12 }}>
       {/* Top Search & Locate Me */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
           <Search className="ico" style={{ position: 'absolute', left: 10, color: 'var(--text-muted)', width: 15, height: 15 }} />
           <input
             type="text"
-            placeholder="Search verified drop-off centers, items (e.g. jackets, uniforms), or location..."
+            placeholder="Search drop-off centers, items, cities, or keywords..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ paddingLeft: 32, width: '100%', fontSize: 13, margin: 0, borderRadius: 8 }}
@@ -107,7 +95,7 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
         <button
           type="button"
           className="btn btn-g"
-          style={{ padding: '7px 12px', fontSize: 12, flexShrink: 0 }}
+          style={{ padding: '7px 12px', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5 }}
           onClick={onLocateMe}
           disabled={locatingUser}
           title="Auto-center map on your device GPS coordinates"
@@ -117,117 +105,94 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
         </button>
       </div>
 
-      {/* Cascading Dropdowns: Region -> Barangay -> Country -> Province -> City -> Distance */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
-        {/* Region Dropdown (TC_DONATE_01, 02) */}
-        <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Region</label>
-          <select
-            value={selectedRegion}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedRegion(val);
-              setSelectedBarangay('all');
-            }}
-            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
-          >
-            <option value="all">All Regions</option>
-            {availableRegions.map(r => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
+      {/* "In My Area" Distance Filter Section */}
+      <div style={{
+        background: 'var(--surface-muted, rgba(0,0,0,0.02))',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        padding: '10px 14px',
+        marginBottom: 10
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MapPin style={{ width: 15, height: 15, color: 'var(--primary)' }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>In My Area</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              {maxDistanceKm === 'all'
+                ? '— Showing all donation drives'
+                : `— Showing drives within ${maxDistanceKm} km`}
+            </span>
+          </div>
+          {userLocation ? (
+            <span style={{
+              fontSize: 11,
+              color: 'var(--primary)',
+              background: 'rgba(22, 101, 52, 0.08)',
+              padding: '2px 8px',
+              borderRadius: 12,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)' }} />
+              Device Location Active
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onLocateMe}
+              disabled={locatingUser}
+              style={{
+                fontSize: 11,
+                background: 'none',
+                border: 'none',
+                color: 'var(--primary)',
+                cursor: 'pointer',
+                fontWeight: 600,
+                textDecoration: 'underline',
+                padding: 0
+              }}
+            >
+              {locatingUser ? 'Acquiring GPS...' : 'Enable GPS location'}
+            </button>
+          )}
         </div>
 
-        {/* Barangay Dropdown (TC_DONATE_01, 03, 05) */}
-        <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Barangay</label>
-          <select
-            value={selectedBarangay}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedBarangay(val);
-            }}
-            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
-          >
-            <option value="all">All Barangays</option>
-            {availableBarangays.map(b => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Country</label>
-          <select
-            value={selectedCountry}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedCountry(val);
-              setSelectedProvince('all');
-              setSelectedCity('all');
-            }}
-            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
-          >
-            {availableCountries.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Province / Area</label>
-          <select
-            value={selectedProvince}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedProvince(val);
-              setSelectedCity('all');
-            }}
-            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
-          >
-            <option value="all">All Provinces</option>
-            {availableProvinces.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>City / Municipality</label>
-          <select
-            value={selectedCity}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedCity(val);
-            }}
-            disabled={selectedProvince === 'all'}
-            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
-          >
-            <option value="all">All Cities</option>
-            {availableCities.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 2 }}>Maximum Distance</label>
-          <select
-            value={maxDistanceKm}
-            onChange={(e) => setMaxDistanceKm(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            style={{ width: '100%', fontSize: 12, padding: '6px 8px', margin: 0 }}
-          >
-            <option value="all">Any distance</option>
-            <option value="5">Within 5 km</option>
-            <option value="10">Within 10 km</option>
-            <option value="25">Within 25 km</option>
-            <option value="50">Within 50 km</option>
-          </select>
+        {/* Distance Radius Pills */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {[
+            { label: 'All Locations', value: 'all' },
+            { label: 'Within 5 km', value: 5 },
+            { label: 'Within 10 km', value: 10 },
+            { label: 'Within 25 km', value: 25 },
+            { label: 'Within 50 km', value: 50 },
+            { label: 'Within 100 km', value: 100 }
+          ].map(option => {
+            const isSelected = maxDistanceKm === option.value;
+            return (
+              <button
+                key={String(option.value)}
+                type="button"
+                className={`btn ${isSelected ? 'btn-p' : 'btn-g'}`}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: isSelected ? 700 : 500,
+                  borderRadius: 20,
+                  transition: 'all 0.15s ease'
+                }}
+                onClick={() => setMaxDistanceKm(option.value as number | 'all')}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Quick category tags and reset */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', paddingTop: 4 }}>
         <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>Quick tags:</span>
         {['Shirts', 'Shoes', 'Jackets', 'Children'].map(cat => {
           const active = selectedCategory.toLowerCase() === cat.toLowerCase();

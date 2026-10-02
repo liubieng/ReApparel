@@ -137,57 +137,40 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     );
   };
 
-  // Center map on location filter changes
-  useEffect(() => {
-    if (selectedBarangay && selectedBarangay !== 'all' && PRESET_COORDINATES[selectedBarangay]) {
-      setMapCenterTarget({
-        lat: PRESET_COORDINATES[selectedBarangay].lat,
-        lng: PRESET_COORDINATES[selectedBarangay].lng,
-        zoom: 15
-      });
-    } else if (selectedRegion && selectedRegion !== 'all' && PRESET_COORDINATES[selectedRegion]) {
-      setMapCenterTarget({
-        lat: PRESET_COORDINATES[selectedRegion].lat,
-        lng: PRESET_COORDINATES[selectedRegion].lng,
-        zoom: 12
-      });
-    } else if (selectedCity && selectedCity !== 'all' && PRESET_COORDINATES[selectedCity]) {
-      setMapCenterTarget({
-        lat: PRESET_COORDINATES[selectedCity].lat,
-        lng: PRESET_COORDINATES[selectedCity].lng,
-        zoom: 14
-      });
-    } else if (selectedProvince && selectedProvince !== 'all' && PRESET_COORDINATES[selectedProvince]) {
-      setMapCenterTarget({
-        lat: PRESET_COORDINATES[selectedProvince].lat,
-        lng: PRESET_COORDINATES[selectedProvince].lng,
-        zoom: 11
-      });
-    } else if (selectedCountry && selectedCountry !== 'all') {
-      getCoordinatesForLocation(
-        selectedCountry,
-        selectedProvince === 'all' ? undefined : selectedProvince,
-        selectedCity === 'all' ? undefined : selectedCity
-      )
-        .then(coords => {
-          if (coords) {
-            setMapCenterTarget({
-              lat: coords.lat,
-              lng: coords.lng,
-              zoom: selectedCity !== 'all' ? 14 : selectedProvince !== 'all' ? 11 : 6
-            });
-          }
-        })
-        .catch(() => {});
+  const handleDistanceChange = (dist: number | 'all') => {
+    setMaxDistanceKm(dist);
+    if (dist !== 'all' && !userLocation && 'geolocation' in navigator) {
+      handleLocateMe();
     }
-  }, [selectedBarangay, selectedRegion, selectedCity, selectedProvince, selectedCountry]);
+  };
+
+  // Center and zoom map when In My Area distance filter changes
+  useEffect(() => {
+    if (maxDistanceKm !== 'all') {
+      const refCoords = userLocation || { lat: 9.3068, lng: 123.3054 };
+      const zoomMap: Record<number, number> = {
+        5: 14,
+        10: 13,
+        25: 11,
+        50: 10,
+        100: 9
+      };
+      const zoom = zoomMap[Number(maxDistanceKm)] || 11;
+      setMapCenterTarget({
+        lat: refCoords.lat,
+        lng: refCoords.lng,
+        zoom
+      });
+    }
+  }, [maxDistanceKm, userLocation]);
 
   // Filter Opportunities with Distance Calculation
   const filteredOpportunities = useMemo(() => {
     return opportunities.map(opp => {
       let dist = opp.distance_km;
-      if (userLocation) {
-        dist = mapsService.calculateDistanceKm(userLocation.lat, userLocation.lng, opp.latitude, opp.longitude);
+      const refLocation = userLocation || { lat: 9.3068, lng: 123.3054 };
+      if (refLocation && typeof opp.latitude === 'number' && typeof opp.longitude === 'number') {
+        dist = mapsService.calculateDistanceKm(refLocation.lat, refLocation.lng, opp.latitude, opp.longitude);
       }
       return { ...opp, calculatedDist: dist };
     }).filter(opp => {
@@ -211,11 +194,15 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const mName = opp.name.toLowerCase().includes(q);
-        const mAddr = opp.address.toLowerCase().includes(q);
+        const mName = (opp.name || '').toLowerCase().includes(q);
+        const mAddr = (opp.address || '').toLowerCase().includes(q);
         const mTypes = (opp.accepted_types || '').toLowerCase().includes(q);
         const mOrg = (opp.organizer || '').toLowerCase().includes(q);
-        if (!mName && !mAddr && !mTypes && !mOrg) return false;
+        const mCity = (opp.city || '').toLowerCase().includes(q);
+        const mProv = (opp.province || '').toLowerCase().includes(q);
+        const mRegion = (opp.region || '').toLowerCase().includes(q);
+        const mBarangay = (opp.barangay || '').toLowerCase().includes(q);
+        if (!mName && !mAddr && !mTypes && !mOrg && !mCity && !mProv && !mRegion && !mBarangay) return false;
       }
       if (selectedCategory !== 'all') {
         const types = (opp.accepted_types || '').toLowerCase();
@@ -284,13 +271,9 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   };
 
-  const selectedLocationLabel = selectedCity !== 'all'
-    ? selectedCity
-    : selectedProvince !== 'all'
-      ? selectedProvince
-      : selectedCountry !== 'all'
-        ? selectedCountry
-        : 'this area';
+  const selectedLocationLabel = maxDistanceKm !== 'all'
+    ? `within ${maxDistanceKm}km of your area`
+    : 'your area';
 
   return (
     <div style={{ marginTop: 8 }}>
@@ -363,11 +346,12 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
             maxDistanceKm={maxDistanceKm}
-            setMaxDistanceKm={setMaxDistanceKm}
+            setMaxDistanceKm={handleDistanceChange}
             onlyActiveDrives={onlyActiveDrives}
             setOnlyActiveDrives={setOnlyActiveDrives}
             onLocateMe={handleLocateMe}
             locatingUser={locatingUser}
+            userLocation={userLocation}
             availableRegions={availableRegions}
             availableBarangays={availableBarangays}
             availableCountries={availableCountries}
@@ -449,19 +433,14 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
                   >
                     <Plus className="ico" style={{ width: 13, height: 13 }} /> Post a Donation Drive
                   </button>
-                  {(selectedCity !== 'all' || selectedProvince !== 'all' || selectedRegion !== 'all' || selectedBarangay !== 'all') && (
+                  {maxDistanceKm !== 'all' && (
                     <button
                       type="button"
                       className="btn btn-g"
                       style={{ fontSize: 12, padding: '7px 16px' }}
-                      onClick={() => {
-                        setSelectedRegion('all');
-                        setSelectedBarangay('all');
-                        setSelectedProvince('all');
-                        setSelectedCity('all');
-                      }}
+                      onClick={() => setMaxDistanceKm('all')}
                     >
-                      View All Regions
+                      Show All Distances
                     </button>
                   )}
                 </div>
