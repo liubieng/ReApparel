@@ -511,97 +511,101 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
               </span>
             </div>
 
-            {/* Filter Bar (matching Virtual Closet section) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-              <button
-                type="button"
-                className={`pill ${closetSelectedTypes.size === 0 && closetSelectedColors.size === 0 ? 'on' : ''}`}
-                style={{
-                  cursor: 'pointer',
-                  padding: '5px 12px',
-                  fontSize: 12,
-                  borderRadius: 20,
-                  background: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
-                  color: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? '#ffffff' : 'var(--text)',
-                  border: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
-                  fontWeight: 600
-                }}
-                onClick={clearClosetFilters}
-              >
-                All
-              </button>
-
-              {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
-                const isSelected = closetSelectedTypes.has(cat);
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    className={`pill ${isSelected ? 'on' : ''}`}
-                    style={{
-                      cursor: 'pointer',
-                      padding: '5px 12px',
-                      fontSize: 12,
-                      borderRadius: 20,
-                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
-                      color: isSelected ? '#ffffff' : 'var(--text)',
-                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                      fontWeight: isSelected ? 600 : 500
-                    }}
-                    onClick={() => toggleClosetType(cat)}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
-
-              <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
-
-              {NORMAL_CLOTHING_COLORS.map(color => {
-                const isSelected = closetSelectedColors.has(color.name);
-                return (
-                  <button
-                    key={color.name}
-                    type="button"
-                    className={`pill ${isSelected ? 'on' : ''}`}
-                    style={{
-                      cursor: 'pointer',
-                      padding: '5px 12px',
-                      fontSize: 12,
-                      borderRadius: 20,
-                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
-                      color: isSelected ? '#ffffff' : 'var(--text)',
-                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                      fontWeight: isSelected ? 600 : 500,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5
-                    }}
-                    onClick={() => toggleClosetColor(color.name)}
-                  >
-                    <span style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: color.hex,
-                      border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
-                      display: 'inline-block'
-                    }} />
-                    {color.name}
-                  </button>
-                );
-              })}
-
-              {hasActiveClosetFilters && (
+            {/* Filter Section (matching Virtual Closet section) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+              {/* Row 1: Garment Types / Categories */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
-                  className="btn btn-g"
-                  style={{ fontSize: 11, padding: '3px 8px', marginLeft: 'auto', color: 'var(--danger)' }}
+                  className={`pill ${closetSelectedTypes.size === 0 && closetSelectedColors.size === 0 ? 'on' : ''}`}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    borderRadius: 20,
+                    background: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
+                    color: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? '#ffffff' : 'var(--text)',
+                    border: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
+                    fontWeight: 600
+                  }}
                   onClick={clearClosetFilters}
                 >
-                  <RotateCcw className="ico" style={{ width: 11, height: 11 }} /> Reset
+                  All
                 </button>
-              )}
+
+                {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
+                  const isSelected = closetSelectedTypes.has(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      className={`pill ${isSelected ? 'on' : ''}`}
+                      style={{
+                        cursor: 'pointer',
+                        padding: '5px 12px',
+                        fontSize: 12,
+                        borderRadius: 20,
+                        background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                        color: isSelected ? '#ffffff' : 'var(--text)',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                        fontWeight: isSelected ? 600 : 500
+                      }}
+                      onClick={() => toggleClosetType(cat)}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+
+                {hasActiveClosetFilters && (
+                  <button
+                    type="button"
+                    className="btn btn-g"
+                    style={{ fontSize: 11, padding: '3px 8px', marginLeft: 'auto', color: 'var(--danger)' }}
+                    onClick={clearClosetFilters}
+                  >
+                    <RotateCcw className="ico" style={{ width: 11, height: 11 }} /> Reset
+                  </button>
+                )}
+              </div>
+
+              {/* Row 2: Color Tags (below garment type tags) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {NORMAL_CLOTHING_COLORS.map(color => {
+                  const isSelected = closetSelectedColors.has(color.name);
+                  return (
+                    <button
+                      key={color.name}
+                      type="button"
+                      className={`pill ${isSelected ? 'on' : ''}`}
+                      style={{
+                        cursor: 'pointer',
+                        padding: '4px 10px',
+                        fontSize: 11.5,
+                        borderRadius: 20,
+                        background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                        color: isSelected ? '#ffffff' : 'var(--text)',
+                        border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                        fontWeight: isSelected ? 600 : 500,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5
+                      }}
+                      onClick={() => toggleClosetColor(color.name)}
+                    >
+                      <span style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: color.hex,
+                        border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
+                        display: 'inline-block'
+                      }} />
+                      {color.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {closetGarments.length === 0 ? (

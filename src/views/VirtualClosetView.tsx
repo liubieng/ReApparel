@@ -166,98 +166,101 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
 
   return (
     <div style={{ position: 'relative', minHeight: '80vh', paddingBottom: 60 }}>
-      {/* Filter Bar (Figure .5.1: [All] [Type/Category] [Color]) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-        <button
-          type="button"
-          className={`pill ${selectedTypes.size === 0 && selectedColors.size === 0 ? 'on' : ''}`}
-          style={{
-            cursor: 'pointer',
-            padding: '6px 14px',
-            fontSize: 12.5,
-            borderRadius: 20,
-            background: (selectedTypes.size === 0 && selectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
-            color: (selectedTypes.size === 0 && selectedColors.size === 0) ? '#ffffff' : 'var(--text)',
-            border: (selectedTypes.size === 0 && selectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
-            fontWeight: 600
-          }}
-          onClick={clearAllFilters}
-        >
-          All
-        </button>
-
-        {/* Categories / Types */}
-        {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
-          const isSelected = selectedTypes.has(cat);
-          return (
-            <button
-              key={cat}
-              type="button"
-              className={`pill ${isSelected ? 'on' : ''}`}
-              style={{
-                cursor: 'pointer',
-                padding: '6px 14px',
-                fontSize: 12.5,
-                borderRadius: 20,
-                background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
-                color: isSelected ? '#ffffff' : 'var(--text)',
-                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                fontWeight: isSelected ? 600 : 500
-              }}
-              onClick={() => toggleTypeFilter(cat)}
-            >
-              {cat}
-            </button>
-          );
-        })}
-
-        {/* Normal Clothing Colors displayed as pills matching tags */}
-        <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 2px' }} />
-        {NORMAL_CLOTHING_COLORS.map(color => {
-          const isSelected = selectedColors.has(color.name);
-          return (
-            <button
-              key={color.name}
-              type="button"
-              className={`pill ${isSelected ? 'on' : ''}`}
-              style={{
-                cursor: 'pointer',
-                padding: '6px 14px',
-                fontSize: 12.5,
-                borderRadius: 20,
-                background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
-                color: isSelected ? '#ffffff' : 'var(--text)',
-                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                fontWeight: isSelected ? 600 : 500,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6
-              }}
-              onClick={() => toggleColorFilter(color.name)}
-            >
-              <span style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: color.hex,
-                border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
-                display: 'inline-block'
-              }} />
-              {color.name}
-            </button>
-          );
-        })}
-
-        {hasActiveFilters && (
+      {/* Filter Section */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+        {/* Row 1: Garment Types / Categories */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button
             type="button"
-            className="btn btn-g"
-            style={{ fontSize: 11.5, padding: '4px 10px', marginLeft: 'auto', color: 'var(--danger)' }}
+            className={`pill ${selectedTypes.size === 0 && selectedColors.size === 0 ? 'on' : ''}`}
+            style={{
+              cursor: 'pointer',
+              padding: '6px 14px',
+              fontSize: 12.5,
+              borderRadius: 20,
+              background: (selectedTypes.size === 0 && selectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
+              color: (selectedTypes.size === 0 && selectedColors.size === 0) ? '#ffffff' : 'var(--text)',
+              border: (selectedTypes.size === 0 && selectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
+              fontWeight: 600
+            }}
             onClick={clearAllFilters}
           >
-            <RotateCcw className="ico" style={{ width: 12, height: 12 }} /> Reset
+            All
           </button>
-        )}
+
+          {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
+            const isSelected = selectedTypes.has(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                className={`pill ${isSelected ? 'on' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: '6px 14px',
+                  fontSize: 12.5,
+                  borderRadius: 20,
+                  background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                  color: isSelected ? '#ffffff' : 'var(--text)',
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  fontWeight: isSelected ? 600 : 500
+                }}
+                onClick={() => toggleTypeFilter(cat)}
+              >
+                {cat}
+              </button>
+            );
+          })}
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-g"
+              style={{ fontSize: 11.5, padding: '4px 10px', marginLeft: 'auto', color: 'var(--danger)' }}
+              onClick={clearAllFilters}
+            >
+              <RotateCcw className="ico" style={{ width: 12, height: 12 }} /> Reset
+            </button>
+          )}
+        </div>
+
+        {/* Row 2: Color Tags (below garment type tags) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {NORMAL_CLOTHING_COLORS.map(color => {
+            const isSelected = selectedColors.has(color.name);
+            return (
+              <button
+                key={color.name}
+                type="button"
+                className={`pill ${isSelected ? 'on' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: '5px 12px',
+                  fontSize: 12,
+                  borderRadius: 20,
+                  background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                  color: isSelected ? '#ffffff' : 'var(--text)',
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  fontWeight: isSelected ? 600 : 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                onClick={() => toggleColorFilter(color.name)}
+              >
+                <span style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: color.hex,
+                  border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
+                  display: 'inline-block'
+                }} />
+                {color.name}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Garments Grid */}
