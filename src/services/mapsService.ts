@@ -23,13 +23,18 @@ export const mapsService = {
     return flag;
   },
 
-  addDonationOpportunity(opp: Omit<DonationOpportunity, 'donation_id'>): DonationOpportunity {
+  async addDonationOpportunity(opp: Omit<DonationOpportunity, 'donation_id'>): Promise<DonationOpportunity> {
     const created = mockDatabase.addDonationOpportunity(opp);
     const supabase = getSupabase();
     if (supabase) {
-      try {
-        supabase.from('donation_opportunity').insert([created]).then(() => {}, () => {});
-      } catch {}
+      const { error } = await supabase.from('donation_opportunity').insert([created]);
+      if (error) {
+        // Roll back: remove just the one failed local entry
+        mockDatabase.setDonationOpportunities(
+          mockDatabase.getDonationOpportunities().filter(o => o.donation_id !== created.donation_id)
+        );
+        throw new Error(`Could not save donation drive: ${error.message}`);
+      }
     }
     return created;
   },
