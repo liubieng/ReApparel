@@ -136,6 +136,27 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
 
   const handleSelectAnswer = (score: number) => {
     handleSelectAnswerForIndex(currentIndex, score);
+
+    // Auto-advance to next question after a short pause so the user can see their selection
+    if (isTransitioning || isSubmitting) return;
+    const autoAdvanceDelay = 300;
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+
+    transitionTimeoutRef.current = setTimeout(() => {
+      if (currentIndex < BSAS_28_ITEMS.length - 1) {
+        setIsTransitioning(true);
+        setAnimationClass('bsas-slide-out-next');
+        transitionTimeoutRef.current = setTimeout(() => {
+          setCurrentIndex(prev => prev + 1);
+          setAnimationClass('bsas-slide-in-next');
+          setTimeout(() => setIsTransitioning(false), 150);
+        }, 180);
+      } else {
+        // Last question — auto-submit
+        const finalAnswers = { ...answers, [currentIndex]: score };
+        finalizeAssessment(finalAnswers);
+      }
+    }, autoAdvanceDelay);
   };
 
   // Check all questions on submission (TC_BSAS_07)
@@ -476,6 +497,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
                       type="button"
                       disabled={isTransitioning || isSubmitting}
                       className={`bsas-option-btn ${isSelected ? 'selected' : ''}`}
+                      style={{ cursor: isTransitioning || isSubmitting ? 'not-allowed' : 'pointer' }}
                       onClick={() => handleSelectAnswer(val)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center' }}>

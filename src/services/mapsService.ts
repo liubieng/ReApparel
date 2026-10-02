@@ -46,6 +46,27 @@ export const mapsService = {
     mockDatabase.clearDonationOpportunities();
   },
 
+  /**
+   * Fetches all donation opportunities from Supabase (shared across all accounts/devices)
+   * and merges them into the local mock DB so every user can see drives posted by others.
+   * Falls back silently if Supabase is unavailable.
+   */
+  async fetchAndMergeFromSupabase(): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('donation_opportunity')
+        .select('*')
+        .order('donation_id', { ascending: false });
+      if (error || !data || data.length === 0) return;
+      const remote = data as DonationOpportunity[];
+      mockDatabase.addMultipleDonationOpportunities(remote);
+    } catch {
+      // Silently ignore network failures — local data still shown
+    }
+  },
+
   calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371; // Earth radius in km
     const dLat = (lat2 - lat1) * (Math.PI / 180);

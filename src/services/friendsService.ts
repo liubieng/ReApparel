@@ -18,8 +18,35 @@ export const friendsService = {
     return mockDatabase.getFriendRequests();
   },
 
-  sendFriendRequest(friendCode: string): { success: boolean; message: string } {
-    const res = mockDatabase.sendFriendRequest(friendCode);
+  async sendFriendRequest(friendCode: string): Promise<{ success: boolean; message: string }> {
+    // 1. Try local lookup first (same-device accounts)
+    let res = mockDatabase.sendFriendRequest(friendCode);
+
+    // 2. If not found locally, query Supabase for the user by friend_code
+    if (!res.success && res.message.includes('not found')) {
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .ilike('friend_code', friendCode.trim())
+            .limit(1);
+
+          if (!error && data && data.length > 0) {
+            // Merge the remote user into local DB so the connection can proceed
+            const remoteUser = data[0] as User;
+            mockDatabase.upsertUser(remoteUser);
+            // Retry local lookup now that the user is available
+            res = mockDatabase.sendFriendRequest(friendCode);
+          }
+        } catch {
+          // Network unavailable — fall through with original not-found message
+        }
+      }
+    }
+
+    // 3. Persist the newly created friend_request to Supabase
     if (res.success) {
       const supabase = getSupabase();
       if (supabase) {
@@ -41,6 +68,24 @@ export const friendsService = {
       }
     }
     return res;
+  },
+
+  /**
+   * Fetches all users from Supabase and merges them into the local store.
+   * Ensures users registered on other devices are discoverable by friend code.
+   */
+  async fetchAndMergeUsersFromSupabase(): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('user_id, email, first_name, last_name, friend_code, created_at');
+      if (error || !data || data.length === 0) return;
+      (data as User[]).forEach(u => mockDatabase.upsertUser(u));
+    } catch {
+      // Silently ignore network failures
+    }
   },
 
   respondToRequest(requestId: number, status: 'accepted' | 'rejected') {

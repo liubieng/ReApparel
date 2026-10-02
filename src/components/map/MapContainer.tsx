@@ -174,7 +174,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
                   <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                     <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${selectedOpp.latitude},${selectedOpp.longitude}`}
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selectedOpp.address)}&destination_place_id=&travelmode=driving&dir_action=navigate`}
                       target="_blank"
                       rel="noreferrer"
                       style={{
@@ -214,181 +214,182 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           </Map>
         </APIProvider>
       ) : (
-        /* Fallback Vector Coordinate Map when API key is not provided */
-        <div style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(circle at 50% 50%, var(--surface-2) 0%, var(--surface) 100%)',
-          overflow: 'hidden'
-        }}>
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.15 }}>
-            <defs>
-              <pattern id="mapgrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#mapgrid)" />
-          </svg>
+        /* Fallback: Real OpenStreetMap iframe when no Google Maps API key */
+        (() => {
+          const pins = opportunities;
+          let centerLat = 12.8797;
+          let centerLng = 121.7740;
+          let zoom = 6;
 
-          <div style={{
-            position: 'absolute',
-            top: 10,
-            left: 10,
-            background: 'rgba(255, 255, 255, 0.92)',
-            color: '#1B2A1D',
-            backdropFilter: 'blur(6px)',
-            padding: '4px 10px',
-            borderRadius: 6,
-            fontSize: 11,
-            fontWeight: 600,
-            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-            zIndex: 4,
-            border: '1px solid rgba(0,0,0,0.08)'
-          }}>
-            🗺️ Interactive GPS Donation Map ({opportunities.length} locations)
-          </div>
+          if (pins.length === 1) {
+            centerLat = pins[0].latitude;
+            centerLng = pins[0].longitude;
+            zoom = 15;
+          } else if (pins.length > 1) {
+            const avgLat = pins.reduce((s, o) => s + o.latitude, 0) / pins.length;
+            const avgLng = pins.reduce((s, o) => s + o.longitude, 0) / pins.length;
+            centerLat = avgLat;
+            centerLng = avgLng;
+            zoom = 12;
+          } else if (userLocation) {
+            centerLat = userLocation.lat;
+            centerLng = userLocation.lng;
+            zoom = 14;
+          }
 
-          {userLocation && (
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 3
-              }}
-              title="Your Current Geolocation"
-            >
+          // Build OSM embed URL — markers are shown via the marker= param (first one only supported natively)
+          // For multiple pins we show a bounding-box view with the first pin marked
+          const firstPin = pins[0];
+          const markerParam = firstPin
+            ? `&marker=${firstPin.latitude}%2C${firstPin.longitude}`
+            : '';
+
+          const osmSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${centerLng - 0.05}%2C${centerLat - 0.04}%2C${centerLng + 0.05}%2C${centerLat + 0.04}&layer=mapnik${markerParam}`;
+
+          return (
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <iframe
+                title="Donation Map"
+                src={osmSrc}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                loading="lazy"
+                allowFullScreen
+              />
+
+              {/* Overlay pin buttons so users can click into OSM for each location */}
               <div style={{
-                width: 16,
-                height: 16,
-                borderRadius: '50%',
-                background: '#2563eb',
-                border: '3px solid #ffffff',
-                boxShadow: '0 0 12px rgba(37,99,235,0.8)'
-              }} />
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1e40af', background: '#eff6ff', padding: '1px 4px', borderRadius: 4, position: 'absolute', top: 18, left: -20, whiteSpace: 'nowrap' }}>
-                You are here
-              </span>
-            </div>
-          )}
-
-          {opportunities.length === 0 && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              padding: '12px 18px',
-              borderRadius: 10,
-              textAlign: 'center',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
-              border: '1px solid var(--border)',
-              zIndex: 4,
-              maxWidth: 290
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <MapPin style={{ width: 14, height: 14, color: '#dc2626' }} />
-                <span>No On-Going Drives</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                No active clothing donation drives found in {selectedLocationLabel}.
-              </div>
-            </div>
-          )}
-
-          {(() => {
-            if (opportunities.length === 0) return null;
-            const lats = opportunities.map(o => o.latitude);
-            const lngs = opportunities.map(o => o.longitude);
-            const minLat = Math.min(...lats);
-            const maxLat = Math.max(...lats);
-            const minLng = Math.min(...lngs);
-            const maxLng = Math.max(...lngs);
-            const latDiff = maxLat - minLat;
-            const lngDiff = maxLng - minLng;
-            const latSpan = latDiff > 0.001 ? latDiff : 0.05;
-            const lngSpan = lngDiff > 0.001 ? lngDiff : 0.05;
-
-            return opportunities.map(opp => {
-              const xPct = lngDiff > 0.001 ? 12 + (((opp.longitude - minLng) / lngSpan) * 76) : 50;
-              const yPct = latDiff > 0.001 ? 12 + (((maxLat - opp.latitude) / latSpan) * 76) : 50;
-              const hasFlags = (opp.flags_count || 0) > 0 || (opp.flags && opp.flags.length > 0);
-              const isSelected = selectedOpp?.donation_id === opp.donation_id;
-
-              return (
-                <div
-                  key={opp.donation_id}
-                  onClick={() => onSelectOpp(opp)}
-                  style={{
-                    position: 'absolute',
-                    left: `${xPct}%`,
-                    top: `${yPct}%`,
-                    transform: `translate(-50%, -100%) scale(${isSelected ? 1.25 : 1.0})`,
-                    cursor: 'pointer',
-                    zIndex: isSelected ? 10 : 2,
-                    transition: 'transform 0.15s ease'
-                  }}
-                  title={`${opp.name} - ${opp.address}`}
-                >
-                  <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{
-                      background: hasFlags ? '#d97706' : '#2E5234',
-                      color: '#ffffff',
-                      padding: '4px 7px',
-                      borderRadius: 14,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      border: isSelected ? '2px solid #ffffff' : '1px solid rgba(0,0,0,0.2)',
-                      boxShadow: '0 3px 8px rgba(0,0,0,0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}>
-                      <MapPin style={{ width: 12, height: 12 }} />
-                      <span style={{ maxWidth: 85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {opp.name.split(' ')[0]}
-                      </span>
-                    </div>
-
-                    <div style={{
-                      width: 0,
-                      height: 0,
-                      borderLeft: '5px solid transparent',
-                      borderRight: '5px solid transparent',
-                      borderTop: `6px solid ${hasFlags ? '#d97706' : '#2E5234'}`
-                    }} />
-
-                    {hasFlags && (
-                      <span style={{
-                        position: 'absolute',
-                        top: -6,
-                        right: -6,
-                        background: '#dc2626',
-                        color: '#ffffff',
-                        borderRadius: '50%',
-                        width: 17,
-                        height: 17,
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                zIndex: 5,
+                maxHeight: 'calc(100% - 16px)',
+                overflowY: 'auto'
+              }}>
+                {pins.map(opp => {
+                  const isSelected = selectedOpp?.donation_id === opp.donation_id;
+                  const hasFlags = (opp.flags_count || 0) > 0 || (opp.flags && opp.flags.length > 0);
+                  return (
+                    <button
+                      key={opp.donation_id}
+                      onClick={() => onSelectOpp(opp)}
+                      title={`${opp.name} — ${opp.address}`}
+                      style={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 10,
-                        fontWeight: 800,
-                        border: '2px solid #ffffff',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                      }}>
-                        !
-                      </span>
-                    )}
+                        gap: 5,
+                        padding: '4px 8px',
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        background: isSelected ? '#2E5234' : 'rgba(255,255,255,0.93)',
+                        color: isSelected ? '#ffffff' : (hasFlags ? '#d97706' : '#1B2A1D'),
+                        border: isSelected ? '2px solid #2E5234' : '1px solid rgba(0,0,0,0.15)',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                        maxWidth: 160,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        backdropFilter: 'blur(4px)'
+                      }}
+                    >
+                      <MapPin style={{ width: 10, height: 10, flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{opp.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Info overlay when a pin is selected */}
+              {selectedOpp && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: 8,
+                  left: 8,
+                  right: 8,
+                  background: 'rgba(255,255,255,0.96)',
+                  backdropFilter: 'blur(6px)',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  zIndex: 6,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 8
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ fontSize: 12.5, display: 'block', color: '#1B2A1D', marginBottom: 2 }}>{selectedOpp.name}</strong>
+                    <div style={{ fontSize: 11, color: '#5A6B57', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                      <MapPin style={{ width: 11, height: 11, flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedOpp.address}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOpp.address + ', ' + (selectedOpp.city || '') + ', ' + (selectedOpp.province || ''))}&query_place_id=`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: 10.5, padding: '3px 8px', background: '#3E6B45', color: '#ffffff', borderRadius: 5, textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Directions
+                      </a>
+                      <a
+                        href={`https://www.openstreetmap.org/?mlat=${selectedOpp.latitude}&mlon=${selectedOpp.longitude}#map=17/${selectedOpp.latitude}/${selectedOpp.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: 10.5, padding: '3px 8px', background: '#0078a8', color: '#ffffff', borderRadius: 5, textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Open in OSM
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => onFlagOpp(selectedOpp)}
+                        style={{ fontSize: 10.5, padding: '3px 8px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Report
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onCloseInfoWindow}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 14, padding: 0, flexShrink: 0 }}
+                  >✕</button>
+                </div>
+              )}
+
+              {opportunities.length === 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'rgba(255,255,255,0.95)',
+                  color: '#1B2A1D',
+                  padding: '12px 18px',
+                  borderRadius: 10,
+                  textAlign: 'center',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                  border: '1px solid rgba(0,0,0,0.1)',
+                  zIndex: 7,
+                  maxWidth: 290
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <MapPin style={{ width: 14, height: 14, color: '#dc2626' }} />
+                    <span>No On-Going Drives</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#6b7280', lineHeight: 1.4 }}>
+                    No active clothing donation drives found in {selectedLocationLabel}.
                   </div>
                 </div>
-              );
-            });
-          })()}
-        </div>
+              )}
+            </div>
+          );
+        })()
       )}
 
       {/* Map Legend Overlay */}

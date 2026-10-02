@@ -181,6 +181,31 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           password: password
         });
 
+        // Immediately persist to Supabase and await the result
+        if (supabase) {
+          try {
+            const { error: insertError } = await supabase.from('users').insert([{
+              user_id: newUser.user_id,
+              email: newUser.email,
+              first_name: newUser.first_name,
+              last_name: newUser.last_name,
+              friend_code: newUser.friend_code,
+              created_at: newUser.created_at
+            }]);
+
+            if (insertError) {
+              // Ignore duplicate-key errors (user somehow already exists remotely)
+              if (insertError.code !== '23505') {
+                // Non-fatal: user is saved locally; warn but proceed
+                console.warn('Supabase user sync warning:', insertError.message);
+              }
+            }
+          } catch (syncErr) {
+            // Network failure — user is saved locally; app still works offline
+            console.warn('Could not sync user to Supabase:', syncErr);
+          }
+        }
+
         toast(`Account created! Welcome to ReApparel, ${newUser.first_name}.`);
         onLoginSuccess(newUser, true);
       } catch (err: any) {
