@@ -806,13 +806,37 @@ class MockDatabaseEngine {
     return log;
   }
 
+  // Unlock daily wear log for user editing
+  public unlockDailyLogForEditing(logId: number): boolean {
+    const log = this.state.daily_clothing_logs.find(l => l.log_id === logId);
+    if (!log) return false;
+    if (log.is_finalized) {
+      if (log.items && log.items.length > 0) {
+        log.items.forEach(logItem => {
+          const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
+          if (closetItem) {
+            const currentCount = closetItem.wear_count || closetItem.worn_count || 0;
+            const decremented = Math.max(0, currentCount - 1);
+            closetItem.wear_count = decremented;
+            closetItem.worn_count = decremented;
+          }
+        });
+      }
+      log.is_finalized = false;
+      log.finalized_at = null;
+      this.notify();
+      return true;
+    }
+    return true;
+  }
+
   // Delete daily wear log (3.2 Update & Delete Daily Wear Log)
   public deleteDailyLog(logId: number): boolean {
     const idx = this.state.daily_clothing_logs.findIndex(l => l.log_id === logId);
     if (idx === -1) return false;
     const log = this.state.daily_clothing_logs[idx];
     if (log.is_finalized) {
-      // Re-open/unlock for demo reset: revert the wear counts added during finalization
+      // Re-open/unlock: revert the wear counts added during finalization
       if (log.items && log.items.length > 0) {
         log.items.forEach(logItem => {
           const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);

@@ -15,9 +15,11 @@ import {
   AlertCircle,
   History,
   Edit3,
+  Pencil,
   ArrowLeft
 } from 'lucide-react';
 import { DailyClothingLog, ClothingItem } from '../types/database';
+import { NORMAL_CLOTHING_COLORS } from '../data/seedData';
 
 interface DailyLogViewProps {
   todayLog: DailyClothingLog;
@@ -26,8 +28,9 @@ interface DailyLogViewProps {
   onToggleGarmentInOutfit: (garment: ClothingItem, targetLogId?: number) => Promise<void>;
   onFinalizeLog: (targetLogId?: number) => Promise<void>;
   onDeleteLog: (targetLogId?: number) => Promise<void>;
+  onEditLog?: (targetLogId?: number) => Promise<void>;
   onCreateNewOutfit?: (dateStr: string, title: string) => Promise<DailyClothingLog | void>;
-  onSimulateMidnight: () => Promise<void>;
+  onSimulateMidnight?: () => Promise<void>;
   onNavigateToCloset: () => void;
   toast: (msg: string) => void;
 }
@@ -39,6 +42,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   onToggleGarmentInOutfit,
   onFinalizeLog,
   onDeleteLog,
+  onEditLog,
   onCreateNewOutfit,
   onSimulateMidnight,
   onNavigateToCloset,
@@ -50,6 +54,57 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingOutfit, setIsAddingOutfit] = useState(false);
   const [newOutfitTitle, setNewOutfitTitle] = useState('');
+
+  // Virtual Closet Filter States for Outfit Picker
+  const [closetSelectedTypes, setClosetSelectedTypes] = useState<Set<string>>(new Set());
+  const [closetSelectedColors, setClosetSelectedColors] = useState<Set<string>>(new Set());
+
+  const toggleClosetType = (typeName: string) => {
+    setClosetSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(typeName)) next.delete(typeName);
+      else next.add(typeName);
+      return next;
+    });
+  };
+
+  const toggleClosetColor = (colorName: string) => {
+    setClosetSelectedColors(prev => {
+      const next = new Set(prev);
+      if (next.has(colorName)) next.delete(colorName);
+      else next.add(colorName);
+      return next;
+    });
+  };
+
+  const clearClosetFilters = () => {
+    setClosetSelectedTypes(new Set());
+    setClosetSelectedColors(new Set());
+  };
+
+  const hasActiveClosetFilters = closetSelectedTypes.size > 0 || closetSelectedColors.size > 0;
+
+  const filteredClosetGarments = useMemo(() => {
+    return closetGarments.filter(g => {
+      // Type / Category Filter
+      const matchType = closetSelectedTypes.size === 0 || Array.from(closetSelectedTypes).some(sel => {
+        return (g.category && g.category.toLowerCase() === sel.toLowerCase()) ||
+               (g.type_tag && g.type_tag.toLowerCase() === sel.toLowerCase());
+      });
+      if (!matchType) return false;
+
+      // Color Filter
+      const matchColor = closetSelectedColors.size === 0 || Array.from(closetSelectedColors).some(sel => {
+        const itemColor = (g.color || '').toLowerCase();
+        const itemColorTag = (g.color_tag || '').toLowerCase();
+        const selLower = sel.toLowerCase();
+        return itemColor.includes(selLower) || itemColorTag.includes(selLower);
+      });
+      if (!matchColor) return false;
+
+      return true;
+    });
+  }, [closetGarments, closetSelectedTypes, closetSelectedColors]);
 
   // Find currently active log being viewed or edited
   const activeLog = useMemo(() => {
@@ -107,6 +162,15 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
       await onSimulateMidnight();
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEditActiveLog = async () => {
+    const logId = activeLog.log_id;
+    if (onEditLog) {
+      await onEditLog(logId);
+    } else {
+      await onDeleteLog(logId);
     }
   };
 
@@ -231,7 +295,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 {todayOutfits.map((log, index) => {
                   const isCurrent = log.log_id === activeLog.log_id;
                   const count = (log.items || []).length;
-                  const title = log.title || (index === 0 ? 'Morning Outfit' : `Evening Outfit #${index + 1}`);
+                  const title = log.title || (index === 0 ? 'First Outfit' : (index === 1 ? 'Second Outfit' : `Outfit #${index + 1}`));
                   return (
                     <button
                       key={log.log_id}
@@ -264,13 +328,13 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                     onClick={() => setIsAddingOutfit(true)}
                   >
                     <Plus className="ico" style={{ width: 12, height: 12 }} />
-                    <span>+ Log Another Outfit Today</span>
+                    <span>Log Another Outfit Today</span>
                   </button>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <input
                       type="text"
-                      placeholder="e.g. Evening Outfit / Workout"
+                      placeholder="e.g. Work Outfit / Evening / Workout"
                       value={newOutfitTitle}
                       onChange={(e) => setNewOutfitTitle(e.target.value)}
                       style={{ padding: '3px 8px', fontSize: 12, borderRadius: 6, margin: 0, width: 180 }}
@@ -422,31 +486,16 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                     <button
                       type="button"
                       className="btn btn-g"
-                      style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                      onClick={handleDeleteActiveLog}
-                      title="Re-open log for demonstration and testing"
+                      style={{ fontSize: 12, padding: '5px 12px', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      onClick={handleEditActiveLog}
+                      title="Edit this outfit record"
                     >
-                      <RotateCcw className="ico" style={{ width: 12, height: 12 }} />
-                      <span>Unlock / Reset Record (Demo)</span>
+                      <Pencil className="ico" style={{ width: 13, height: 13 }} />
+                      <span>Edit Outfit</span>
                     </button>
                   </div>
                 )}
               </div>
-
-              {/* Defense Midnight Job Simulation */}
-              {!isLocked && !isEditingHistorical && (
-                <button
-                  type="button"
-                  className="btn btn-g"
-                  style={{ fontSize: 11.5, padding: '6px 12px', background: 'var(--surface-3)', border: '1px solid var(--primary-soft)' }}
-                  title="Demonstrates the automated midnight cron lock to the panel"
-                  onClick={handleMidnight}
-                  disabled={isSubmitting}
-                >
-                  <Moon className="ico" style={{ width: 13, height: 13, color: 'var(--primary)' }} />
-                  <span>Simulate 00:00 Midnight Job (Defense Demo)</span>
-                </button>
-              )}
             </div>
 
           </div>
@@ -462,6 +511,99 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
               </span>
             </div>
 
+            {/* Filter Bar (matching Virtual Closet section) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              <button
+                type="button"
+                className={`pill ${closetSelectedTypes.size === 0 && closetSelectedColors.size === 0 ? 'on' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: '5px 12px',
+                  fontSize: 12,
+                  borderRadius: 20,
+                  background: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
+                  color: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? '#ffffff' : 'var(--text)',
+                  border: (closetSelectedTypes.size === 0 && closetSelectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  fontWeight: 600
+                }}
+                onClick={clearClosetFilters}
+              >
+                All
+              </button>
+
+              {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
+                const isSelected = closetSelectedTypes.has(cat);
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`pill ${isSelected ? 'on' : ''}`}
+                    style={{
+                      cursor: 'pointer',
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      borderRadius: 20,
+                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                      color: isSelected ? '#ffffff' : 'var(--text)',
+                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      fontWeight: isSelected ? 600 : 500
+                    }}
+                    onClick={() => toggleClosetType(cat)}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+
+              <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 2px' }} />
+
+              {NORMAL_CLOTHING_COLORS.map(color => {
+                const isSelected = closetSelectedColors.has(color.name);
+                return (
+                  <button
+                    key={color.name}
+                    type="button"
+                    className={`pill ${isSelected ? 'on' : ''}`}
+                    style={{
+                      cursor: 'pointer',
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      borderRadius: 20,
+                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                      color: isSelected ? '#ffffff' : 'var(--text)',
+                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      fontWeight: isSelected ? 600 : 500,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5
+                    }}
+                    onClick={() => toggleClosetColor(color.name)}
+                  >
+                    <span style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: color.hex,
+                      border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
+                      display: 'inline-block'
+                    }} />
+                    {color.name}
+                  </button>
+                );
+              })}
+
+              {hasActiveClosetFilters && (
+                <button
+                  type="button"
+                  className="btn btn-g"
+                  style={{ fontSize: 11, padding: '3px 8px', marginLeft: 'auto', color: 'var(--danger)' }}
+                  onClick={clearClosetFilters}
+                >
+                  <RotateCcw className="ico" style={{ width: 11, height: 11 }} /> Reset
+                </button>
+              )}
+            </div>
+
             {closetGarments.length === 0 ? (
               <div className="card" style={{ padding: '24px 16px', textAlign: 'center' }}>
                 <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-muted)' }}>
@@ -471,13 +613,22 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                   Go to Virtual Closet
                 </button>
               </div>
+            ) : filteredClosetGarments.length === 0 ? (
+              <div className="card" style={{ padding: '24px 16px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-muted)' }}>
+                  No garments match the selected filters.
+                </p>
+                <button type="button" className="btn btn-g" onClick={clearClosetFilters}>
+                  Clear Filters
+                </button>
+              </div>
             ) : (
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
                 gap: 10
               }}>
-                {closetGarments.map(garment => {
+                {filteredClosetGarments.map(garment => {
                   const isSelected = selectedItems.some(i => i.item_id === garment.item_id);
                   const isHex = garment.image_url?.startsWith('#');
 

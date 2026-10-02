@@ -46,7 +46,7 @@ interface SidebarProps {
   onSelectView: (viewId: string) => void;
   onCloseMobile: () => void;
   onLogout: () => void;
-  onOpenDatabase: () => void;
+  onOpenDatabase?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -219,16 +219,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer Actions */}
         <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button
-            type="button"
-            className="btn btn-g"
-            style={{ fontSize: 11.5, justifyContent: 'flex-start', padding: '6px 10px' }}
-            onClick={onOpenDatabase}
-          >
-            <Database className="ico" style={{ width: 13, height: 13 }} />
-            <span>Database Schema</span>
-          </button>
-
           <button
             type="button"
             className="btn btn-g"

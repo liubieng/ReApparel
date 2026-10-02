@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   mockDatabase, 
   getStoredSupabaseConfig, 
+  syncAllLocalDataToSupabase,
   safeStorage, 
   STORAGE_KEY_ACTIVE_USER, 
   STORAGE_KEY_ACTIVE_VIEW 
@@ -245,6 +246,16 @@ export default function App() {
     return () => unsubscribe();
   }, [loadData]);
 
+  // Automatic background upload to cloud (Supabase)
+  useEffect(() => {
+    if (currentUser) {
+      const timer = setTimeout(() => {
+        syncAllLocalDataToSupabase().catch(() => {});
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [currentUser, garments.length, assessments.length, todayLog?.items?.length, todayLog?.is_finalized]);
+
   // --------------------------------------------------------------------------
   // USER ACTIONS & HANDLERS
   // --------------------------------------------------------------------------
@@ -336,11 +347,18 @@ export default function App() {
     toast("Outfit finalized! Cumulative wear counts updated.");
   };
 
+  const handleEditDailyLog = async (targetLogId?: number) => {
+    const targetId = targetLogId || todayLog.log_id;
+    await closetService.unlockDailyLogForEditing(targetId);
+    await loadData();
+    toast("Outfit opened for editing. You can adjust your garments and re-finalize.");
+  };
+
   const handleDeleteDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.deleteDailyLog(targetId);
     await loadData();
-    toast("Outfit record cleared / unlocked.");
+    toast("Outfit record cleared.");
   };
 
   const handleCreateDailyLog = async (dateStr: string, title: string) => {
@@ -591,8 +609,8 @@ export default function App() {
               onToggleGarmentInOutfit={handleToggleGarmentInOutfit}
               onFinalizeLog={handleFinalizeDailyLog}
               onDeleteLog={handleDeleteDailyLog}
+              onEditLog={handleEditDailyLog}
               onCreateNewOutfit={handleCreateDailyLog}
-              onSimulateMidnight={handleSimulateMidnight}
               onNavigateToCloset={() => setView('closet')}
               toast={toast}
             />

@@ -16,7 +16,7 @@ import {
   ShoppingBag,
   ArrowRight
 } from 'lucide-react';
-import { CURATED_COLOR_FAMILIES, createGarmentSilhouette } from '../data/seedData';
+import { CURATED_COLOR_FAMILIES, NORMAL_CLOTHING_COLORS, createGarmentSilhouette } from '../data/seedData';
 import { ClothingItem } from '../types/database';
 
 interface VirtualClosetViewProps {
@@ -211,34 +211,42 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
           );
         })}
 
-        {/* Color Dropdown/Pills - Including All Curated Colors (TC_FILTER_02, TC_FILTER_05, TC_FILTER_06) */}
-        <select
-          aria-label="Filter by Color"
-          className="field"
-          style={{
-            margin: 0,
-            padding: '5px 10px',
-            fontSize: 12,
-            borderRadius: 20,
-            background: 'var(--surface-2)',
-            color: 'var(--text)',
-            border: selectedColors.size > 0 ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-            cursor: 'pointer'
-          }}
-          value={Array.from(selectedColors)[0] || 'all'}
-          onChange={(e) => {
-            const val = e.target.value;
-            if (val === 'all') setSelectedColors(new Set());
-            else setSelectedColors(new Set([val]));
-          }}
-        >
-          <option value="all">All Colors</option>
-          {CURATED_COLOR_FAMILIES.map(family => (
-            <option key={family.name} value={family.name}>
-              Color: {family.name}
-            </option>
-          ))}
-        </select>
+        {/* Normal Clothing Colors displayed as pills matching tags */}
+        <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 2px' }} />
+        {NORMAL_CLOTHING_COLORS.map(color => {
+          const isSelected = selectedColors.has(color.name);
+          return (
+            <button
+              key={color.name}
+              type="button"
+              className={`pill ${isSelected ? 'on' : ''}`}
+              style={{
+                cursor: 'pointer',
+                padding: '6px 14px',
+                fontSize: 12.5,
+                borderRadius: 20,
+                background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                color: isSelected ? '#ffffff' : 'var(--text)',
+                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                fontWeight: isSelected ? 600 : 500,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+              onClick={() => toggleColorFilter(color.name)}
+            >
+              <span style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: color.hex,
+                border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
+                display: 'inline-block'
+              }} />
+              {color.name}
+            </button>
+          );
+        })}
 
         {hasActiveFilters && (
           <button

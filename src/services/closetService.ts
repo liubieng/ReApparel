@@ -370,6 +370,35 @@ export const closetService = {
     return localLog;
   },
 
+  async unlockDailyLogForEditing(logId: number): Promise<boolean> {
+    const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10));
+    const wasFinalized = logBefore?.is_finalized;
+    const items = logBefore?.items || [];
+
+    const result = mockDatabase.unlockDailyLogForEditing(logId);
+    const supabase = getSupabase();
+    if (supabase && wasFinalized && items.length > 0) {
+      try {
+        await Promise.allSettled(
+          items.map(async (item) => {
+            const closetItem = mockDatabase.getItemById(item.item_id);
+            const count = closetItem?.wear_count ?? 0;
+            return supabase.from('clothing_item').update({ wear_count: count }).eq('item_id', item.item_id);
+          })
+        );
+        const currentUser = mockDatabase.getCurrentUser();
+        const canonicalUid = toCanonicalUserId(currentUser?.user_id);
+        if (logBefore) {
+          await supabase
+            .from('daily_clothing_log')
+            .update({ is_finalized: false, finalized_at: null })
+            .match({ user_id: canonicalUid, log_date: logBefore.log_date });
+        }
+      } catch {}
+    }
+    return result;
+  },
+
   async deleteDailyLog(logId: number): Promise<boolean> {
     const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10));
     const wasFinalized = logBefore?.is_finalized;

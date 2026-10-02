@@ -263,6 +263,19 @@ export const CURATED_COLOR_FAMILIES: CuratedColorFamily[] = [
   { name: 'Neutral', hex: '#a8a29e' }
 ];
 
+// Standard core clothing colors for everyday wardrobes (normal colors for clothes)
+export const NORMAL_CLOTHING_COLORS: CuratedColorFamily[] = [
+  { name: 'Black', hex: '#18181b' },
+  { name: 'White', hex: '#f8fafc' },
+  { name: 'Gray', hex: '#64748b' },
+  { name: 'Navy', hex: '#1e293b' },
+  { name: 'Blue', hex: '#2563eb' },
+  { name: 'Brown', hex: '#78350f' },
+  { name: 'Beige', hex: '#d6c7a1' },
+  { name: 'Green', hex: '#16a34a' },
+  { name: 'Red', hex: '#dc2626' }
+];
+
 export const CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear', 'Accessories'] as const;
 export const GARMENT_TYPES = ['Shirt', 'Pants', 'Skirt', 'Shorts', 'Dress', 'One-Piece', 'Shoes', 'Outerwear'] as const;
 
