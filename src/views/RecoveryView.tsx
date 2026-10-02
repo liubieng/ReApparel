@@ -104,8 +104,8 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   onStartRetakeAssessment,
   onNavigateToStatistics
 }) => {
-  // Accordion state for "How to interpret your BSAS Score"
-  const [expandedDimension, setExpandedDimension] = useState<string | null>('salience');
+  // Accordion state for "How to interpret your BSAS Score" (starts collapsed by default)
+  const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
 
   // Assessments sorted chronologically (oldest to newest for bar chart)
   const sortedAsc = useMemo(() => {
