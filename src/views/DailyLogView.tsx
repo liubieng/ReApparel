@@ -295,7 +295,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 {todayOutfits.map((log, index) => {
                   const isCurrent = log.log_id === activeLog.log_id;
                   const count = (log.items || []).length;
-                  const title = log.title || (index === 0 ? 'First Outfit' : (index === 1 ? 'Second Outfit' : `Outfit #${index + 1}`));
+                  const title = log.title || (index === 0 ? 'First Outfit' : `Outfit #${index + 1}`);
                   return (
                     <button
                       key={log.log_id}

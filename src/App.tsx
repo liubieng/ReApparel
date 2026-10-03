@@ -551,7 +551,10 @@ export default function App() {
   }
 
   // 30-Day BSAS Assessment Cooldown & Notification Status
-  const latestAssessment = assessments[0];
+  // Sort to get the most-recently taken assessment (highest taken_at date)
+  const latestAssessment = assessments.length > 0
+    ? [...assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime())[0]
+    : null;
   const isBSASDue = !latestAssessment || (
     Math.floor((Date.now() - new Date(latestAssessment.taken_at).getTime() + simulatedDaysOffset * 86400000) / 86400000) >= 30
   );

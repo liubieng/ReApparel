@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
-import { CATEGORIES, GARMENT_TYPES, CURATED_COLOR_FAMILIES } from '../../data/seedData';
+import { CATEGORIES, CURATED_COLOR_FAMILIES } from '../../data/seedData';
 import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 
 interface EditItemModalProps {
@@ -21,9 +21,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 }) => {
   if (!isOpen || !garment) return null;
 
-  const [name, setName] = useState(garment.name);
   const [category, setCategory] = useState<string>(garment.category || '');
-  const [garmentType, setGarmentType] = useState<string>(garment.type_tag || '');
   const [color, setColor] = useState<string>(garment.color || '');
   const [colorHex, setColorHex] = useState<string>(garment.color_tag || '');
   const [images, setImages] = useState<string[]>(
@@ -34,9 +32,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
   useEffect(() => {
     if (garment) {
-      setName(garment.name);
       setCategory(garment.category || '');
-      setGarmentType(garment.type_tag || '');
       setColor(garment.color || '');
       setColorHex(garment.color_tag || '');
       setImages(garment.images && garment.images.length > 0 ? garment.images : [garment.image_url]);
@@ -82,12 +78,12 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleRetry = () => {
+    setUpdateError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      toast('Garment name cannot be empty.');
-      return;
-    }
 
     const primaryImage = images[0] || garment.image_url;
     setIsSubmitting(true);
@@ -95,30 +91,21 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
 
     try {
       await onUpdateItem(garment.item_id, {
-        name: name.trim(),
         category,
-        type_tag: garmentType,
+        type_tag: garment.type_tag,
         color,
         color_tag: colorHex,
         image_url: primaryImage,
         images
       });
 
-      toast(`Updated "${name.trim()}"`);
+      toast(`Updated garment successfully`);
       onClose();
     } catch (err: any) {
       setUpdateError('The system encountered an error updating this garment. Please retry or cancel.');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleSimulateFailure = () => {
-    setUpdateError('Simulated error: The clothing item update could not be completed.');
-  };
-
-  const handleRetry = () => {
-    setUpdateError(null);
   };
 
   return (
@@ -238,12 +225,6 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             <input type="file" ref={fileInputRef} accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
           </div>
 
-          {/* Name */}
-          <div className="field">
-            <label>Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-
           {/* Category */}
           <div className="field">
             <label>Category (1 only)</label>
@@ -262,60 +243,53 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             </div>
           </div>
 
-          {/* Garment Type */}
-          <div className="field">
-            <label>Garment Type (1 only)</label>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, maxHeight: 90, overflowY: 'auto' }}>
-              {GARMENT_TYPES.map(gt => (
-                <button
-                  key={gt}
-                  type="button"
-                  className={`pill ${garmentType === gt ? 'on' : ''}`}
-                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12 }}
-                  onClick={() => setGarmentType(gt)}
-                >
-                  {gt}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Color */}
           <div className="field">
-            <label>Color</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 4, maxHeight: 90, overflowY: 'auto' }}>
-              {CURATED_COLOR_FAMILIES.map(f => (
-                <button
-                  key={f.name}
-                  type="button"
-                  className="btn btn-g"
-                  style={{
-                    fontSize: 10.5, padding: '3px 6px',
-                    border: color === f.name ? '2px solid var(--primary)' : '1px solid var(--border)'
-                  }}
-                  onClick={() => { setColor(f.name); setColorHex(f.hex); }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: f.hex, display: 'inline-block', marginRight: 4 }} />
-                  {f.name}
-                </button>
-              ))}
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Color Profile</span>
+              {color && (
+                <span style={{ fontSize: 11.5, color: 'var(--primary)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: colorHex, display: 'inline-block' }} />
+                  {color}
+                </span>
+              )}
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 6, marginTop: 4, maxHeight: 110, overflowY: 'auto' }}>
+              {CURATED_COLOR_FAMILIES.map(f => {
+                const isSelected = color === f.name;
+                return (
+                  <button
+                    key={f.name}
+                    type="button"
+                    className="btn btn-g"
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      justifyContent: 'flex-start',
+                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                      background: isSelected ? 'var(--surface-2)' : 'var(--surface)'
+                    }}
+                    onClick={() => { setColor(f.name); setColorHex(f.hex); }}
+                  >
+                    <span style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      background: f.hex,
+                      display: 'inline-block',
+                      marginRight: 4,
+                      border: '1px solid rgba(0,0,0,0.15)'
+                    }} />
+                    <span>{f.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-            <button
-              type="button"
-              className="btn btn-g"
-              style={{ fontSize: 11, color: 'var(--text-muted)' }}
-              onClick={handleSimulateFailure}
-              title="Test Case: Simulate failed item update"
-            >
-              Simulate Update Failure
-            </button>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="btn btn-g" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-              <button type="submit" className="btn btn-p" disabled={isSubmitting}>Save Changes</button>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button type="button" className="btn btn-g" onClick={onClose} disabled={isSubmitting}>Cancel</button>
+            <button type="submit" className="btn btn-p" disabled={isSubmitting}>Save Changes</button>
           </div>
         </form>
 

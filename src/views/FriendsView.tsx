@@ -559,28 +559,35 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     {item.name}
                   </strong>
 
-                  {/* 2 Tag Pills (e.g. dress, red / white) */}
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                    <span style={{
-                      fontSize: 10.5,
-                      padding: '2px 8px',
-                      borderRadius: 12,
-                      background: 'var(--surface-2)',
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--border)'
-                    }}>
-                      {categoryTag}
-                    </span>
-                    <span style={{
-                      fontSize: 10.5,
-                      padding: '2px 8px',
-                      borderRadius: 12,
-                      background: 'var(--surface-2)',
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--border)'
-                    }}>
-                      {colorTag}
-                    </span>
+                  {/* 2 Tag Pills: category + color dot (matching VirtualClosetView style) */}
+                  <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {categoryTag && (
+                      <span style={{
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        background: 'var(--surface-2)',
+                        color: 'var(--text)',
+                        fontWeight: 500
+                      }}>
+                        {categoryTag}
+                      </span>
+                    )}
+                    {item.color && (
+                      <span style={{
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        background: 'var(--surface-2)',
+                        color: 'var(--text)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color_tag || '#64748b', display: 'inline-block' }} />
+                        {item.color}
+                      </span>
+                    )}
                     {isUnavailable && (
                       <span style={{
                         fontSize: 10,

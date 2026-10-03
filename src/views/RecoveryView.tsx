@@ -452,6 +452,91 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
               )}
             </div>
 
+            {/* Overall Closet Utilization */}
+            {(() => {
+              const total = garments.length;
+              const worn = garments.filter(g => (g.worn_count ?? g.wear_count ?? 0) > 0).length;
+              const utilPct = total > 0 ? Math.round((worn / total) * 100) : 0;
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+                      Overall Closet Utilization
+                    </span>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: utilPct >= 70 ? 'var(--primary)' : utilPct >= 40 ? '#f59e0b' : 'var(--danger, #dc2626)' }}>
+                      {utilPct}%
+                    </span>
+                  </div>
+                  <div style={{ height: 10, borderRadius: 6, background: 'var(--surface-2)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${utilPct}%`,
+                      borderRadius: 6,
+                      background: utilPct >= 70
+                        ? 'linear-gradient(90deg, var(--primary-soft, #a7f3d0), var(--primary, #059669))'
+                        : utilPct >= 40
+                        ? 'linear-gradient(90deg, #fcd34d, #f59e0b)'
+                        : 'linear-gradient(90deg, #fca5a5, #dc2626)',
+                      transition: 'width 0.4s ease'
+                    }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                    <span>{worn} of {total} items worn at least once</span>
+                    <span>{total - worn} items never worn</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Most to Least Worn */}
+            <div style={{ marginBottom: 20 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: 10 }}>
+                Most to Least Worn
+              </span>
+              {garments.length === 0 ? (
+                <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, background: 'var(--surface-2)', borderRadius: 10 }}>
+                  Add clothes to your closet to see wear rankings.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[...garments]
+                    .sort((a, b) => (b.worn_count ?? b.wear_count ?? 0) - (a.worn_count ?? a.wear_count ?? 0))
+                    .slice(0, 5)
+                    .map((item, idx) => {
+                      const wears = item.worn_count ?? item.wear_count ?? 0;
+                      const maxWears = Math.max(...garments.map(g => g.worn_count ?? g.wear_count ?? 0), 1);
+                      const barPct = Math.max(4, (wears / maxWears) * 100);
+                      const isHex = item.image_url?.startsWith('#');
+                      return (
+                        <div key={item.item_id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', width: 14, textAlign: 'right', flexShrink: 0 }}>#{idx + 1}</span>
+                          <div style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 6,
+                            flexShrink: 0,
+                            backgroundColor: isHex ? item.image_url : 'var(--surface-2)',
+                            backgroundImage: isHex ? undefined : `url("${item.image_url}")`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            border: '1px solid var(--border)'
+                          }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.name}
+                            </div>
+                            <div style={{ height: 5, borderRadius: 3, background: 'var(--surface-2)', overflow: 'hidden', marginTop: 3 }}>
+                              <div style={{ height: '100%', width: `${barPct}%`, borderRadius: 3, background: 'var(--primary)' }} />
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', flexShrink: 0 }}>{wears}×</span>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
             {/* Subheading: Least worn from each category */}
             <div style={{ marginBottom: 16 }}>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: 10 }}>

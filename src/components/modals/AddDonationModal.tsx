@@ -1,14 +1,5 @@
 import React, { useState } from 'react';
 import { DonationOpportunity } from '../../types/database';
-import { 
-  REGIONS, 
-  BARANGAYS_BY_REGION, 
-  COUNTRIES, 
-  PROVINCES_BY_COUNTRY, 
-  CITIES_BY_PROVINCE, 
-  PRESET_COORDINATES, 
-  getCoordinatesForLocation 
-} from '../../data/locationDirectory';
 import { MapPin, Navigation, Share2, X, AlertCircle } from 'lucide-react';
 
 interface AddDonationModalProps {
@@ -27,11 +18,6 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   const [name, setName] = useState('');
   const [organizer, setOrganizer] = useState('');
   const [address, setAddress] = useState('');
-  const [country, setCountry] = useState('Philippines');
-  const [region, setRegion] = useState('Central Visayas');
-  const [province, setProvince] = useState('Negros Oriental');
-  const [city, setCity] = useState('Dumaguete City');
-  const [barangay, setBarangay] = useState('Daro');
   const [latitude, setLatitude] = useState<number>(9.317);
   const [longitude, setLongitude] = useState<number>(123.303);
   const [hours, setHours] = useState('Mon-Sat 8:00 AM - 5:00 PM');
@@ -45,57 +31,6 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
-
-  const handleCountryChange = (c: string) => {
-    setCountry(c);
-    const provs = PROVINCES_BY_COUNTRY[c] || [];
-    const firstProv = provs[0] || '';
-    setProvince(firstProv);
-    const cities = CITIES_BY_PROVINCE[firstProv] || [];
-    setCity(cities[0] || '');
-    updateCoords(c, firstProv, cities[0] || '');
-  };
-
-  const handleProvinceChange = (p: string) => {
-    setProvince(p);
-    const cities = CITIES_BY_PROVINCE[p] || [];
-    const firstCity = cities[0] || '';
-    setCity(firstCity);
-    updateCoords(country, p, firstCity);
-  };
-
-  const handleCityChange = (ct: string) => {
-    setCity(ct);
-    updateCoords(country, province, ct);
-  };
-
-  const handleRegionChange = (r: string) => {
-    setRegion(r);
-    const brgys = BARANGAYS_BY_REGION[r] || [];
-    setBarangay(brgys[0] || '');
-    if (PRESET_COORDINATES[r]) {
-      setLatitude(PRESET_COORDINATES[r].lat);
-      setLongitude(PRESET_COORDINATES[r].lng);
-    }
-  };
-
-  const handleBarangayChange = (b: string) => {
-    setBarangay(b);
-    if (PRESET_COORDINATES[b]) {
-      setLatitude(PRESET_COORDINATES[b].lat);
-      setLongitude(PRESET_COORDINATES[b].lng);
-    }
-  };
-
-  const updateCoords = async (c: string, p: string, ct: string) => {
-    try {
-      const coords = await getCoordinatesForLocation(c, p, ct);
-      if (coords) {
-        setLatitude(coords.lat);
-        setLongitude(coords.lng);
-      }
-    } catch {}
-  };
 
   const handleUseCurrentLocation = () => {
     if (userLocation) {
@@ -140,11 +75,6 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
         name: name.trim(),
         organizer: organizer.trim() || undefined,
         address: address.trim(),
-        country,
-        region,
-        province,
-        city,
-        barangay,
         latitude: Number(latitude),
         longitude: Number(longitude),
         hours: hours.trim() || 'Daily access',
@@ -165,9 +95,15 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
     }
   };
 
-  const availableProvinces = PROVINCES_BY_COUNTRY[country] || [];
-  const availableCities = CITIES_BY_PROVINCE[province] || [];
-  const availableBarangays = BARANGAYS_BY_REGION[region] || [];
+  // Compute pin position within a small preview box
+  // Clamp lat to ~0–20°N (rough PH range), lng to ~115–130°E
+  const MAP_W = 260;
+  const MAP_H = 140;
+  const LAT_MIN = 4, LAT_MAX = 22;
+  const LNG_MIN = 114, LNG_MAX = 130;
+  const pinX = Math.max(0, Math.min(MAP_W, ((longitude - LNG_MIN) / (LNG_MAX - LNG_MIN)) * MAP_W));
+  const pinY = Math.max(0, Math.min(MAP_H, ((LAT_MAX - latitude) / (LAT_MAX - LAT_MIN)) * MAP_H));
+  const isValidCoords = !isNaN(latitude) && !isNaN(longitude);
 
   return (
     <div
@@ -273,84 +209,17 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
             />
           </div>
 
-          {/* Cascading Area Selectors */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: 8 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Region</label>
-              <select
-                value={region}
-                onChange={(e) => handleRegionChange(e.target.value)}
-                style={{ fontSize: 12, padding: '6px 8px' }}
-              >
-                {REGIONS.map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Barangay</label>
-              <select
-                value={barangay}
-                onChange={(e) => handleBarangayChange(e.target.value)}
-                style={{ fontSize: 12, padding: '6px 8px' }}
-              >
-                {availableBarangays.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Country</label>
-              <select
-                value={country}
-                onChange={(e) => handleCountryChange(e.target.value)}
-                style={{ fontSize: 12, padding: '6px 8px' }}
-              >
-                {COUNTRIES.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Province</label>
-              <select
-                value={province}
-                onChange={(e) => handleProvinceChange(e.target.value)}
-                style={{ fontSize: 12, padding: '6px 8px' }}
-              >
-                {availableProvinces.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>City</label>
-              <select
-                value={city}
-                onChange={(e) => handleCityChange(e.target.value)}
-                style={{ fontSize: 12, padding: '6px 8px' }}
-              >
-                {availableCities.map(ct => (
-                  <option key={ct} value={ct}>{ct}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Coordinates & Auto-Detect */}
+          {/* Map Pin Coordinates + Visual Preview */}
           <div style={{
-            padding: 10,
+            padding: 12,
             background: 'var(--surface-2)',
-            borderRadius: 8,
+            borderRadius: 10,
             border: '1px solid var(--border)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text)' }}>
-                Map Pin Coordinates (Lat, Lng)
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <MapPin style={{ width: 13, height: 13, color: 'var(--primary)' }} />
+                Map Pin Coordinates
               </span>
               <button
                 type="button"
@@ -362,7 +231,8 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {/* Coordinate inputs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
               <div>
                 <label style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Latitude</label>
                 <input
@@ -386,6 +256,82 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Visual map preview */}
+            <div style={{
+              position: 'relative',
+              width: '100%',
+              height: MAP_H,
+              borderRadius: 8,
+              overflow: 'hidden',
+              border: '1px solid var(--border)',
+              background: 'linear-gradient(160deg, #dbeafe 0%, #bfdbfe 40%, #93c5fd 70%, #60a5fa 100%)'
+            }}>
+              {/* SVG land mass (simplified Philippine silhouette-style blobs) */}
+              <svg
+                viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                preserveAspectRatio="none"
+              >
+                {/* Grid lines */}
+                {[0.25, 0.5, 0.75].map(f => (
+                  <React.Fragment key={f}>
+                    <line x1={MAP_W * f} y1={0} x2={MAP_W * f} y2={MAP_H} stroke="rgba(255,255,255,0.3)" strokeWidth={0.5} />
+                    <line x1={0} y1={MAP_H * f} x2={MAP_W} y2={MAP_H * f} stroke="rgba(255,255,255,0.3)" strokeWidth={0.5} />
+                  </React.Fragment>
+                ))}
+                {/* Simplified land blobs */}
+                <ellipse cx={130} cy={70} rx={32} ry={55} fill="rgba(134,239,172,0.55)" />
+                <ellipse cx={155} cy={45} rx={20} ry={28} fill="rgba(134,239,172,0.45)" />
+                <ellipse cx={108} cy={100} rx={18} ry={22} fill="rgba(134,239,172,0.5)" />
+                <ellipse cx={165} cy={88} rx={16} ry={24} fill="rgba(134,239,172,0.4)" />
+                <ellipse cx={90} cy={65} rx={14} ry={18} fill="rgba(134,239,172,0.4)" />
+                <ellipse cx={142} cy={108} rx={10} ry={14} fill="rgba(134,239,172,0.35)" />
+                {/* Corner labels */}
+                <text x={4} y={11} fontSize={8} fill="rgba(0,0,0,0.35)">N 22°</text>
+                <text x={4} y={MAP_H - 4} fontSize={8} fill="rgba(0,0,0,0.35)">N 4°</text>
+                <text x={MAP_W - 28} y={11} fontSize={8} fill="rgba(0,0,0,0.35)">130°E</text>
+                <text x={4} y={MAP_H / 2 + 4} fontSize={8} fill="rgba(0,0,0,0.35)">114°E</text>
+              </svg>
+
+              {/* Pin marker */}
+              {isValidCoords && (
+                <div style={{
+                  position: 'absolute',
+                  left: `${(pinX / MAP_W) * 100}%`,
+                  top: `${(pinY / MAP_H) * 100}%`,
+                  transform: 'translate(-50%, -100%)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  pointerEvents: 'none'
+                }}>
+                  <div style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50% 50% 50% 0',
+                    transform: 'rotate(-45deg)',
+                    background: 'var(--primary, #059669)',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                    border: '2px solid #fff'
+                  }} />
+                  <div style={{
+                    marginTop: 2,
+                    background: 'rgba(0,0,0,0.65)',
+                    color: '#fff',
+                    fontSize: 8.5,
+                    padding: '1px 4px',
+                    borderRadius: 4,
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {latitude.toFixed(3)}, {longitude.toFixed(3)}
+                  </div>
+                </div>
+              )}
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 10.5, color: 'var(--text-muted)' }}>
+              Adjust coordinates above or use GPS to position the pin on the map.
+            </p>
           </div>
 
           {/* Hours & Accepted Materials */}

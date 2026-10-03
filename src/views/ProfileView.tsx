@@ -7,7 +7,6 @@ import {
   ChevronRight, 
   Copy, 
   Check, 
-  KeyRound, 
   Edit3, 
   BarChart2, 
   Clock, 
@@ -71,12 +70,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const displayName = `${currentUser.first_name[0] ? currentUser.first_name[0] + '.' : ''} ${currentUser.last_name || currentUser.first_name}`;
 
   // Modals for menu actions
-  const [modalAction, setModalAction] = useState<'edit-profile' | 'change-password' | 'friend-code' | null>(null);
+  const [modalAction, setModalAction] = useState<'edit-profile' | 'friend-code' | null>(null);
   const [editFirstName, setEditFirstName] = useState(currentUser.first_name);
   const [editLastName, setEditLastName] = useState(currentUser.last_name);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Streak calculation (days logged)
   const streakDays = useMemo(() => {
@@ -116,27 +113,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     };
     mockDatabase.upsertUser(updatedUser);
     toast('Profile updated successfully!');
-    setModalAction(null);
-  };
-
-  const handleChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 8) {
-      toast('Password must be at least 8 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast('Passwords do not match.');
-      return;
-    }
-    const updatedUser: User = {
-      ...currentUser,
-      password: newPassword
-    };
-    mockDatabase.upsertUser(updatedUser);
-    toast('Password changed successfully!');
-    setNewPassword('');
-    setConfirmPassword('');
     setModalAction(null);
   };
 
@@ -322,27 +298,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
-          {/* 2. Change Password */}
-          <button
-            type="button"
-            onClick={() => setModalAction('change-password')}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '14px 20px',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: '1px solid var(--border)',
-              cursor: 'pointer',
-              textAlign: 'left'
-            }}
-          >
-            <span style={{ fontSize: 14, color: 'var(--text)' }}>Change Password</span>
-            <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
-          </button>
-
           {/* 3. Closet Statistics */}
           <button
             type="button"
@@ -469,29 +424,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="button" className="btn btn-g" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setModalAction(null)}>Cancel</button>
                 <button type="submit" className="btn btn-p" style={{ flex: 1, justifyContent: 'center' }}>Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Change Password */}
-      {modalAction === 'change-password' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
-          <div className="card" style={{ maxWidth: 400, width: '100%', padding: 24, borderRadius: 16 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontFamily: 'var(--font-display)' }}>Change Password</h3>
-            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>New Password (min 8 chars)</label>
-                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Confirm New Password</label>
-                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button type="button" className="btn btn-g" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setModalAction(null)}>Cancel</button>
-                <button type="submit" className="btn btn-p" style={{ flex: 1, justifyContent: 'center' }}>Update</button>
               </div>
             </form>
           </div>
