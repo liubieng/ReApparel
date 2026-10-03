@@ -129,6 +129,14 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     return list;
   }, [dailyLogs, todayLog]);
 
+  // Compute the display title for the active log (first outfit always = "First Outfit")
+  const activeOutfitTitle = useMemo(() => {
+    if (isEditingHistorical) return activeLog.title || 'Historical Outfit';
+    const idx = todayOutfits.findIndex(l => l.log_id === activeLog.log_id);
+    if (idx === 0) return 'First Outfit';
+    return activeLog.title || `Outfit #${idx + 1}`;
+  }, [activeLog, todayOutfits, isEditingHistorical]);
+
   // All logs sorted chronologically for wear history
   const allLogsSorted = useMemo(() => {
     const logs = dailyLogs.filter(l => l.is_finalized || (l.items && l.items.length > 0));
@@ -295,7 +303,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 {todayOutfits.map((log, index) => {
                   const isCurrent = log.log_id === activeLog.log_id;
                   const count = (log.items || []).length;
-                  const title = log.title || (index === 0 ? 'First Outfit' : `Outfit #${index + 1}`);
+                  const title = index === 0 ? 'First Outfit' : (log.title || `Outfit #${index + 1}`);
                   return (
                     <button
                       key={log.log_id}
@@ -371,7 +379,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Shirt className="ico" style={{ color: 'var(--primary)' }} />
                 <strong style={{ fontSize: 14 }}>
-                  {activeLog.title || (isEditingHistorical ? 'Historical Outfit' : "Today's Outfit")} ({selectedItems.length} {selectedItems.length === 1 ? 'item' : 'items'})
+                  {activeOutfitTitle} ({selectedItems.length} {selectedItems.length === 1 ? 'item' : 'items'})
                 </strong>
               </div>
               
