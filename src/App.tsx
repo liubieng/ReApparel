@@ -246,6 +246,7 @@ export default function App() {
         const fetchPromises: Promise<any>[] = [
           closetService.getItems(user.user_id).catch(() => mockDatabase.getClothingItems(user.user_id)),
           closetService.getAssessments(user.user_id).catch(() => mockDatabase.getAssessments(user.user_id)),
+          closetService.getDailyLogs(user.user_id).catch(() => mockDatabase.getDailyLogs(user.user_id)),
           friendsService.fetchAndMergeUsersFromSupabase().catch(() => {})
         ];
 
@@ -256,10 +257,11 @@ export default function App() {
           fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => {}));
         }
 
-        const [items, userAssessments] = await Promise.all(fetchPromises);
+        const [items, userAssessments, userLogs] = await Promise.all(fetchPromises);
 
         if (items) setGarments(items);
         if (userAssessments) setAssessments(userAssessments);
+        if (userLogs) setDailyLogs(userLogs);
         setAllUsers(mockDatabase.getAllUsers());
         setFriends(friendsService.getConnectedFriends());
         setOpportunities(mapsService.getDonationOpportunities());
@@ -310,6 +312,16 @@ export default function App() {
 
     return () => clearInterval(pollTimer);
   }, [view]);
+
+  // Fetch/refresh daily clothing logs whenever user navigates to the Daily Clothing Log tab
+  useEffect(() => {
+    if (view !== 'daily-log') return;
+    const uid = currentUser?.user_id;
+    if (!uid) return;
+    closetService.getDailyLogs(uid).then(logs => {
+      if (logs) setDailyLogs(logs);
+    }).catch(() => {});
+  }, [view, currentUser]);
 
   // Supabase Realtime Listener: when any device adds/updates a donation opportunity,
   // merge the changed row straight from the event payload (no extra table query).

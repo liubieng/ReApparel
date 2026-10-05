@@ -834,6 +834,18 @@ class MockDatabaseEngine {
     return newLog;
   }
 
+  public upsertDailyLog(log: DailyClothingLog): void {
+    const idx = this.state.daily_clothing_logs.findIndex(
+      l => l.log_id === log.log_id || (isSameUser(l.user_id, log.user_id) && l.log_date === log.log_date)
+    );
+    if (idx !== -1) {
+      this.state.daily_clothing_logs[idx] = { ...this.state.daily_clothing_logs[idx], ...log };
+    } else {
+      this.state.daily_clothing_logs.push(log);
+    }
+    this.notify();
+  }
+
   public updateTodayLogItems(logId: number, items: ClothingItem[]): DailyClothingLog | null {
     const log = this.state.daily_clothing_logs.find(l => l.log_id === logId);
     if (!log || log.is_finalized) return null;

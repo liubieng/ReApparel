@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { safeStorage } from '../services/supabaseClient';
 
 /**
@@ -64,14 +64,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   });
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [simulatedOffline, setSimulatedOffline] = useState(false);
 
   // Sync to safeStorage
   const handleTogglePref = (key: keyof NotificationPrefs, label: string) => {
     setErrorMessage(null);
 
     // Check online status (TC_NOTIF_05)
-    const isOffline = !navigator.onLine || simulatedOffline;
+    const isOffline = !navigator.onLine;
     if (isOffline) {
       const msg = 'Notification preference could not be saved.';
       setErrorMessage(msg);
@@ -166,30 +165,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }}>
             Notification Preferences
           </h3>
-
-          {/* Test Offline Simulator Pill */}
-          <button
-            type="button"
-            className="btn btn-g"
-            style={{ fontSize: 11, padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 5 }}
-            onClick={() => {
-              setSimulatedOffline(!simulatedOffline);
-              toast(simulatedOffline ? 'Online network restored.' : 'Simulating offline network state.');
-            }}
-            title="Toggle offline state to test TC_NOTIF_05 network failure revert"
-          >
-            {simulatedOffline ? (
-              <>
-                <WifiOff className="ico" style={{ width: 12, height: 12, color: 'var(--danger)' }} />
-                <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Simulated Offline ON</span>
-              </>
-            ) : (
-              <>
-                <Wifi className="ico" style={{ width: 12, height: 12, color: 'var(--primary)' }} />
-                <span>Simulate Offline</span>
-              </>
-            )}
-          </button>
         </div>
 
         {/* Offline Error Banner (TC_NOTIF_05) */}

@@ -292,8 +292,72 @@ export const closetService = {
     return mockDatabase.getTodayLog(today);
   },
 
-  async getDailyLogs(): Promise<DailyClothingLog[]> {
-    return mockDatabase.getDailyLogs();
+  async getDailyLogs(userId?: string): Promise<DailyClothingLog[]> {
+    const localLogs = mockDatabase.getDailyLogs(userId);
+
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const currentUser = mockDatabase.getCurrentUser();
+        const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
+        if (!isUuid) return localLogs;
+
+        const query = supabase
+          .from('daily_clothing_log')
+          .select(`
+            log_id,
+            user_id,
+            log_date,
+            is_finalized,
+            finalized_at,
+            daily_log_item (
+              item_id,
+              clothing_item (*)
+            )
+          `)
+          .eq('user_id', targetUid)
+          .order('log_date', { ascending: false });
+
+        const { data, error } = await withTimeout(query, 4000);
+
+        if (!error && data && data.length > 0) {
+          const remoteLogs: DailyClothingLog[] = (data as any[]).map(r => {
+            const items: ClothingItem[] = (r.daily_log_item || [])
+              .map((dli: any) => {
+                const ci = dli.clothing_item;
+                if (!ci) return null;
+                return {
+                  ...ci,
+                  category: ci.category || 'Tops',
+                  color: ci.color || 'Neutral'
+                };
+              })
+              .filter(Boolean);
+
+            return {
+              log_id: r.log_id,
+              user_id: r.user_id,
+              log_date: r.log_date,
+              is_finalized: Boolean(r.is_finalized),
+              finalized_at: r.finalized_at,
+              items: items
+            };
+          });
+
+          // Sync into mockDatabase
+          remoteLogs.forEach(rem => {
+            mockDatabase.upsertDailyLog(rem);
+          });
+
+          return mockDatabase.getDailyLogs(targetUid);
+        }
+      } catch (err) {
+        console.warn('Error fetching daily logs from Supabase:', err);
+      }
+    }
+
+    return localLogs;
   },
 
   async createDailyLog(dateString: string, title?: string): Promise<DailyClothingLog> {
