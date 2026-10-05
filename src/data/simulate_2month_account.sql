@@ -6,7 +6,7 @@
 --  1. User Account: "Elena Vance" (Created 60 days ago)
 --     - Email: elena.vance@reapparel.app
 --     - Friend Code: RP-ELENA-2026
---     - Login: Use email/friend code and any password (8+ chars)
+--     - Password: Password123!
 --  2. 3 Longitudinal BSAS Assessments:
 --     - Day 2 (58 days ago): Score 5 ("Indicative" - baseline shopping issues)
 --     - Day 30 (29 days ago): Score 3 ("Non-Indicative" - 1-month check-in)
@@ -117,8 +117,8 @@ BEGIN
     -- ----------------------------------------------------------------
     -- STEP 2: Create User Profile
     -- ----------------------------------------------------------------
-    INSERT INTO users (user_id, email, first_name, last_name, friend_code, created_at)
-    VALUES (v_user_id, v_email, v_first_name, v_last_name, v_friend_code, v_created_at);
+    INSERT INTO users (user_id, email, first_name, last_name, friend_code, password, created_at)
+    VALUES (v_user_id, v_email, v_first_name, v_last_name, v_friend_code, 'Password123!', v_created_at);
 
     -- ----------------------------------------------------------------
     -- STEP 3: 3 BSAS Longitudinal Recovery Assessments

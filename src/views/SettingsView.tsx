@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 import { safeStorage } from '../services/supabaseClient';
 
 /**
@@ -24,7 +24,7 @@ import { safeStorage } from '../services/supabaseClient';
 interface SettingsViewProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
-  onOpenDatabaseModal: () => void;
+  onOpenDatabaseModal?: () => void;
   onDeleteAccount?: () => void;
   toast: (msg: string) => void;
 }
@@ -329,26 +329,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onClick={onDeleteAccount}
         >
           Delete account
-        </button>
-
-        {/* Developer / Defense schema connection modal trigger */}
-        <button
-          type="button"
-          onClick={onOpenDatabaseModal}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: 11.5,
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            textDecoration: 'underline'
-          }}
-        >
-          <Database style={{ width: 12, height: 12 }} />
-          <span>Open Database Connection &amp; Schema</span>
         </button>
       </div>
 

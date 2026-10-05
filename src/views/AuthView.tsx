@@ -93,8 +93,23 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
 
               if (data && data.length > 0) {
                 const remoteUser = data[0] as User;
-                // Password is stored locally only — accept login and save password for next time
-                remoteUser.password = pwd;
+
+                // Validate password if stored in remote database
+                if (remoteUser.password && remoteUser.password !== pwd) {
+                  setErrorMsg('The login credentials are invalid. Please check your password.');
+                  return;
+                }
+
+                // If remote user has no password recorded yet (legacy row), record entered password
+                if (!remoteUser.password) {
+                  remoteUser.password = pwd;
+                  try {
+                    await supabase.from('users').update({ password: pwd }).eq('user_id', remoteUser.user_id);
+                  } catch {
+                    // Non-fatal if column not yet added
+                  }
+                }
+
                 mockDatabase.upsertUser(remoteUser);
                 mockDatabase.setCurrentUserId(remoteUser.user_id);
                 user = remoteUser;
@@ -190,14 +205,25 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         // Persist to Supabase if available so the account is accessible cross-device
         if (supabase) {
           try {
-            const { error: insertError } = await supabase.from('users').insert([{
+            const insertPayload: Record<string, any> = {
               user_id: newUser.user_id,
               email: newUser.email,
               first_name: newUser.first_name,
               last_name: newUser.last_name,
               friend_code: newUser.friend_code,
+              password: newUser.password,
               created_at: newUser.created_at
-            }]);
+            };
+
+            let { error: insertError } = await supabase.from('users').insert([insertPayload]);
+
+            // Fallback: If remote schema hasn't added the password column yet (code 42703), retry without password
+            if (insertError && (insertError.code === '42703' || insertError.message?.includes('password'))) {
+              const fallbackPayload = { ...insertPayload };
+              delete fallbackPayload.password;
+              const retry = await supabase.from('users').insert([fallbackPayload]);
+              insertError = retry.error;
+            }
 
             if (insertError) {
               // Ignore duplicate-key errors (user somehow already exists remotely)
