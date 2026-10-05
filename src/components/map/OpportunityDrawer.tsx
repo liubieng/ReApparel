@@ -15,7 +15,10 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
 }) => {
   if (!opportunity) return null;
 
-  const flagCount = (opportunity.flags_count || 0) + (opportunity.flags?.length || 0);
+  // flags_count and flags.length describe the same reports — never add them together
+  const flagCount = opportunity.flags && opportunity.flags.length > 0
+    ? opportunity.flags.length
+    : (opportunity.flags_count || 0);
 
   return (
     <div
