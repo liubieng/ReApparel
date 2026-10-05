@@ -76,10 +76,17 @@ export interface SupabaseConfig {
   isConfigured: boolean;
 }
 
-const DEFAULT_FALLBACK_URL = 'https://mgkcnewvfdpjemiexptm.supabase.co';
-const DEFAULT_FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1na2NuZXd2ZmRwamVtaWV4cHRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1ODQwNzYsImV4cCI6MjEwNjE2MDA3Nn0.vdMZDM6Nsu7xk7bdvRpWTGceYJ9fgIzQd5cJTfN73pQ';
+const DEFAULT_FALLBACK_URL = 'https://rhxarhotbzyzgyjaeyiu.supabase.co';
+const DEFAULT_FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJoeGFyaG90Ynp5emd5amFleWl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzg3ODgsImV4cCI6MjEwNjc1NDc4OH0.W3_9SzfCIHCDBvmDDBLr1I2y_AdDvpo2IllX7vxxx54';
 
 export function getStoredSupabaseConfig(): SupabaseConfig {
+  // Purge legacy fallback project or corrupted triple-slash configs from localStorage
+  const rawStoredUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL);
+  if (rawStoredUrl && (rawStoredUrl.includes('mgkcnewvfdpjemiexptm') || rawStoredUrl.includes('https:///'))) {
+    safeStorage.removeItem(STORAGE_KEY_SUPABASE_URL);
+    safeStorage.removeItem(STORAGE_KEY_SUPABASE_KEY);
+  }
+
   const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || DEFAULT_FALLBACK_URL;
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || DEFAULT_FALLBACK_KEY;
   let storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
