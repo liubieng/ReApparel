@@ -119,24 +119,36 @@ export const mapsService = {
         supabase
           .from('donation_opportunity')
           .select('*')
-          .order('donation_id', { ascending: false }),
+          .order('donation_id', { ascending: false })
+          .limit(200),
         3000
       );
       if (error || !data || data.length === 0) return;
-      const remote = (data as any[])
-        .filter(r => r.name && r.name !== 'Test Drive')
-        .map(r => ({
-          ...r,
-          latitude: Number(r.latitude),
-          longitude: Number(r.longitude),
-          is_live_drive: r.is_live_drive ?? true,
-          flags: r.flags || [],
-          flags_count: r.flags_count || 0
-        })) as DonationOpportunity[];
-      mockDatabase.addMultipleDonationOpportunities(remote);
+      this.mergeRemoteRows(data as any[]);
     } catch {
       // Silently ignore network failures — local data still shown
     }
+  },
+
+  /** Normalizes raw Supabase rows and merges them into the local store (used by fetch + realtime). */
+  mergeRemoteRows(rows: any[]): void {
+    const remote = rows
+      .filter(r => r && r.name && r.name !== 'Test Drive')
+      .map(r => ({
+        ...r,
+        latitude: Number(r.latitude),
+        longitude: Number(r.longitude),
+        is_live_drive: r.is_live_drive ?? true,
+        flags: r.flags || [],
+        flags_count: r.flags_count || 0
+      })) as DonationOpportunity[];
+    if (remote.length > 0) mockDatabase.addMultipleDonationOpportunities(remote);
+  },
+
+  removeDonationOpportunity(donationId: number): void {
+    mockDatabase.setDonationOpportunities(
+      mockDatabase.getDonationOpportunities().filter(o => o.donation_id !== donationId)
+    );
   },
 
   calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {

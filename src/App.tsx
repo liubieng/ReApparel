@@ -291,26 +291,28 @@ export default function App() {
     return () => unsubscribe();
   }, [loadData, syncLocalState]);
 
-  // Always fetch fresh donation drives directly from Supabase when opening the Donations view
+  // Fetch donation drives once when opening the Donations view.
+  // Realtime (below) handles live updates; this slow fallback only runs while the tab is visible,
+  // to stay well within Supabase free-plan request limits.
   useEffect(() => {
-    if (view === 'donations') {
+    if (view !== 'donations') return;
+
+    const refresh = () => {
       mapsService.fetchAndMergeFromSupabase().then(() => {
         setOpportunities(mapsService.getDonationOpportunities());
       }).catch(() => {});
+    };
+    refresh();
 
-      // Auto-poll every 10 seconds so new community drives appear automatically without page refresh
-      const pollTimer = setInterval(() => {
-        mapsService.fetchAndMergeFromSupabase().then(() => {
-          setOpportunities(mapsService.getDonationOpportunities());
-        }).catch(() => {});
-      }, 10000);
+    const pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 120000);
 
-      return () => clearInterval(pollTimer);
-    }
+    return () => clearInterval(pollTimer);
   }, [view]);
 
-  // Supabase Realtime Listener for Live Capstone Demonstration:
-  // When any device adds a donation opportunity, other devices update their map automatically
+  // Supabase Realtime Listener: when any device adds/updates a donation opportunity,
+  // merge the changed row straight from the event payload (no extra table query).
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -320,8 +322,12 @@ export default function App() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'donation_opportunity' },
-          async () => {
-            await mapsService.fetchAndMergeFromSupabase();
+          (payload: any) => {
+            if (payload?.eventType === 'DELETE' && payload.old?.donation_id) {
+              mapsService.removeDonationOpportunity(payload.old.donation_id);
+            } else if (payload?.new?.donation_id) {
+              mapsService.mergeRemoteRows([payload.new]);
+            }
             setOpportunities(mapsService.getDonationOpportunities());
           }
         )

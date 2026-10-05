@@ -23,15 +23,14 @@ export const closetService = {
         const currentUser = mockDatabase.getCurrentUser();
         const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
+        // Without a valid user ID the query would scan every user's closet — skip it
+        if (!isUuid) return localItems;
 
-        let query = supabase
+        const query = supabase
           .from('clothing_item')
           .select('*, item_tag(tag(*))')
+          .eq('user_id', targetUid)
           .order('date_added', { ascending: false });
-
-        if (isUuid) {
-          query = query.eq('user_id', targetUid);
-        }
 
         const { data, error } = await withTimeout(query, 3000);
 
@@ -184,15 +183,14 @@ export const closetService = {
         const currentUser = mockDatabase.getCurrentUser();
         const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
+        // Without a valid user ID the query would scan every user's assessments — skip it
+        if (!isUuid) return deduplicateAssessments(localAssessments);
 
-        let query = supabase
+        const query = supabase
           .from('bsas_assessment')
-          .select('*')
+          .select('assessment_id, user_id, score, risk_level, taken_at')
+          .eq('user_id', targetUid)
           .order('taken_at', { ascending: false });
-
-        if (isUuid) {
-          query = query.eq('user_id', targetUid);
-        }
 
         const { data, error } = await withTimeout(query, 3000);
 
