@@ -1,6 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { DonationOpportunity } from '../../types/database';
 import { MapPin, Navigation, Share2, X, AlertCircle } from 'lucide-react';
+
+const customLeafletPinIcon = typeof window !== 'undefined' ? L.divIcon({
+  className: 'reapparel-leaflet-pin',
+  html: `
+    <div style="
+      position: relative;
+      width: 30px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35));
+    ">
+      <svg width="30" height="38" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.37258 0 0 5.37258 0 12C0 21 12 32 12 32C12 32 24 21 24 12C24 5.37258 18.6274 0 12 0Z" fill="#2E5234" stroke="#ffffff" stroke-width="1.8"/>
+        <circle cx="12" cy="11" r="4.5" fill="#ffffff"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [30, 38],
+  iconAnchor: [15, 38],
+  tooltipAnchor: [0, -38]
+}) : undefined as any;
 
 interface AddDonationModalProps {
   isOpen: boolean;
@@ -30,20 +56,110 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+
+  // Mount Leaflet Map with real OpenStreetMap tiles when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = setTimeout(() => {
+      if (!mapContainerRef.current) return;
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
+
+      const initialLat = (!isNaN(latitude) && latitude !== 0) ? latitude : (userLocation?.lat || 9.317);
+      const initialLng = (!isNaN(longitude) && longitude !== 0) ? longitude : (userLocation?.lng || 123.303);
+
+      const map = L.map(mapContainerRef.current, {
+        center: [initialLat, initialLng],
+        zoom: 14,
+        zoomControl: true,
+        attributionControl: false
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      const marker = L.marker([initialLat, initialLng], {
+        icon: customLeafletPinIcon,
+        draggable: true
+      }).addTo(map);
+
+      marker.bindTooltip('Drag or click map to move', {
+        direction: 'top',
+        offset: [0, -32]
+      });
+
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        setLatitude(Number(pos.lat.toFixed(5)));
+        setLongitude(Number(pos.lng.toFixed(5)));
+      });
+
+      map.on('click', (e) => {
+        marker.setLatLng(e.latlng);
+        setLatitude(Number(e.latlng.lat.toFixed(5)));
+        setLongitude(Number(e.latlng.lng.toFixed(5)));
+      });
+
+      mapInstanceRef.current = map;
+      markerRef.current = marker;
+
+      map.invalidateSize();
+    }, 60);
+
+    return () => {
+      clearTimeout(timer);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, [isOpen]);
+
+  // Sync marker position when lat/lng inputs change
+  useEffect(() => {
+    if (markerRef.current && mapInstanceRef.current && !isNaN(latitude) && !isNaN(longitude)) {
+      const cur = markerRef.current.getLatLng();
+      if (Math.abs(cur.lat - latitude) > 0.0001 || Math.abs(cur.lng - longitude) > 0.0001) {
+        markerRef.current.setLatLng([latitude, longitude]);
+        mapInstanceRef.current.panTo([latitude, longitude]);
+      }
+    }
+  }, [latitude, longitude]);
 
   const handleUseCurrentLocation = () => {
     if (userLocation) {
-      setLatitude(Number(userLocation.lat.toFixed(5)));
-      setLongitude(Number(userLocation.lng.toFixed(5)));
+      const lat = Number(userLocation.lat.toFixed(5));
+      const lng = Number(userLocation.lng.toFixed(5));
+      setLatitude(lat);
+      setLongitude(lng);
+      if (markerRef.current && mapInstanceRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+        mapInstanceRef.current.setView([lat, lng], 15);
+      }
       return;
     }
 
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setLatitude(Number(pos.coords.latitude.toFixed(5)));
-          setLongitude(Number(pos.coords.longitude.toFixed(5)));
+          const lat = Number(pos.coords.latitude.toFixed(5));
+          const lng = Number(pos.coords.longitude.toFixed(5));
+          setLatitude(lat);
+          setLongitude(lng);
+          if (markerRef.current && mapInstanceRef.current) {
+            markerRef.current.setLatLng([lat, lng]);
+            mapInstanceRef.current.setView([lat, lng], 15);
+          }
         },
         () => {
           setErrorMsg('Could not detect device GPS location.');
@@ -71,6 +187,16 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
     setErrorMsg(null);
 
     try {
+      const addrLower = address.toLowerCase();
+      let detectedBarangay = 'Daro';
+      if (addrLower.includes('bantayan')) detectedBarangay = 'Bantayan';
+      else if (addrLower.includes('mangnao')) detectedBarangay = 'Mangnao';
+      else if (addrLower.includes('piapi')) detectedBarangay = 'Piapi';
+      else if (addrLower.includes('taclobo')) detectedBarangay = 'Taclobo';
+      else if (addrLower.includes('calindagan')) detectedBarangay = 'Calindagan';
+      else if (addrLower.includes('bagacay')) detectedBarangay = 'Bagacay';
+      else if (addrLower.includes('daro')) detectedBarangay = 'Daro';
+
       await onSubmit({
         name: name.trim(),
         organizer: organizer.trim() || undefined,
@@ -85,7 +211,12 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
         post_title: `${name.trim()} - Community Donation Drive`,
         post_snippet: postSnippet.trim() || undefined,
         post_date: 'Active Community Drive',
-        is_live_drive: true
+        is_live_drive: true,
+        country: 'Philippines',
+        region: 'Central Visayas',
+        province: 'Negros Oriental',
+        city: 'Dumaguete City',
+        barangay: detectedBarangay
       });
       onClose();
     } catch (err: any) {
@@ -95,15 +226,7 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
     }
   };
 
-  // Compute pin position within a small preview box
-  // Clamp lat to ~0–20°N (rough PH range), lng to ~115–130°E
-  const MAP_W = 260;
-  const MAP_H = 140;
-  const LAT_MIN = 4, LAT_MAX = 22;
-  const LNG_MIN = 114, LNG_MAX = 130;
-  const pinX = Math.max(0, Math.min(MAP_W, ((longitude - LNG_MIN) / (LNG_MAX - LNG_MIN)) * MAP_W));
-  const pinY = Math.max(0, Math.min(MAP_H, ((LAT_MAX - latitude) / (LAT_MAX - LAT_MIN)) * MAP_H));
-  const isValidCoords = !isNaN(latitude) && !isNaN(longitude);
+  if (!isOpen) return null;
 
   return (
     <div
@@ -257,81 +380,80 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
               </div>
             </div>
 
-            {/* Visual map preview */}
+            {/* Real Interactive OpenStreetMap (Identical to main page) */}
             <div style={{
               position: 'relative',
               width: '100%',
-              height: MAP_H,
+              height: 240,
               borderRadius: 8,
               overflow: 'hidden',
               border: '1px solid var(--border)',
-              background: 'linear-gradient(160deg, #dbeafe 0%, #bfdbfe 40%, #93c5fd 70%, #60a5fa 100%)'
+              isolation: 'isolate'
             }}>
-              {/* SVG land mass (simplified Philippine silhouette-style blobs) */}
-              <svg
-                viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-                preserveAspectRatio="none"
-              >
-                {/* Grid lines */}
-                {[0.25, 0.5, 0.75].map(f => (
-                  <React.Fragment key={f}>
-                    <line x1={MAP_W * f} y1={0} x2={MAP_W * f} y2={MAP_H} stroke="rgba(255,255,255,0.3)" strokeWidth={0.5} />
-                    <line x1={0} y1={MAP_H * f} x2={MAP_W} y2={MAP_H * f} stroke="rgba(255,255,255,0.3)" strokeWidth={0.5} />
-                  </React.Fragment>
-                ))}
-                {/* Simplified land blobs */}
-                <ellipse cx={130} cy={70} rx={32} ry={55} fill="rgba(134,239,172,0.55)" />
-                <ellipse cx={155} cy={45} rx={20} ry={28} fill="rgba(134,239,172,0.45)" />
-                <ellipse cx={108} cy={100} rx={18} ry={22} fill="rgba(134,239,172,0.5)" />
-                <ellipse cx={165} cy={88} rx={16} ry={24} fill="rgba(134,239,172,0.4)" />
-                <ellipse cx={90} cy={65} rx={14} ry={18} fill="rgba(134,239,172,0.4)" />
-                <ellipse cx={142} cy={108} rx={10} ry={14} fill="rgba(134,239,172,0.35)" />
-                {/* Corner labels */}
-                <text x={4} y={11} fontSize={8} fill="rgba(0,0,0,0.35)">N 22°</text>
-                <text x={4} y={MAP_H - 4} fontSize={8} fill="rgba(0,0,0,0.35)">N 4°</text>
-                <text x={MAP_W - 28} y={11} fontSize={8} fill="rgba(0,0,0,0.35)">130°E</text>
-                <text x={4} y={MAP_H / 2 + 4} fontSize={8} fill="rgba(0,0,0,0.35)">114°E</text>
-              </svg>
+              <div
+                ref={mapContainerRef}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  zIndex: 1
+                }}
+              />
 
-              {/* Pin marker */}
-              {isValidCoords && (
-                <div style={{
-                  position: 'absolute',
-                  left: `${(pinX / MAP_W) * 100}%`,
-                  top: `${(pinY / MAP_H) * 100}%`,
-                  transform: 'translate(-50%, -100%)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  pointerEvents: 'none'
-                }}>
-                  <div style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: '50% 50% 50% 0',
-                    transform: 'rotate(-45deg)',
-                    background: 'var(--primary, #059669)',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-                    border: '2px solid #fff'
-                  }} />
-                  <div style={{
-                    marginTop: 2,
-                    background: 'rgba(0,0,0,0.65)',
-                    color: '#fff',
-                    fontSize: 8.5,
-                    padding: '1px 4px',
-                    borderRadius: 4,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {latitude.toFixed(3)}, {longitude.toFixed(3)}
-                  </div>
-                </div>
-              )}
+              {/* Instructions banner on map */}
+              <div style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(4px)',
+                color: '#1B2A1D',
+                fontSize: 10.5,
+                padding: '3px 10px',
+                borderRadius: 20,
+                fontWeight: 600,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                pointerEvents: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                zIndex: 400
+              }}>
+                <MapPin style={{ width: 11, height: 11, color: '#2E5234' }} />
+                <span>Click map or drag pin to place</span>
+              </div>
             </div>
-            <p style={{ margin: '6px 0 0', fontSize: 10.5, color: 'var(--text-muted)' }}>
-              Adjust coordinates above or use GPS to position the pin on the map.
-            </p>
+
+            {/* Quick Pin Presets & Instructions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 6 }}>
+              <p style={{ margin: 0, fontSize: 10.5, color: 'var(--text-muted)' }}>
+                Click or drag on the map to position the pin, or choose a quick city:
+              </p>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {[
+                  { name: 'Dumaguete', lat: 9.317, lng: 123.303 },
+                  { name: 'Cebu City', lat: 10.316, lng: 123.885 },
+                  { name: 'Manila', lat: 14.599, lng: 120.984 },
+                  { name: 'Davao', lat: 7.190, lng: 125.455 }
+                ].map(loc => (
+                  <button
+                    key={loc.name}
+                    type="button"
+                    className="btn btn-g"
+                    style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10 }}
+                    onClick={() => {
+                      setLatitude(loc.lat);
+                      setLongitude(loc.lng);
+                      if (markerRef.current && mapInstanceRef.current) {
+                        markerRef.current.setLatLng([loc.lat, loc.lng]);
+                        mapInstanceRef.current.setView([loc.lat, loc.lng], 14);
+                      }
+                    }}
+                  >
+                    {loc.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Hours & Accepted Materials */}

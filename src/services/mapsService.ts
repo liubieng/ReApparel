@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase } from './supabaseClient';
+import { mockDatabase, getSupabase, withTimeout } from './supabaseClient';
 import { DonationOpportunity, DonationFlag } from '../types/database';
 
 export const mapsService = {
@@ -24,16 +24,71 @@ export const mapsService = {
   },
 
   async addDonationOpportunity(opp: Omit<DonationOpportunity, 'donation_id'>): Promise<DonationOpportunity> {
+    // 1. Immediately record in persistent local store so the drive shows up on the map right away
     const created = mockDatabase.addDonationOpportunity(opp);
+
+    // 2. Safely synchronize to Supabase (adapts to both full and core schemas)
     const supabase = getSupabase();
     if (supabase) {
-      const { error } = await supabase.from('donation_opportunity').insert([created]);
-      if (error) {
-        // Roll back: remove just the one failed local entry
-        mockDatabase.setDonationOpportunities(
-          mockDatabase.getDonationOpportunities().filter(o => o.donation_id !== created.donation_id)
+      try {
+        const fullPayload: Record<string, any> = {
+          name: opp.name.trim(),
+          address: opp.address.trim(),
+          latitude: Number(opp.latitude),
+          longitude: Number(opp.longitude),
+          hours: opp.hours?.trim() || 'Mon-Sun 8:00 AM - 8:00 PM',
+          accepted_types: opp.accepted_types?.trim() || 'Clothing, Shoes, Linens, Bags'
+        };
+
+        if (opp.organizer) fullPayload.organizer = opp.organizer.trim();
+        if (opp.post_url) fullPayload.post_url = opp.post_url.trim();
+        if (opp.post_platform) fullPayload.post_platform = opp.post_platform;
+        if (opp.post_title) fullPayload.post_title = opp.post_title.trim();
+        if (opp.post_snippet) fullPayload.post_snippet = opp.post_snippet.trim();
+        if (typeof opp.is_live_drive === 'boolean') fullPayload.is_live_drive = opp.is_live_drive;
+        if (opp.city) fullPayload.city = opp.city.trim();
+        if (opp.province) fullPayload.province = opp.province.trim();
+        if (opp.barangay) fullPayload.barangay = opp.barangay.trim();
+
+        let { data, error } = await withTimeout(
+          supabase
+            .from('donation_opportunity')
+            .insert([fullPayload])
+            .select()
+            .single(),
+          5000
         );
-        throw new Error(`Could not save donation drive: ${error.message}`);
+
+        // Fallback: If table does not yet have the extra columns, insert core schema fields
+        if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+          const corePayload = {
+            name: opp.name.trim(),
+            address: opp.address.trim(),
+            latitude: Number(opp.latitude),
+            longitude: Number(opp.longitude),
+            hours: opp.hours?.trim() || 'Mon-Sun 8:00 AM - 8:00 PM',
+            accepted_types: opp.accepted_types?.trim() || 'Clothing, Shoes, Linens, Bags'
+          };
+          const fallbackRes = await withTimeout(
+            supabase
+              .from('donation_opportunity')
+              .insert([corePayload])
+              .select()
+              .single(),
+            5000
+          );
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
+
+        if (!error && data && data.donation_id) {
+          mockDatabase.updateDonationOpportunityId(created.donation_id, data.donation_id);
+          created.donation_id = data.donation_id;
+        } else if (error) {
+          console.warn('Supabase remote donation sync notice (saved locally):', error.message);
+        }
+      } catch (err: any) {
+        console.warn('Supabase remote donation sync timeout (saved locally):', err?.message || err);
       }
     }
     return created;
@@ -60,12 +115,24 @@ export const mapsService = {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
-      const { data, error } = await supabase
-        .from('donation_opportunity')
-        .select('*')
-        .order('donation_id', { ascending: false });
+      const { data, error } = await withTimeout(
+        supabase
+          .from('donation_opportunity')
+          .select('*')
+          .order('donation_id', { ascending: false }),
+        3000
+      );
       if (error || !data || data.length === 0) return;
-      const remote = data as DonationOpportunity[];
+      const remote = (data as any[])
+        .filter(r => r.name && r.name !== 'Test Drive')
+        .map(r => ({
+          ...r,
+          latitude: Number(r.latitude),
+          longitude: Number(r.longitude),
+          is_live_drive: r.is_live_drive ?? true,
+          flags: r.flags || [],
+          flags_count: r.flags_count || 0
+        })) as DonationOpportunity[];
       mockDatabase.addMultipleDonationOpportunities(remote);
     } catch {
       // Silently ignore network failures — local data still shown

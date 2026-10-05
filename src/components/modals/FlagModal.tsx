@@ -14,7 +14,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
   onClose,
   onSubmitFlag
 }) => {
-  const [flagType, setFlagType] = useState<DonationFlagType>('Inactive');
+  const [flagType, setFlagType] = useState<DonationFlagType | null>(null);
   const [flagNotes, setFlagNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -22,6 +22,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
   if (!isOpen || !opportunity) return null;
 
   const handleClose = () => {
+    setFlagType(null);
     setFlagNotes('');
     setErrorMsg(null);
     onClose();
@@ -29,10 +30,23 @@ export const FlagModal: React.FC<FlagModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     setErrorMsg(null);
+
+    // TC_FLAG_03: Verify flag cannot be submitted without a reason
+    if (!flagType) {
+      setErrorMsg('A reason is required to submit a report. Please select one of the options below.');
+      return;
+    }
+
+    if (!flagNotes.trim()) {
+      setErrorMsg('A description of the report is required. Please explain the issue with this location.');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await onSubmitFlag(flagType, flagNotes.trim() || undefined);
+      await onSubmitFlag(flagType, flagNotes.trim());
+      setFlagType(null);
       setFlagNotes('');
       setErrorMsg(null);
       onClose();
@@ -74,7 +88,9 @@ export const FlagModal: React.FC<FlagModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>Report Reason</label>
+            <label style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              Report Reason <span style={{ color: 'var(--danger)' }}>*</span>
+            </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label style={{
                 display: 'flex',
@@ -91,7 +107,10 @@ export const FlagModal: React.FC<FlagModalProps> = ({
                   name="flagType"
                   value="Inactive"
                   checked={flagType === 'Inactive'}
-                  onChange={() => setFlagType('Inactive')}
+                  onChange={() => {
+                    setFlagType('Inactive');
+                    if (errorMsg) setErrorMsg(null);
+                  }}
                 />
                 <div>
                   <strong style={{ fontSize: 13, display: 'block' }}>Inactive / Removed</strong>
@@ -114,7 +133,10 @@ export const FlagModal: React.FC<FlagModalProps> = ({
                   name="flagType"
                   value="Inaccurate"
                   checked={flagType === 'Inaccurate'}
-                  onChange={() => setFlagType('Inaccurate')}
+                  onChange={() => {
+                    setFlagType('Inaccurate');
+                    if (errorMsg) setErrorMsg(null);
+                  }}
                 />
                 <div>
                   <strong style={{ fontSize: 13, display: 'block' }}>Inaccurate Details</strong>
@@ -125,12 +147,18 @@ export const FlagModal: React.FC<FlagModalProps> = ({
           </div>
 
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Additional Notes (Optional)</label>
+            <label style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+              Report Description <span style={{ color: 'var(--danger)' }}>*</span>
+            </label>
             <textarea
               rows={3}
+              required
               placeholder="e.g. Bin was moved behind the church gate; only open until 4pm."
               value={flagNotes}
-              onChange={(e) => setFlagNotes(e.target.value)}
+              onChange={(e) => {
+                setFlagNotes(e.target.value);
+                if (errorMsg) setErrorMsg(null);
+              }}
               style={{ width: '100%', fontSize: 12.5 }}
             />
           </div>

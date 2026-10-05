@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Navigation, Flag } from 'lucide-react';
+import { MapPin, Navigation, Flag, Info } from 'lucide-react';
 import { DonationOpportunity } from '../../types/database';
 
 interface OpportunityDrawerProps {
@@ -48,12 +48,52 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <strong style={{ fontSize: 16 }}>{opportunity.name}</strong>
             {flagCount > 0 ? (
-              <span className="pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 700 }}>
-                ⚠️ {flagCount} Community Flag{flagCount === 1 ? '' : 's'}
+              <span className="pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span 
+                  title={`There are ${flagCount} community report(s) for this location.`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    cursor: 'help'
+                  }}
+                >
+                  <Info style={{ width: 12, height: 12 }} />
+                </span>
+                <span>{flagCount} Community Report{flagCount === 1 ? '' : 's'}</span>
               </span>
             ) : (
-              <span className="pill on">
-                ✓ Verified Active
+              <span 
+                className="pill on" 
+                title="Verified Active"
+                style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  padding: '3px 8px',
+                  borderRadius: 20
+                }}
+              >
+                <span 
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    background: '#16a34a',
+                    color: '#ffffff',
+                    cursor: 'help'
+                  }}
+                >
+                  <Info style={{ width: 12, height: 12 }} />
+                </span>
               </span>
             )}
           </div>
@@ -87,16 +127,34 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
         )}
       </div>
 
-      {opportunity.flags && opportunity.flags.length > 0 && (
+      {opportunity.flags && opportunity.flags.length > 0 ? (
         <div className="warn" style={{ marginTop: 12 }}>
-          <strong>Community Reports:</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span 
+              title={`There are ${opportunity.flags.length} community report(s) recorded.`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                background: '#dc2626',
+                color: '#ffffff',
+                cursor: 'help'
+              }}
+            >
+              <Info style={{ width: 12, height: 12 }} />
+            </span>
+            <strong>Community Reports ({opportunity.flags.length}):</strong>
+          </div>
           {opportunity.flags.map(f => (
             <div key={f.flag_id} style={{ marginTop: 4, fontSize: 12 }}>
               &bull; <strong>{f.flag_type}</strong>: {f.notes || 'Reported by community member'} ({new Date(f.flagged_at).toLocaleDateString()})
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <a

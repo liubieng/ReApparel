@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, Check, AlertCircle, Sparkles, ImagePlus, Camera, VideoOff } from 'lucide-react';
+import { Upload, X, AlertCircle, Camera, Sliders } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
 import { 
   CATEGORIES, 
-  CURATED_COLOR_FAMILIES, 
+  NORMAL_CLOTHING_COLORS, 
   CuratedColorFamily,
   createGarmentSilhouette 
 } from '../../data/seedData';
@@ -28,11 +28,17 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [selectedColorHex, setSelectedColorHex] = useState<string>('#64748b');
   const [images, setImages] = useState<string[]>([]);
+  const [activeImageIdx, setActiveImageIdx] = useState<number>(0);
+  const [isolationLevel, setIsolationLevel] = useState<number>(50);
+  const rawImagesRef = useRef<string[]>([]);
+  const rawImageElementsRef = useRef<HTMLImageElement[]>([]);
+  const isolationSeqRef = useRef<number>(0);
+  const debounceTimerRef = useRef<any>(null);
   const [formWarning, setFormWarning] = useState<string | null>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // TC_ADD_02, TC_ADD_04: Image input options (Upload vs Camera)
+  // Image input options (Upload vs Camera)
   const [inputMode, setInputMode] = useState<'upload' | 'camera'>('upload');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -54,9 +60,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   useEffect(() => {
     if (!isOpen) {
       stopCameraStream();
+      rawImagesRef.current = [];
+      rawImageElementsRef.current = [];
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      setActiveImageIdx(0);
     }
     return () => {
       stopCameraStream();
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, [isOpen]);
 
@@ -82,8 +93,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
-  // Capture frame from camera stream (TC_ADD_04)
-  const handleCapturePhoto = () => {
+  // Capture frame from camera stream
+  const handleCapturePhoto = async () => {
     if (images.length >= 3) {
       toast('Maximum 3 photos allowed per garment.');
       return;
@@ -107,7 +118,36 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         dataUrl = createGarmentSilhouette(selectedColorHex || '#2563eb', 'Captured Garment', 'top');
       }
 
-      setImages(prev => [...prev, dataUrl]);
+      const imgEl = new Image();
+      imgEl.crossOrigin = 'anonymous';
+      imgEl.src = dataUrl;
+      await imgEl.decode?.().catch(() => {});
+
+      rawImagesRef.current.push(dataUrl);
+      rawImageElementsRef.current.push(imgEl);
+
+      setIsProcessingImage(true);
+      try {
+        const transparentResult = await removeBackgroundClientSide(imgEl, {
+          tolerance: isolationLevel,
+          removeShadows: isolationLevel >= 25
+        });
+        const finalImage = transparentResult?.dataUrl || dataUrl;
+        setImages(prev => {
+          const next = [...prev, finalImage];
+          setActiveImageIdx(next.length - 1);
+          return next;
+        });
+      } catch {
+        setImages(prev => {
+          const next = [...prev, dataUrl];
+          setActiveImageIdx(next.length - 1);
+          return next;
+        });
+      } finally {
+        setIsProcessingImage(false);
+      }
+
       stopCameraStream();
       setInputMode('upload');
       toast('Photo captured successfully!');
@@ -116,21 +156,23 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
-  // Simulate Camera Failure (TC_ADD_09)
-  const handleSimulateCameraFailure = () => {
+  // Upload image button trigger (directly functional)
+  const handleUploadClick = () => {
     stopCameraStream();
-    setCameraError('Camera failure: The device camera could not capture the image.');
-    setFormWarning('An error occurred during camera capture. Please check camera permissions or try uploading an image.');
+    setInputMode('upload');
+    setCameraError(null);
+    if (images.length >= 3) {
+      toast('Maximum 3 photos allowed per garment.');
+      return;
+    }
+    fileInputRef.current?.click();
   };
-
-  if (!isOpen) return null;
 
   // Image Upload with Automatic Client-Side Background Removal
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // TC_ADD_09: Check for unsupported file formats
     if (!file.type.startsWith('image/')) {
       setFormWarning('The selected file is unsupported. Please upload a valid image file (e.g., JPG, PNG).');
       toast('Unsupported file format.');
@@ -153,19 +195,37 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
           setIsProcessingImage(false);
           return;
         }
+
+        const imgEl = new Image();
+        imgEl.crossOrigin = 'anonymous';
+        imgEl.src = rawDataUrl;
+        await imgEl.decode?.().catch(() => {});
+
+        rawImagesRef.current.push(rawDataUrl);
+        rawImageElementsRef.current.push(imgEl);
+
         try {
-          const transparentResult = await removeBackgroundClientSide(rawDataUrl, {
-            tolerance: 32,
-            removeShadows: false
+          const transparentResult = await removeBackgroundClientSide(imgEl, {
+            tolerance: isolationLevel,
+            removeShadows: isolationLevel >= 25
           });
           const finalImage = transparentResult?.dataUrl || rawDataUrl;
-          setImages(prev => [...prev, finalImage]);
+          setImages(prev => {
+            const next = [...prev, finalImage];
+            setActiveImageIdx(next.length - 1);
+            return next;
+          });
           toast('Photo uploaded successfully!');
         } catch {
-          setImages(prev => [...prev, rawDataUrl]);
+          setImages(prev => {
+            const next = [...prev, rawDataUrl];
+            setActiveImageIdx(next.length - 1);
+            return next;
+          });
           toast('Photo uploaded successfully!');
         } finally {
           setIsProcessingImage(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
         }
       };
       reader.readAsDataURL(file);
@@ -175,8 +235,63 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  // Live adjustment of background isolation level via slider (smooth, debounced & non-blocking)
+  const handleIsolationChange = (newVal: number) => {
+    setIsolationLevel(newVal);
+    if (rawImageElementsRef.current.length === 0 && rawImagesRef.current.length === 0) return;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    const currentSeq = ++isolationSeqRef.current;
+    setIsProcessingImage(true);
+
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const count = Math.max(rawImageElementsRef.current.length, rawImagesRef.current.length);
+        const updatedImages: string[] = [];
+
+        for (let i = 0; i < count; i++) {
+          const imgEl = rawImageElementsRef.current[i];
+          const rawUrl = rawImagesRef.current[i];
+          const source = (imgEl && imgEl.complete && imgEl.naturalWidth > 0) ? imgEl : rawUrl;
+
+          if (!source) continue;
+          if (typeof source === 'string' && !source.startsWith('data:image')) {
+            updatedImages.push(source);
+            continue;
+          }
+
+          try {
+            const res = await removeBackgroundClientSide(source, {
+              tolerance: newVal,
+              removeShadows: newVal >= 25
+            });
+            updatedImages.push(res?.dataUrl || (typeof source === 'string' ? source : source.src));
+          } catch {
+            updatedImages.push(typeof source === 'string' ? source : source.src);
+          }
+        }
+
+        if (currentSeq === isolationSeqRef.current && updatedImages.length > 0) {
+          setImages(updatedImages);
+        }
+      } catch (err) {
+        console.error('Failed to update isolation:', err);
+      } finally {
+        if (currentSeq === isolationSeqRef.current) {
+          setIsProcessingImage(false);
+        }
+      }
+    }, 40);
+  };
+
   const handleRemoveImage = (index: number) => {
+    rawImagesRef.current = rawImagesRef.current.filter((_, i) => i !== index);
+    rawImageElementsRef.current = rawImageElementsRef.current.filter((_, i) => i !== index);
     setImages(prev => prev.filter((_, i) => i !== index));
+    setActiveImageIdx(prev => Math.max(0, prev >= index ? prev - 1 : prev));
   };
 
   const handleSelectCategory = (cat: string) => {
@@ -194,7 +309,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     e.preventDefault();
     setFormWarning(null);
 
-    // TC_ADD_10: Prevent submission when required attributes are missing
     if (!category && !selectedColor) {
       setFormWarning('Please complete the required clothing category and color details before submitting.');
       return;
@@ -208,7 +322,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       return;
     }
 
-    // Resolve category, color, and automatic naming
     const finalCategory = category;
     const finalColor = selectedColor;
     const finalColorHex = selectedColorHex || '#64748b';
@@ -248,10 +361,15 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 
       toast(`"${finalName}" added to your virtual closet!`);
       // Reset form fields
+      rawImagesRef.current = [];
+      rawImageElementsRef.current = [];
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       setImages([]);
+      setActiveImageIdx(0);
       setFormWarning(null);
       setCategory('');
       setSelectedColor('');
+      setIsolationLevel(50);
       onClose();
     } catch (err) {
       console.error('Failed to add garment:', err);
@@ -260,6 +378,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="modalScrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -296,7 +416,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           
-          {/* Image Input Options (TC_ADD_02, TC_ADD_04, TC_ADD_09) */}
+          {/* Image Input Options */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Clothing Image ({images.length}/3)</span>
@@ -309,14 +429,11 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                 type="button"
                 className={`btn ${inputMode === 'upload' ? 'btn-p' : 'btn-g'}`}
                 style={{ fontSize: 12, padding: '6px 14px' }}
-                onClick={() => {
-                  stopCameraStream();
-                  setInputMode('upload');
-                  setCameraError(null);
-                }}
+                onClick={handleUploadClick}
+                disabled={isProcessingImage}
               >
                 <Upload className="ico" style={{ width: 14, height: 14 }} />
-                Upload Image
+                {isProcessingImage ? 'Processing...' : 'Upload Image'}
               </button>
 
               <button
@@ -330,7 +447,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
               </button>
             </div>
 
-            {/* Camera View Interface (TC_ADD_04, TC_ADD_09) */}
+            {/* Camera View Interface */}
             {inputMode === 'camera' && (
               <div style={{
                 background: 'var(--surface-2)',
@@ -399,95 +516,127 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                     className="btn btn-p"
                     style={{ fontSize: 12, padding: '7px 18px' }}
                     onClick={handleCapturePhoto}
+                    disabled={isProcessingImage}
                   >
                     <Camera className="ico" style={{ width: 13, height: 13 }} />
-                    Capture Photo
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-g"
-                    style={{ fontSize: 11, padding: '6px 12px', color: 'var(--danger)' }}
-                    onClick={handleSimulateCameraFailure}
-                    title="Simulate Camera Capture Failure for Testing"
-                  >
-                    <VideoOff className="ico" style={{ width: 12, height: 12 }} />
-                    Simulate Camera Failure
+                    {isProcessingImage ? 'Processing...' : 'Capture Photo'}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Photo Previews */}
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, margin: '8px 0' }}>
-              {images.map((imgSrc, idx) => {
-                const isColorHex = imgSrc.startsWith('#');
-                return (
-                  <div
-                    key={idx}
+            {/* Enlarged & Centered Photo Preview */}
+            {images.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '14px 0', width: '100%' }}>
+                <div style={{
+                  width: '100%',
+                  maxWidth: 320,
+                  height: 220,
+                  borderRadius: 12,
+                  border: '1.5px solid var(--border)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  // Subtle checkered pattern to visualize transparent background isolation:
+                  backgroundImage: 'linear-gradient(45deg, rgba(0,0,0,0.05) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.05) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.05) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.05) 75%)',
+                  backgroundSize: '16px 16px',
+                  backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                  backgroundColor: 'var(--surface-2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.06)'
+                }}>
+                  {images[activeImageIdx]?.startsWith('#') ? (
+                    <div style={{ width: '100%', height: '100%', backgroundColor: images[activeImageIdx] }} />
+                  ) : (
+                    <img
+                      src={images[activeImageIdx] || images[0]}
+                      alt="Garment Preview"
+                      style={{
+                        maxWidth: '92%',
+                        maxHeight: '92%',
+                        objectFit: 'contain',
+                        display: 'block',
+                        filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.12))',
+                        transition: 'opacity 0.15s ease'
+                      }}
+                    />
+                  )}
+
+                  {/* Delete active photo button */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(activeImageIdx)}
+                    title="Remove photo"
+                    aria-label="Remove photo"
                     style={{
-                      width: 68,
-                      height: 68,
-                      borderRadius: 8,
-                      border: '1.5px solid var(--border)',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      backgroundColor: 'var(--surface-2)',
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 24,
+                      height: 24,
+                      fontSize: 12,
+                      cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                     }}
                   >
-                    {isColorHex ? (
-                      <div style={{ width: '100%', height: '100%', backgroundColor: imgSrc }} />
-                    ) : (
-                      <img
-                        src={imgSrc}
-                        alt={`Photo ${idx + 1}`}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(idx)}
-                      title="Remove photo"
-                      style={{
-                        position: 'absolute',
-                        top: 2,
-                        right: 2,
-                        background: 'rgba(0,0,0,0.65)',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: 18,
-                        height: 18,
-                        fontSize: 10,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        lineHeight: 1
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                );
-              })}
+                    ✕
+                  </button>
 
-              {images.length < 3 && inputMode === 'upload' && (
-                <button
-                  type="button"
-                  className="btn btn-g"
-                  style={{ fontSize: 12, padding: '6px 12px', height: 68 }}
-                  disabled={isProcessingImage}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="ico" style={{ width: 14, height: 14 }} />
-                  {isProcessingImage ? 'Uploading...' : 'Select File'}
-                </button>
-              )}
-            </div>
+                  {/* Processing indicator badge */}
+                  {isProcessingImage && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 8,
+                      background: 'rgba(0,0,0,0.7)',
+                      color: '#ffffff',
+                      padding: '3px 10px',
+                      borderRadius: 12,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}>
+                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+                      Isolating...
+                    </div>
+                  )}
+                </div>
+
+                {/* Thumbnail gallery if multiple photos */}
+                {images.length > 1 && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'center' }}>
+                    {images.map((imgSrc, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveImageIdx(idx)}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 8,
+                          border: activeImageIdx === idx ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          padding: 0,
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          background: 'var(--surface-2)'
+                        }}
+                      >
+                        <img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <input
               type="file"
@@ -496,8 +645,55 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
               style={{ display: 'none' }}
               onChange={handleImageFileChange}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              ⚡ Background is automatically isolated. If no photo is uploaded, a crisp vector silhouette is generated.
+
+            {/* Background Isolation Slider */}
+            <div style={{
+              marginTop: 10,
+              padding: '10px 14px',
+              background: 'var(--surface-2)',
+              borderRadius: 8,
+              border: '1px solid var(--border)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label htmlFor="bg-isolation-range" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Sliders className="ico" style={{ width: 13, height: 13, color: 'var(--primary)' }} />
+                  <span>Background Isolation Level</span>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: 'var(--primary)',
+                    background: 'rgba(34, 197, 94, 0.12)',
+                    padding: '1px 6px',
+                    borderRadius: 4
+                  }}>
+                    {isolationLevel}%
+                  </span>
+                </label>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {isolationLevel <= 30 ? 'Low / Soft' : isolationLevel <= 65 ? 'Standard' : 'Aggressive'}
+                </span>
+              </div>
+
+              <input
+                id="bg-isolation-range"
+                type="range"
+                min="10"
+                max="90"
+                step="5"
+                value={isolationLevel}
+                onChange={(e) => handleIsolationChange(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  accentColor: 'var(--primary)',
+                  cursor: 'pointer'
+                }}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                <span>Subtle (10%)</span>
+                <span style={{ textAlign: 'center' }}>Adjusts how strictly the background is isolated from the garment</span>
+                <span>Max isolation (90%)</span>
+              </div>
             </div>
           </div>
 
@@ -534,7 +730,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
             </div>
           </div>
 
-          {/* Color Selection */}
+          {/* Color Selection - matched to Virtual Closet colors */}
           <div className="field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Color Profile</span>
@@ -545,33 +741,39 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
                 </span>
               )}
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 6, marginTop: 4, maxHeight: 110, overflowY: 'auto' }}>
-              {CURATED_COLOR_FAMILIES.map(family => {
-                const isSelected = selectedColor === family.name;
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              {NORMAL_CLOTHING_COLORS.map(color => {
+                const isSelected = selectedColor === color.name;
                 return (
                   <button
-                    key={family.name}
+                    key={color.name}
                     type="button"
-                    className="btn btn-g"
+                    className={`pill ${isSelected ? 'on' : ''}`}
                     style={{
-                      padding: '4px 8px',
-                      fontSize: 11,
-                      justifyContent: 'flex-start',
-                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      background: isSelected ? 'var(--surface-2)' : 'var(--surface)'
+                      cursor: 'pointer',
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      borderRadius: 20,
+                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                      color: isSelected ? '#ffffff' : 'var(--text)',
+                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      fontWeight: isSelected ? 600 : 500,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
                     }}
-                    onClick={() => handleSelectColorFamily(family)}
+                    onClick={() => handleSelectColorFamily(color)}
                   >
                     <span style={{
-                      width: 12,
-                      height: 12,
+                      width: 9,
+                      height: 9,
                       borderRadius: '50%',
-                      background: family.hex,
+                      background: color.hex,
                       display: 'inline-block',
-                      marginRight: 4,
-                      border: '1px solid rgba(0,0,0,0.15)'
+                      border: color.name === 'White' ? '1px solid #cbd5e1' : 'none'
                     }} />
-                    <span>{family.name}</span>
+                    <span>{color.name}</span>
+                    {isSelected && <span>✓</span>}
                   </button>
                 );
               })}
@@ -608,4 +810,3 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     </div>
   );
 };
-

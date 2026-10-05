@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ClothingItem } from '../types/database';
-import { Filter, ArrowUpDown, Shirt, RotateCcw } from 'lucide-react';
-import { createGarmentSilhouette } from '../data/seedData';
+import { ArrowLeft, ArrowUpDown, Shirt, RotateCcw } from 'lucide-react';
+import { createGarmentSilhouette, NORMAL_CLOTHING_COLORS } from '../data/seedData';
 
 /**
  * ============================================================================
@@ -21,21 +21,56 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
   onNavigateToRecovery,
   onNavigateToCloset
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
-  const [selectedColor, setSelectedColor] = useState<string>('All');
+
+  const toggleTypeFilter = (typeName: string) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(typeName)) next.delete(typeName);
+      else next.add(typeName);
+      return next;
+    });
+  };
+
+  const toggleColorFilter = (colorName: string) => {
+    setSelectedColors(prev => {
+      const next = new Set(prev);
+      if (next.has(colorName)) next.delete(colorName);
+      else next.add(colorName);
+      return next;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setSelectedTypes(new Set());
+    setSelectedColors(new Set());
+  };
+
+  const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0;
 
   // Filter and sort items
   const filteredSortedItems = useMemo(() => {
-    let result = [...garments];
+    let result = garments.filter(g => {
+      // Type / Category Filter
+      const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
+        return (g.category && g.category.toLowerCase() === sel.toLowerCase()) ||
+               (g.type_tag && g.type_tag.toLowerCase() === sel.toLowerCase());
+      });
+      if (!matchType) return false;
 
-    if (selectedCategory !== 'All') {
-      result = result.filter(g => (g.category || g.type_tag || '').toLowerCase() === selectedCategory.toLowerCase());
-    }
+      // Color Filter
+      const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
+        const itemColor = (g.color || '').toLowerCase();
+        const itemColorTag = (g.color_tag || '').toLowerCase();
+        const selLower = sel.toLowerCase();
+        return itemColor.includes(selLower) || itemColorTag.includes(selLower);
+      });
+      if (!matchColor) return false;
 
-    if (selectedColor !== 'All') {
-      result = result.filter(g => (g.color || '').toLowerCase() === selectedColor.toLowerCase());
-    }
+      return true;
+    });
 
     result.sort((a, b) => {
       const wearA = a.worn_count ?? a.wear_count ?? 0;
@@ -44,41 +79,79 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
     });
 
     return result;
-  }, [garments, selectedCategory, selectedColor, sortOrder]);
+  }, [garments, selectedTypes, selectedColors, sortOrder]);
 
   const toggleSort = () => {
     setSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'));
   };
 
-  const categories = ['All', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes', 'Knitwear'];
-
-  const availableColors = useMemo(() => {
-    const set = new Set<string>();
-    garments.forEach(g => {
-      const c = (g.color || '').trim();
-      if (c) set.add(c);
-    });
-    return Array.from(set).sort();
-  }, [garments]);
-
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       
-      {/* Filter & Sort Bar (Matching Figure .7.1: [All] [Type] [Color] Filter Sort) */}
+      {/* Top Left Navigation Bar: Back to Recovery Progress */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 10,
-        marginBottom: 20,
-        paddingBottom: 12,
-        borderBottom: '1px solid var(--border)'
+        marginBottom: 16
       }}>
-        {/* Category Pills & Color Filter */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {categories.map(cat => {
-            const isSelected = selectedCategory === cat;
+        {onNavigateToRecovery ? (
+          <button
+            type="button"
+            className="btn btn-g"
+            style={{
+              fontSize: 12.5,
+              padding: '6px 14px',
+              borderRadius: 20,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              cursor: 'pointer'
+            }}
+            onClick={onNavigateToRecovery}
+          >
+            <ArrowLeft className="ico" style={{ width: 14, height: 14 }} />
+            Recovery Progress
+          </button>
+        ) : <div />}
+
+        {/* Sort Control */}
+        <button
+          type="button"
+          className="btn btn-g"
+          style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20 }}
+          onClick={toggleSort}
+          title={`Sort by wears (${sortOrder === 'desc' ? 'High to Low' : 'Low to High'})`}
+        >
+          <ArrowUpDown className="ico" style={{ width: 13, height: 13 }} />
+          <span>Sort {sortOrder === 'desc' ? '↓' : '↑'}</span>
+        </button>
+      </div>
+
+      {/* Filter Section (Matching Virtual Closet) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+        {/* Row 1: Garment Types / Categories */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`pill ${selectedTypes.size === 0 && selectedColors.size === 0 ? 'on' : ''}`}
+            style={{
+              cursor: 'pointer',
+              padding: '6px 14px',
+              fontSize: 12.5,
+              borderRadius: 20,
+              background: (selectedTypes.size === 0 && selectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
+              color: (selectedTypes.size === 0 && selectedColors.size === 0) ? '#ffffff' : 'var(--text)',
+              border: (selectedTypes.size === 0 && selectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
+              fontWeight: 600
+            }}
+            onClick={clearAllFilters}
+          >
+            All
+          </button>
+
+          {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
+            const isSelected = selectedTypes.has(cat);
             return (
               <button
                 key={cat}
@@ -94,82 +167,61 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
                   border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
                   fontWeight: isSelected ? 600 : 500
                 }}
-                onClick={() => setSelectedCategory(cat)}
+                onClick={() => toggleTypeFilter(cat)}
               >
                 {cat}
               </button>
             );
           })}
 
-          {availableColors.length > 0 && (
-            <select
-              value={selectedColor}
-              onChange={(e) => setSelectedColor(e.target.value)}
-              style={{
-                fontSize: 12,
-                padding: '5px 10px',
-                borderRadius: 20,
-                border: '1px solid var(--border)',
-                background: selectedColor !== 'All' ? 'var(--primary-soft)' : 'var(--surface-2)',
-                color: selectedColor !== 'All' ? 'var(--primary)' : 'var(--text)',
-                fontWeight: selectedColor !== 'All' ? 700 : 500,
-                cursor: 'pointer'
-              }}
-              title="Filter by color"
-            >
-              <option value="All">All Colors</option>
-              {availableColors.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          )}
-
-          {(selectedCategory !== 'All' || selectedColor !== 'All') && (
+          {hasActiveFilters && (
             <button
               type="button"
               className="btn btn-g"
-              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20 }}
-              onClick={() => { setSelectedCategory('All'); setSelectedColor('All'); }}
+              style={{ fontSize: 11.5, padding: '4px 10px', marginLeft: 'auto', color: 'var(--danger)', borderRadius: 20 }}
+              onClick={clearAllFilters}
             >
-              <RotateCcw className="ico" style={{ width: 11, height: 11 }} /> Reset
+              <RotateCcw className="ico" style={{ width: 12, height: 12 }} /> Reset
             </button>
           )}
         </div>
 
-        {/* Action Controls: Navigation & Sort */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {onNavigateToCloset && (
-            <button
-              type="button"
-              className="btn btn-g"
-              style={{ fontSize: 12, padding: '5px 12px' }}
-              onClick={onNavigateToCloset}
-            >
-              &larr; Virtual Closet
-            </button>
-          )}
-
-          {onNavigateToRecovery && (
-            <button
-              type="button"
-              className="btn btn-g"
-              style={{ fontSize: 12, padding: '5px 12px' }}
-              onClick={onNavigateToRecovery}
-            >
-              &larr; Recovery Progress
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="btn btn-g"
-            style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px' }}
-            onClick={toggleSort}
-            title={`Sort by wears (${sortOrder === 'desc' ? 'High to Low' : 'Low to High'})`}
-          >
-            <ArrowUpDown className="ico" style={{ width: 13, height: 13 }} />
-            <span>Sort {sortOrder === 'desc' ? '↓' : '↑'}</span>
-          </button>
+        {/* Row 2: Color Tags (matching Virtual Closet with colored dots) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {NORMAL_CLOTHING_COLORS.map(color => {
+            const isSelected = selectedColors.has(color.name);
+            return (
+              <button
+                key={color.name}
+                type="button"
+                className={`pill ${isSelected ? 'on' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: '5px 12px',
+                  fontSize: 12,
+                  borderRadius: 20,
+                  background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                  color: isSelected ? '#ffffff' : 'var(--text)',
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  fontWeight: isSelected ? 600 : 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                onClick={() => toggleColorFilter(color.name)}
+              >
+                <span style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: color.hex,
+                  border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
+                  display: 'inline-block'
+                }} />
+                {color.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 

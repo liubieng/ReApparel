@@ -13,7 +13,7 @@ import {
   Shirt, 
   Users 
 } from 'lucide-react';
-import { mockDatabase } from '../services/supabaseClient';
+import { mockDatabase, deduplicateAssessments } from '../services/supabaseClient';
 
 /**
  * ============================================================================
@@ -82,14 +82,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   // Assessments sorted chronologically (oldest to newest for bar chart)
   const sortedAsc = useMemo(() => {
-    return [...assessments].sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
+    return deduplicateAssessments(assessments).sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
   }, [assessments]);
-
-  // Check if current user has active unreturned borrows (deletion safeguard)
-  const activeUnreturned = borrows.filter(
-    b => (b.status === 'Accepted' || (b.status as string) === 'approved') &&
-         (b.borrower_id === currentUser.user_id || b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id)
-  );
 
   const handleCopyFriendCode = () => {
     if (currentUser.friend_code) {
@@ -385,7 +379,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           {/* 7. Delete Account */}
           <button
             type="button"
-            disabled={activeUnreturned.length > 0}
             onClick={onDeleteAccount}
             style={{
               width: '100%',
@@ -395,9 +388,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               padding: '14px 20px',
               background: 'transparent',
               border: 'none',
-              cursor: activeUnreturned.length > 0 ? 'not-allowed' : 'pointer',
-              textAlign: 'left',
-              opacity: activeUnreturned.length > 0 ? 0.5 : 1
+              cursor: 'pointer',
+              textAlign: 'left'
             }}
           >
             <span style={{ fontSize: 14, color: 'var(--danger, #dc2626)' }}>Delete Account</span>

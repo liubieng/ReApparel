@@ -1,5 +1,7 @@
-import { mockDatabase, getSupabase, toCanonicalUserId } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments } from './supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../types/database';
+
+export { deduplicateAssessments };
 
 export interface BSASCooldownInfo {
   canTake: boolean;
@@ -31,7 +33,7 @@ export const closetService = {
           query = query.eq('user_id', targetUid);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await withTimeout(query, 3000);
 
         if (!error && data && data.length > 0) {
           const remoteItems = (data as any[]).map(r => {
@@ -173,7 +175,7 @@ export const closetService = {
   // --- BSAS ASSESSMENTS ---
   async getAssessments(userId?: string): Promise<BSASAssessment[]> {
     // 1. Always load local assessments from mockDatabase
-    const localAssessments = mockDatabase.getAssessments(userId);
+    const localAssessments = deduplicateAssessments(mockDatabase.getAssessments(userId));
 
     // 2. Query Supabase if configured and merge any remote assessments for this user
     const supabase = getSupabase();
@@ -192,28 +194,28 @@ export const closetService = {
           query = query.eq('user_id', targetUid);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await withTimeout(query, 3000);
 
         if (!error && data && data.length > 0) {
-          const remoteAssessments = data as BSASAssessment[];
+          const remoteAssessments = deduplicateAssessments(data as BSASAssessment[]);
           const merged = [...remoteAssessments];
 
           localAssessments.forEach(loc => {
             const isDuplicate = merged.some(m =>
               m.assessment_id === loc.assessment_id ||
-              Math.abs(new Date(m.taken_at).getTime() - new Date(loc.taken_at).getTime()) < 10000
+              Math.abs(new Date(m.taken_at).getTime() - new Date(loc.taken_at).getTime()) < 60000
             );
             if (!isDuplicate) {
               merged.push(loc);
             }
           });
-          return merged.sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+          return deduplicateAssessments(merged);
         }
       } catch {
         // Silently preserve local assessments
       }
     }
-    return localAssessments;
+    return deduplicateAssessments(localAssessments);
   },
 
   async submitAssessment(score: number, breakdown?: BSASAssessment['breakdown'], userId?: string): Promise<BSASAssessment> {
@@ -224,11 +226,12 @@ export const closetService = {
 
     const supabase = getSupabase();
     if (supabase) {
-      try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
-        if (isUuid) {
-          const risk_level = score >= 4 ? 'Indicative' : 'Non-Indicative';
-          const { data, error } = await supabase
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
+      if (isUuid) {
+        const risk_level = score >= 4 ? 'Indicative' : 'Non-Indicative';
+        // Run remote sync non-blockingly with a strict timeout so UI never hangs or stalls
+        withTimeout(
+          supabase
             .from('bsas_assessment')
             .insert([{
               user_id: targetUid,
@@ -236,14 +239,15 @@ export const closetService = {
               risk_level
             }])
             .select()
-            .single();
+            .single(),
+          3500
+        ).then(({ data, error }) => {
           if (!error && data) {
             mockDatabase.updateAssessmentId(localAssessment.assessment_id, data.assessment_id);
-            return { ...localAssessment, ...data };
           }
-        }
-      } catch {
-        // Local assessment already preserved
+        }).catch((err) => {
+          console.warn('Supabase BSAS sync skipped/timed out (local copy preserved):', err?.message || err);
+        });
       }
     }
     return localAssessment;

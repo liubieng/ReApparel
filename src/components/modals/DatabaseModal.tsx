@@ -188,7 +188,18 @@ CREATE TABLE donation_flag (
     user_id UUID REFERENCES users(user_id),
     flag_type TEXT NOT NULL CHECK (flag_type IN ('Inactive', 'Inaccurate')),
     flagged_at TIMESTAMPTZ DEFAULT now()
-);`;
+);
+
+-- Performance Indexes for High-Frequency Queries and RLS Subqueries
+CREATE INDEX IF NOT EXISTS idx_clothing_item_user ON clothing_item (user_id);
+CREATE INDEX IF NOT EXISTS idx_friend_request_status_users ON friend_request (status, sender_id, receiver_id);
+CREATE INDEX IF NOT EXISTS idx_daily_clothing_log_user_date ON daily_clothing_log (user_id, log_date);
+CREATE INDEX IF NOT EXISTS idx_daily_log_item_log_id ON daily_log_item (log_id);
+CREATE INDEX IF NOT EXISTS idx_borrow_borrower ON borrow (borrower_id);
+CREATE INDEX IF NOT EXISTS idx_borrow_item ON borrow (item_id);
+CREATE INDEX IF NOT EXISTS idx_donation_flag_donation_id ON donation_flag (donation_id);
+CREATE INDEX IF NOT EXISTS idx_item_tag_item_id ON item_tag (item_id);
+CREATE INDEX IF NOT EXISTS idx_bsas_assessment_user ON bsas_assessment (user_id);`;
 
 export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   isOpen,

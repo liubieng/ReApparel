@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   mockDatabase, 
+  getSupabase,
   getStoredSupabaseConfig, 
-  syncAllLocalDataToSupabase,
   safeStorage, 
   STORAGE_KEY_ACTIVE_USER, 
   STORAGE_KEY_ACTIVE_VIEW 
@@ -98,6 +98,13 @@ export default function App() {
     }
     const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
     if (saved && VALID_VIEWS.has(saved)) {
+      if (saved === 'bsas' || saved === 'bsasIntro') {
+        const uid = user?.user_id || safeStorage.getItem(STORAGE_KEY_ACTIVE_USER);
+        const userAssessments = uid ? mockDatabase.getAssessments(uid) : [];
+        if (userAssessments.length > 0) {
+          return 'closet';
+        }
+      }
       return saved;
     }
     return 'closet';
@@ -143,11 +150,15 @@ export default function App() {
     isOpen: boolean;
     title: string;
     message: string;
+    confirmLabel?: string;
+    requiredConfirmText?: string;
     onConfirm: () => void;
   }>({
     isOpen: false,
     title: '',
     message: '',
+    confirmLabel: 'Proceed',
+    requiredConfirmText: undefined,
     onConfirm: () => {}
   });
 
@@ -182,8 +193,32 @@ export default function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Master Data Refresh Callback
-  const loadData = useCallback(async () => {
+  // Synchronous Local State Hydration (0ms, 0 Supabase network queries)
+  const syncLocalState = useCallback(() => {
+    const user = mockDatabase.getCurrentUser();
+    setCurrentUser(user);
+    setAllUsers(mockDatabase.getAllUsers());
+
+    if (user) {
+      setGarments(mockDatabase.getClothingItems(user.user_id));
+      setAssessments(mockDatabase.getAssessments(user.user_id));
+      setTodayLog(mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10)));
+      setFriends(friendsService.getConnectedFriends());
+      setFriendRequests(friendsService.getFriendRequests());
+      setBorrows(friendsService.getBorrows());
+      setNotifications(friendsService.getNotifications(user.user_id));
+      setDailyLogs(mockDatabase.getDailyLogs(user.user_id));
+      setOpportunities(mapsService.getDonationOpportunities());
+    } else {
+      setFriends([]);
+      setFriendRequests([]);
+      setBorrows([]);
+      setNotifications([]);
+    }
+  }, []);
+
+  // Master Data Refresh Callback (targeted remote sync to minimize Supabase API usage)
+  const loadData = useCallback(async (options?: { forceDonations?: boolean }) => {
     let user = mockDatabase.getCurrentUser();
     if (!user && safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
       user = await mockDatabase.syncCurrentUserWithSupabase();
@@ -193,71 +228,110 @@ export default function App() {
     setAllUsers(mockDatabase.getAllUsers());
 
     if (user) {
+      // 1. Immediate synchronous local hydration (0ms UI latency)
+      syncLocalState();
+
       // Ensure authenticated users are transitioned away from the login screen
       setView(prev => {
         if (prev === 'login') {
           const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
-          return (saved && VALID_VIEWS.has(saved)) ? saved : 'closet';
+          const safeSaved = (saved === 'bsas' || saved === 'bsasIntro') ? 'closet' : saved;
+          return (safeSaved && VALID_VIEWS.has(safeSaved)) ? safeSaved : 'closet';
         }
         return prev;
       });
 
-      const items = await closetService.getItems(user.user_id);
-      setGarments(items);
+      // 2. Targeted background remote fetch with strict timeouts (does not freeze local UI)
+      try {
+        const fetchPromises: Promise<any>[] = [
+          closetService.getItems(user.user_id).catch(() => mockDatabase.getClothingItems(user.user_id)),
+          closetService.getAssessments(user.user_id).catch(() => mockDatabase.getAssessments(user.user_id)),
+          friendsService.fetchAndMergeUsersFromSupabase().catch(() => {})
+        ];
 
-      const userAssessments = await closetService.getAssessments(user.user_id);
-      setAssessments(userAssessments);
+        // DEMO-SAFE DONATION FETCHING:
+        // Only fetch donation drives from Supabase when explicitly requested,
+        // or on initial boot / when on donations view to save ~80% of unnecessary map queries
+        if (options?.forceDonations || view === 'donations') {
+          fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => {}));
+        }
 
-      const log = await closetService.getTodayLog();
-      setTodayLog(log);
+        const [items, userAssessments] = await Promise.all(fetchPromises);
 
-      await friendsService.fetchAndMergeUsersFromSupabase();
-      setAllUsers(mockDatabase.getAllUsers());
-      setFriends(friendsService.getConnectedFriends());
-      setFriendRequests(friendsService.getFriendRequests());
-      setBorrows(friendsService.getBorrows());
-      setNotifications(friendsService.getNotifications(user.user_id));
+        if (items) setGarments(items);
+        if (userAssessments) setAssessments(userAssessments);
+        setAllUsers(mockDatabase.getAllUsers());
+        setFriends(friendsService.getConnectedFriends());
+        setOpportunities(mapsService.getDonationOpportunities());
+      } catch {
+        // Local data is already fully rendered
+      }
     } else {
       if (safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
         mockDatabase.setCurrentUserId(null);
       }
       safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
       setView('login');
-      const items = await closetService.getItems();
-      setGarments(items);
-      const userAssessments = await closetService.getAssessments();
-      setAssessments(userAssessments);
-      const log = await closetService.getTodayLog();
-      setTodayLog(log);
+      setGarments(mockDatabase.getClothingItems());
+      setAssessments(mockDatabase.getAssessments());
+      setTodayLog(mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10)));
       setFriends([]);
       setFriendRequests([]);
       setBorrows([]);
       setNotifications([]);
     }
-    const allLogs = await closetService.getDailyLogs();
-    setDailyLogs(allLogs);
-    await mapsService.fetchAndMergeFromSupabase();
-    setOpportunities(mapsService.getDonationOpportunities());
-  }, []);
+  }, [syncLocalState, view]);
 
-  // Subscribe to In-Memory / Supabase state changes
+  // Subscribe to In-Memory state changes (updates UI with 0 network overhead)
   useEffect(() => {
     loadData();
     const unsubscribe = mockDatabase.subscribe(() => {
-      loadData();
+      syncLocalState();
     });
     return () => unsubscribe();
-  }, [loadData]);
+  }, [loadData, syncLocalState]);
 
-  // Automatic background upload to cloud (Supabase)
+  // Always fetch fresh donation drives directly from Supabase when opening the Donations view
   useEffect(() => {
-    if (currentUser) {
-      const timer = setTimeout(() => {
-        syncAllLocalDataToSupabase().catch(() => {});
-      }, 1500);
-      return () => clearTimeout(timer);
+    if (view === 'donations') {
+      mapsService.fetchAndMergeFromSupabase().then(() => {
+        setOpportunities(mapsService.getDonationOpportunities());
+      }).catch(() => {});
+
+      // Auto-poll every 10 seconds so new community drives appear automatically without page refresh
+      const pollTimer = setInterval(() => {
+        mapsService.fetchAndMergeFromSupabase().then(() => {
+          setOpportunities(mapsService.getDonationOpportunities());
+        }).catch(() => {});
+      }, 10000);
+
+      return () => clearInterval(pollTimer);
     }
-  }, [currentUser, garments.length, assessments.length, todayLog?.items?.length, todayLog?.is_finalized]);
+  }, [view]);
+
+  // Supabase Realtime Listener for Live Capstone Demonstration:
+  // When any device adds a donation opportunity, other devices update their map automatically
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const channel = supabase
+        .channel('realtime_community_donations')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'donation_opportunity' },
+          async () => {
+            await mapsService.fetchAndMergeFromSupabase();
+            setOpportunities(mapsService.getDonationOpportunities());
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch {}
+  }, []);
 
   // --------------------------------------------------------------------------
   // USER ACTIONS & HANDLERS
@@ -271,7 +345,8 @@ export default function App() {
       setView('bsasIntro'); // New users complete baseline check-in
     } else {
       const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
-      const targetView = (saved && VALID_VIEWS.has(saved) && saved !== 'login') ? saved : 'closet';
+      const safeSaved = (saved === 'bsas' || saved === 'bsasIntro') ? 'closet' : saved;
+      const targetView = (safeSaved && VALID_VIEWS.has(safeSaved) && safeSaved !== 'login') ? safeSaved : 'closet';
       setView(targetView);
     }
   };
@@ -295,16 +370,28 @@ export default function App() {
 
   // BSAS Check-In Completed
   const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>, targetView: 'closet' | 'recovery' = 'closet') => {
-    const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || 'a0000000-0000-0000-0000-000000000001';
-    await closetService.submitAssessment(score, breakdown, activeUid);
-    await loadData();
-    toast(score >= 4 ? 'Check-in saved: Indicative risk identified' : 'Check-in saved: Non-Indicative risk level');
+    const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
+    
+    // 1. Immediately transition the view so user NEVER gets stuck on BSAS page
+    safeStorage.setItem(STORAGE_KEY_ACTIVE_VIEW, targetView);
     setView(targetView);
+
+    // 2. Submit assessment to database (synchronous local update + non-blocking background sync)
+    await closetService.submitAssessment(score, breakdown, activeUid);
+
+    // 3. Immediately update assessments in React state so latestAssessment & isBSASDue are fresh
+    const freshAssessments = mockDatabase.getAssessments(activeUid);
+    setAssessments(freshAssessments);
+
+    toast(score >= 4 ? 'Check-in saved: Indicative risk identified' : 'Check-in saved: Non-Indicative risk level');
+
+    // 4. Background refresh of any other collections without blocking
+    loadData().catch(() => {});
   };
 
   // Garment Management: Add, Edit, Delete, Quick Wear Increment
   const handleAddGarment = async (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => {
-    const activeUid = item.user_id || currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || 'a0000000-0000-0000-0000-000000000001';
+    const activeUid = item.user_id || currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
     await closetService.addItem({
       ...item,
       user_id: activeUid
@@ -430,14 +517,16 @@ export default function App() {
     loadData();
   };
 
-  // Account Deletion Safeguard with confirmation dialog
+  // Account Deletion Safeguard with confirmation dialog (TC_ACCDEL_02, TC_ACCDEL_03, Figure 34.4)
   const handleDeleteAccount = () => {
     if (!currentUser) return;
     const targetUser = currentUser;
     setConfirmDialog({
       isOpen: true,
       title: 'Delete Account & Closet Data?',
-      message: 'This will permanently remove your user profile, digitized garments, outfit logs, and BSAS assessment history. This action cannot be undone. Are you sure you wish to proceed?',
+      message: 'This will permanently remove your user profile, digitized garments, outfit logs, and BSAS assessment history. This action cannot be undone. To confirm, please type "DELETE" below.',
+      confirmLabel: 'Delete Account',
+      requiredConfirmText: 'DELETE',
       onConfirm: async () => {
         try {
           await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
@@ -704,7 +793,7 @@ export default function App() {
               <DonationMapSection
                 opportunities={opportunities}
                 currentUserLocation={null}
-                onRefreshData={loadData}
+                onRefreshData={() => loadData({ forceDonations: true })}
                 toast={toast}
                 highlightId={donHighlight}
                 setHighlightId={setDonHighlight}
@@ -798,6 +887,8 @@ export default function App() {
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
         message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        requiredConfirmText={confirmDialog.requiredConfirmText}
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
       />

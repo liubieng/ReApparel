@@ -76,7 +76,7 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
           <Search className="ico" style={{ position: 'absolute', left: 10, color: 'var(--text-muted)', width: 15, height: 15 }} />
           <input
             type="text"
-            placeholder="Search drop-off centers, items, cities, or keywords..."
+            placeholder="Search for a country, region, province, city, or barangay..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ paddingLeft: 32, width: '100%', fontSize: 13, margin: 0, borderRadius: 8 }}
@@ -191,25 +191,11 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
         </div>
       </div>
 
-      {/* Quick category tags and reset */}
+      {/* Active live drives toggle and reset */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', paddingTop: 4 }}>
-        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>Quick tags:</span>
-        {['Shirts', 'Shoes', 'Jackets', 'Children'].map(cat => {
-          const active = selectedCategory.toLowerCase() === cat.toLowerCase();
-          return (
-            <span
-              key={cat}
-              className={`pill ${active ? 'on' : ''}`}
-              style={{ cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}
-              onClick={() => setSelectedCategory(active ? 'all' : cat)}
-            >
-              {cat}
-            </span>
-          );
-        })}
         <span
           className={`pill ${onlyActiveDrives ? 'on' : ''}`}
-          style={{ cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}
+          style={{ cursor: 'pointer', fontSize: 11, padding: '3px 10px' }}
           onClick={() => setOnlyActiveDrives(!onlyActiveDrives)}
         >
           🔥 Active Live Drives Only

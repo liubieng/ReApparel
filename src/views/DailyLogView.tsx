@@ -16,7 +16,8 @@ import {
   History,
   Edit3,
   Pencil,
-  ArrowLeft
+  ArrowLeft,
+  X
 } from 'lucide-react';
 import { DailyClothingLog, ClothingItem } from '../types/database';
 import { NORMAL_CLOTHING_COLORS } from '../data/seedData';
@@ -52,8 +53,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   const [activeLogId, setActiveLogId] = useState<number>(todayLog.log_id);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAddingOutfit, setIsAddingOutfit] = useState(false);
-  const [newOutfitTitle, setNewOutfitTitle] = useState('');
+  const [hoveredOutfitId, setHoveredOutfitId] = useState<number | null>(null);
 
   // Virtual Closet Filter States for Outfit Picker
   const [closetSelectedTypes, setClosetSelectedTypes] = useState<Set<string>>(new Set());
@@ -129,12 +129,23 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     return list;
   }, [dailyLogs, todayLog]);
 
-  // Compute the display title for the active log (first outfit always = "First Outfit")
+  // Ordinal outfit naming: First Outfit, Second Outfit, Third Outfit, etc.
+  const OUTFIT_ORDINALS = [
+    'First Outfit',
+    'Second Outfit',
+    'Third Outfit',
+    'Fourth Outfit',
+    'Fifth Outfit',
+    'Sixth Outfit',
+    'Seventh Outfit',
+    'Eighth Outfit'
+  ];
+
+  // Compute the display title for the active log
   const activeOutfitTitle = useMemo(() => {
     if (isEditingHistorical) return activeLog.title || 'Historical Outfit';
     const idx = todayOutfits.findIndex(l => l.log_id === activeLog.log_id);
-    if (idx === 0) return 'First Outfit';
-    return activeLog.title || `Outfit #${idx + 1}`;
+    return OUTFIT_ORDINALS[idx] || activeLog.title || `Outfit #${idx + 1}`;
   }, [activeLog, todayOutfits, isEditingHistorical]);
 
   // All logs sorted chronologically for wear history
@@ -167,7 +178,9 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     }
     setIsSubmitting(true);
     try {
-      await onSimulateMidnight();
+      if (onSimulateMidnight) {
+        await onSimulateMidnight();
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -188,34 +201,37 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     setActiveLogId(todayLog.log_id);
   };
 
-  const handleCreateOutfit = async () => {
-    const title = newOutfitTitle.trim() || `Outfit #${todayOutfits.length + 1}`;
+  const handleDeleteOutfit = async (logId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await onDeleteLog(logId);
+    const remaining = todayOutfits.filter(l => l.log_id !== logId);
+    if (remaining.length > 0) {
+      setActiveLogId(remaining[0].log_id);
+    } else {
+      setActiveLogId(todayLog.log_id);
+    }
+  };
+
+  const handleAddNextOutfit = async () => {
+    const nextIdx = todayOutfits.length;
+    const title = OUTFIT_ORDINALS[nextIdx] || `Outfit #${nextIdx + 1}`;
     if (onCreateNewOutfit) {
       const created = await onCreateNewOutfit(todayLog.log_date, title);
       if (created && typeof created === 'object' && 'log_id' in created && (created as any).log_id) {
         setActiveLogId((created as any).log_id);
       }
     }
-    setNewOutfitTitle('');
-    setIsAddingOutfit(false);
   };
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <h2 style={{ margin: '0 0 2px', fontSize: 22, fontFamily: 'var(--font-display)' }}>
-            Daily Outfit Log
-          </h2>
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            {isEditingHistorical ? (
-              <span>Editing outfit record for date: <strong style={{ color: 'var(--primary)' }}>{activeLog.log_date}</strong> (Original date preserved)</span>
-            ) : (
-              <span>Date: <strong>{todayLog.log_date}</strong> &middot; Track what you wore today to boost wear count metrics</span>
-            )}
+      {/* Header status */}
+      <div style={{ display: 'flex', justifyContent: isEditingHistorical ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        {isEditingHistorical && (
+          <div style={{ fontSize: 13, color: 'var(--text)' }}>
+            Editing record for date: <strong style={{ color: 'var(--primary)' }}>{activeLog.log_date}</strong>
           </div>
-        </div>
+        )}
 
         {/* Lock Status Pill */}
         <span style={{
@@ -224,7 +240,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
           gap: 5,
           fontSize: 12,
           fontWeight: 700,
-          padding: '4px 10px',
+          padding: '4px 12px',
           borderRadius: 16,
           background: isLocked ? 'var(--surface-2)' : 'rgba(37, 99, 235, 0.1)',
           color: isLocked ? 'var(--text-muted)' : '#2563eb',
@@ -237,8 +253,8 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
             </>
           ) : (
             <>
-              <Unlock className="ico" style={{ width: 13, height: 13 }} />
-              <span>Editing Open (Unfinalized)</span>
+              <Clock className="ico" style={{ width: 13, height: 13 }} />
+              <span>Will finalize at midnight</span>
             </>
           )}
         </span>
@@ -302,73 +318,97 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
               <>
                 {todayOutfits.map((log, index) => {
                   const isCurrent = log.log_id === activeLog.log_id;
-                  const count = (log.items || []).length;
-                  const title = index === 0 ? 'First Outfit' : (log.title || `Outfit #${index + 1}`);
+                  const title = OUTFIT_ORDINALS[index] || log.title || `Outfit #${index + 1}`;
+                  const isHovered = hoveredOutfitId === log.log_id;
                   return (
-                    <button
+                    <div
                       key={log.log_id}
-                      type="button"
-                      className={`btn ${isCurrent ? 'btn-p' : 'btn-g'}`}
-                      style={{ fontSize: 12, padding: '4px 10px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                      onClick={() => setActiveLogId(log.log_id)}
+                      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                      onMouseEnter={() => setHoveredOutfitId(log.log_id)}
+                      onMouseLeave={() => setHoveredOutfitId(null)}
                     >
-                      <span>{title}</span>
-                      <span style={{
-                        background: isCurrent ? 'rgba(255,255,255,0.3)' : 'var(--surface-3)',
-                        padding: '1px 6px',
-                        borderRadius: 10,
-                        fontSize: 10.5,
-                        fontWeight: 700
-                      }}>
-                        {count}
-                      </span>
-                      {log.is_finalized && <CheckCircle2 style={{ width: 12, height: 12 }} />}
-                    </button>
+                      <button
+                        type="button"
+                        className={`btn ${isCurrent ? 'btn-p' : 'btn-g'}`}
+                        style={{
+                          fontSize: 12,
+                          padding: isHovered ? '4px 26px 4px 12px' : '4px 12px',
+                          borderRadius: 20,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontWeight: isCurrent ? 700 : 500,
+                          transition: 'all 0.15s ease'
+                        }}
+                        onClick={() => setActiveLogId(log.log_id)}
+                      >
+                        <span>{title}</span>
+                        {log.is_finalized && <CheckCircle2 style={{ width: 12, height: 12 }} />}
+                      </button>
+
+                      {/* Small (x) delete button on hover */}
+                      {isHovered && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteOutfit(log.log_id, e)}
+                          title={`Delete ${title}`}
+                          aria-label={`Delete ${title}`}
+                          style={{
+                            position: 'absolute',
+                            right: 6,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: 16,
+                            height: 16,
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: isCurrent ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.12)',
+                            color: isCurrent ? '#ffffff' : 'var(--text)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: 0,
+                            lineHeight: 1,
+                            zIndex: 2
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = 'var(--danger)';
+                            (e.currentTarget as HTMLElement).style.color = '#ffffff';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = isCurrent ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.12)';
+                            (e.currentTarget as HTMLElement).style.color = isCurrent ? '#ffffff' : 'var(--text)';
+                          }}
+                        >
+                          <X style={{ width: 10, height: 10 }} />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
 
-                {/* TC_USAGE_06: Add second / multiple outfit on same day */}
-                {!isAddingOutfit ? (
-                  <button
-                    type="button"
-                    className="btn btn-g"
-                    style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 20 }}
-                    onClick={() => setIsAddingOutfit(true)}
-                  >
-                    <Plus className="ico" style={{ width: 12, height: 12 }} />
-                    <span>Log Another Outfit Today</span>
-                  </button>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="text"
-                      placeholder="e.g. Work Outfit / Evening / Workout"
-                      value={newOutfitTitle}
-                      onChange={(e) => setNewOutfitTitle(e.target.value)}
-                      style={{ padding: '3px 8px', fontSize: 12, borderRadius: 6, margin: 0, width: 180 }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-p"
-                      style={{ fontSize: 11, padding: '3px 8px' }}
-                      onClick={handleCreateOutfit}
-                    >
-                      Save Outfit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-g"
-                      style={{ fontSize: 11, padding: '3px 6px' }}
-                      onClick={() => {
-                        setIsAddingOutfit(false);
-                        setNewOutfitTitle('');
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className="btn btn-g"
+                  style={{
+                    fontSize: 12,
+                    padding: '4px 10px',
+                    borderRadius: 20,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 32,
+                    fontWeight: 700
+                  }}
+                  onClick={handleAddNextOutfit}
+                  title="Add next outfit for today"
+                  aria-label="Add next outfit"
+                >
+                  <Plus className="ico" style={{ width: 13, height: 13 }} />
+                </button>
               </>
             )}
           </div>

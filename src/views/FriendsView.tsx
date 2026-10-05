@@ -11,11 +11,13 @@ import {
   SlidersHorizontal, 
   ArrowUpDown,
   UserCheck,
-  Inbox
+  Inbox,
+  RotateCcw
 } from 'lucide-react';
 import { User, FriendRequest, ClothingItem } from '../types/database';
 import { friendsService } from '../services/friendsService';
 import { closetService } from '../services/closetService';
+import { NORMAL_CLOTHING_COLORS } from '../data/seedData';
 
 /**
  * ============================================================================
@@ -74,11 +76,35 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   const [allFriendsGarments, setAllFriendsGarments] = useState<ItemWithFriend[]>([]);
   const [isLoadingAllClosets, setIsLoadingAllClosets] = useState(false);
 
-  // Closet filtering & sorting state (Fig 11.1 & 12.1)
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterLength, setFilterLength] = useState<string>('all');
-  const [filterColor, setFilterColor] = useState<string>('all');
+  // Closet filtering & sorting state (matching Virtual Closet)
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const toggleTypeFilter = (typeName: string) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(typeName)) next.delete(typeName);
+      else next.add(typeName);
+      return next;
+    });
+  };
+
+  const toggleColorFilter = (colorName: string) => {
+    setSelectedColors(prev => {
+      const next = new Set(prev);
+      if (next.has(colorName)) next.delete(colorName);
+      else next.add(colorName);
+      return next;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setSelectedTypes(new Set());
+    setSelectedColors(new Set());
+  };
+
+  const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0;
 
   // Friends items counts cache: friend_id -> count
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
@@ -148,9 +174,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   const handleOpenFriendCloset = async (friend: User) => {
     setViewingFriend(friend);
     setSubView('single-closet');
-    setFilterType('all');
-    setFilterLength('all');
-    setFilterColor('all');
+    clearAllFilters();
     setIsLoadingSingleCloset(true);
     try {
       const items = await closetService.getItems(friend.user_id);
@@ -164,9 +188,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   // Open All Friends Closets view (Figure .12.1 - only public items TC_FCLOSET_03)
   const handleOpenAllClosets = async () => {
     setSubView('all-closets');
-    setFilterType('all');
-    setFilterLength('all');
-    setFilterColor('all');
+    clearAllFilters();
     setIsLoadingAllClosets(true);
     try {
       const combined: ItemWithFriend[] = [];
@@ -188,43 +210,63 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   // Filter & sort single friend's garments
   const filteredSingleGarments = useMemo(() => {
-    let result = [...friendGarments];
-    if (filterType !== 'all') {
-      result = result.filter(item => 
-        item.category?.toLowerCase() === filterType.toLowerCase() ||
-        item.type_tag?.toLowerCase() === filterType.toLowerCase()
-      );
-    }
-    if (filterColor !== 'all') {
-      result = result.filter(item => item.color?.toLowerCase() === filterColor.toLowerCase());
-    }
+    let result = friendGarments.filter(item => {
+      // Type / Category Filter
+      const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
+        return (item.category && item.category.toLowerCase() === sel.toLowerCase()) ||
+               (item.type_tag && item.type_tag.toLowerCase() === sel.toLowerCase());
+      });
+      if (!matchType) return false;
+
+      // Color Filter
+      const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
+        const itemColor = (item.color || '').toLowerCase();
+        const itemColorTag = (item.color_tag || '').toLowerCase();
+        const selLower = sel.toLowerCase();
+        return itemColor.includes(selLower) || itemColorTag.includes(selLower);
+      });
+      if (!matchColor) return false;
+
+      return true;
+    });
+
     result.sort((a, b) => {
       const nameA = a.name || a.category || '';
       const nameB = b.name || b.category || '';
       return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
     });
     return result;
-  }, [friendGarments, filterType, filterColor, sortOrder]);
+  }, [friendGarments, selectedTypes, selectedColors, sortOrder]);
 
   // Filter & sort all friends' garments
   const filteredAllGarments = useMemo(() => {
-    let result = [...allFriendsGarments];
-    if (filterType !== 'all') {
-      result = result.filter(item => 
-        item.category?.toLowerCase() === filterType.toLowerCase() ||
-        item.type_tag?.toLowerCase() === filterType.toLowerCase()
-      );
-    }
-    if (filterColor !== 'all') {
-      result = result.filter(item => item.color?.toLowerCase() === filterColor.toLowerCase());
-    }
+    let result = allFriendsGarments.filter(item => {
+      // Type / Category Filter
+      const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
+        return (item.category && item.category.toLowerCase() === sel.toLowerCase()) ||
+               (item.type_tag && item.type_tag.toLowerCase() === sel.toLowerCase());
+      });
+      if (!matchType) return false;
+
+      // Color Filter
+      const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
+        const itemColor = (item.color || '').toLowerCase();
+        const itemColorTag = (item.color_tag || '').toLowerCase();
+        const selLower = sel.toLowerCase();
+        return itemColor.includes(selLower) || itemColorTag.includes(selLower);
+      });
+      if (!matchColor) return false;
+
+      return true;
+    });
+
     result.sort((a, b) => {
       const nameA = a.name || a.category || '';
       const nameB = b.name || b.category || '';
       return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
     });
     return result;
-  }, [allFriendsGarments, filterType, filterColor, sortOrder]);
+  }, [allFriendsGarments, selectedTypes, selectedColors, sortOrder]);
 
   // Filtered friends list for Figure .10.1
   const filteredFriends = useMemo(() => {
@@ -242,77 +284,122 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     r => r.receiver_id === currentUser.user_id && r.status === 'pending'
   );
 
-  // Helper to render filter pills matching wireframe [All] [Type] [Length] [Color] + Sort
+  // Helper to render filter pills matching Virtual Closet: Row 1 categories + Reset, Row 2 color tag pills with color dots
   const renderFilterBar = () => (
     <div style={{
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: 'column',
       gap: 10,
-      flexWrap: 'wrap',
-      marginBottom: 20
+      marginBottom: 20,
+      paddingBottom: 14,
+      borderBottom: '1px solid var(--border)'
     }}>
+      {/* Row 1: Garment Types / Categories + Sort */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`pill ${selectedTypes.size === 0 && selectedColors.size === 0 ? 'on' : ''}`}
+            style={{
+              cursor: 'pointer',
+              padding: '6px 14px',
+              fontSize: 12.5,
+              borderRadius: 20,
+              background: (selectedTypes.size === 0 && selectedColors.size === 0) ? 'var(--primary)' : 'var(--surface-2)',
+              color: (selectedTypes.size === 0 && selectedColors.size === 0) ? '#ffffff' : 'var(--text)',
+              border: (selectedTypes.size === 0 && selectedColors.size === 0) ? '1px solid var(--primary)' : '1px solid var(--border)',
+              fontWeight: 600
+            }}
+            onClick={clearAllFilters}
+          >
+            All
+          </button>
+
+          {['Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Shoes'].map(cat => {
+            const isSelected = selectedTypes.has(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                className={`pill ${isSelected ? 'on' : ''}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: '6px 14px',
+                  fontSize: 12.5,
+                  borderRadius: 20,
+                  background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                  color: isSelected ? '#ffffff' : 'var(--text)',
+                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  fontWeight: isSelected ? 600 : 500
+                }}
+                onClick={() => toggleTypeFilter(cat)}
+              >
+                {cat}
+              </button>
+            );
+          })}
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              className="btn btn-g"
+              style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--danger)', borderRadius: 20 }}
+              onClick={clearAllFilters}
+            >
+              <RotateCcw className="ico" style={{ width: 12, height: 12 }} /> Reset
+            </button>
+          )}
+        </div>
+
+        {/* Sort button */}
+        <button
+          type="button"
+          className="btn btn-g"
+          onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+          style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20 }}
+        >
+          <ArrowUpDown className="ico" style={{ width: 13, height: 13 }} />
+          <span>Sort {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}</span>
+        </button>
+      </div>
+
+      {/* Row 2: Color Tags (matching Virtual Closet with colored dots) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {['All', 'Tops', 'Bottoms', 'Dresses', 'Shoes'].map(cat => {
-          const isActive = (cat === 'All' && filterType === 'all') || filterType.toLowerCase() === cat.toLowerCase();
+        {NORMAL_CLOTHING_COLORS.map(color => {
+          const isSelected = selectedColors.has(color.name);
           return (
             <button
-              key={cat}
+              key={color.name}
               type="button"
-              className={`pill-btn ${isActive ? 'active' : ''}`}
-              onClick={() => setFilterType(cat === 'All' ? 'all' : cat.toLowerCase())}
+              className={`pill ${isSelected ? 'on' : ''}`}
               style={{
-                padding: '6px 14px',
-                borderRadius: 20,
-                fontSize: 12,
-                fontWeight: 600,
-                background: isActive ? 'var(--primary)' : 'var(--surface-2)',
-                color: isActive ? '#FFFFFF' : 'var(--text)',
-                border: '1px solid var(--border)',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease'
+                padding: '5px 12px',
+                fontSize: 12,
+                borderRadius: 20,
+                background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                color: isSelected ? '#ffffff' : 'var(--text)',
+                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                fontWeight: isSelected ? 600 : 500,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
               }}
+              onClick={() => toggleColorFilter(color.name)}
             >
-              {cat}
+              <span style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: color.hex,
+                border: color.name === 'White' ? '1px solid #cbd5e1' : 'none',
+                display: 'inline-block'
+              }} />
+              {color.name}
             </button>
           );
         })}
-
-        {/* Color filter dropdown */}
-        <select
-          value={filterColor}
-          onChange={(e) => setFilterColor(e.target.value)}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 20,
-            fontSize: 12,
-            background: 'var(--surface-2)',
-            color: 'var(--text)',
-            border: '1px solid var(--border)',
-            cursor: 'pointer'
-          }}
-        >
-          <option value="all">Color: All</option>
-          <option value="black">Black</option>
-          <option value="white">White</option>
-          <option value="blue">Blue</option>
-          <option value="grey">Grey</option>
-          <option value="yellow">Yellow</option>
-          <option value="red">Red</option>
-          <option value="green">Green</option>
-        </select>
       </div>
-
-      {/* Sort button */}
-      <button
-        type="button"
-        className="btn btn-g"
-        onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-        style={{ fontSize: 12, padding: '6px 12px', borderRadius: 20 }}
-      >
-        <ArrowUpDown className="ico" style={{ width: 14, height: 14 }} />
-        <span>Sort {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}</span>
-      </button>
     </div>
   );
 

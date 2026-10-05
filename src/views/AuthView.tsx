@@ -138,6 +138,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         return;
       }
 
+      // Validate password confirmation match before any async network operations
+      if (password !== confirmPassword) {
+        setErrorMsg('Passwords do not match. Please verify your confirmation password.');
+        return;
+      }
+
       if (!trimmedFirst) {
         setErrorMsg('First name is required.');
         return;
@@ -172,11 +178,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               return;
             }
           } catch {}
-        }
-
-        if (password !== confirmPassword) {
-          setErrorMsg('Passwords do not match. Please verify your confirmation password.');
-          return;
         }
 
         const newUser = mockDatabase.registerUser({

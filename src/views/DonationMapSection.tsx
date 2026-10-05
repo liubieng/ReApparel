@@ -202,7 +202,8 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
         const mProv = (opp.province || '').toLowerCase().includes(q);
         const mRegion = (opp.region || '').toLowerCase().includes(q);
         const mBarangay = (opp.barangay || '').toLowerCase().includes(q);
-        if (!mName && !mAddr && !mTypes && !mOrg && !mCity && !mProv && !mRegion && !mBarangay) return false;
+        const mCountry = (opp.country || '').toLowerCase().includes(q);
+        if (!mName && !mAddr && !mTypes && !mOrg && !mCity && !mProv && !mRegion && !mBarangay && !mCountry) return false;
       }
       if (selectedCategory !== 'all') {
         const types = (opp.accepted_types || '').toLowerCase();
@@ -259,7 +260,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   // Submit Community Donation Drive
   const handleAddDriveSubmit = async (data: Omit<DonationOpportunity, 'donation_id'>) => {
     try {
-      const created = mapsService.addDonationOpportunity(data);
+      const created = await mapsService.addDonationOpportunity(data);
       await onRefreshData();
       setSelectedOpp(created);
       setHighlightId(created.donation_id);

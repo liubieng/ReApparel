@@ -85,6 +85,14 @@ export function getStoredSupabaseConfig(): SupabaseConfig {
   const storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
   const storedKey = safeStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
 
+  if (storedUrl === 'off' || storedKey === 'off' || storedUrl === 'disabled') {
+    return {
+      url: '',
+      key: '',
+      isConfigured: false
+    };
+  }
+
   return {
     url: storedUrl,
     key: storedKey,
@@ -119,6 +127,20 @@ export function getSupabase(): SupabaseClient | null {
     return realSupabaseClient;
   }
   return null;
+}
+
+/**
+ * Wraps a promise in a timeout to guarantee the client application never stalls
+ * indefinitely if the remote Supabase database has high latency, is cold-starting,
+ * or experiences network issues.
+ */
+export function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number = 3500): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Supabase request timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
 }
 
 // -----------------------------------------------------------------------------
@@ -186,7 +208,11 @@ function loadInitialMockState(): MockDatabaseState {
       // CRITICAL RECOVERY: Ensure any garments registered in daily_clothing_logs are always
       // present in clothing_items so they are never missing from the virtual closet!
       if (!parsed.clothing_items) parsed.clothing_items = [];
-      if (!parsed.bsas_assessments) parsed.bsas_assessments = [];
+      if (!parsed.bsas_assessments) {
+        parsed.bsas_assessments = [];
+      } else if (Array.isArray(parsed.bsas_assessments)) {
+        parsed.bsas_assessments = deduplicateAssessments(parsed.bsas_assessments);
+      }
       if (parsed.daily_clothing_logs && Array.isArray(parsed.daily_clothing_logs)) {
         parsed.daily_clothing_logs.forEach((log: DailyClothingLog) => {
           if (log.items && Array.isArray(log.items)) {
@@ -203,25 +229,6 @@ function loadInitialMockState(): MockDatabaseState {
         });
       }
 
-      // One-time cleanup for accounts deleted before the deleteUser fix was deployed
-      const cleanedDeletedUsersKey = 'reapparel_cleaned_deleted_marioantoniolee_v1';
-      if (!safeStorage.getItem(cleanedDeletedUsersKey)) {
-        if (parsed.users && Array.isArray(parsed.users)) {
-          const stuckIndex = parsed.users.findIndex((u: User) => u.email.toLowerCase() === 'marioantoniolee@gmail.com');
-          if (stuckIndex !== -1) {
-            const stuckUid = parsed.users[stuckIndex].user_id;
-            parsed.users.splice(stuckIndex, 1);
-            parsed.clothing_items = (parsed.clothing_items || []).filter((i: ClothingItem) => i.user_id !== stuckUid);
-            parsed.bsas_assessments = (parsed.bsas_assessments || []).filter((a: BSASAssessment) => a.user_id !== stuckUid);
-            parsed.daily_clothing_logs = (parsed.daily_clothing_logs || []).filter((l: DailyClothingLog) => l.user_id !== stuckUid);
-            const activeUser = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER);
-            if (activeUser === stuckUid) {
-              safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
-            }
-          }
-        }
-        safeStorage.setItem(cleanedDeletedUsersKey, 'true');
-      }
 
       // Clean up seed demo accounts mario@example.com and liu@example.com from localStorage cache
       if (parsed.users && Array.isArray(parsed.users)) {
@@ -320,6 +327,38 @@ export function generateUUID(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+export const SPAM_ASSESSMENT_IDS = new Set<number>([72, 73, 74, 75, 76, 77]);
+
+export function deduplicateAssessments(assessments: BSASAssessment[]): BSASAssessment[] {
+  if (!assessments || !Array.isArray(assessments)) return [];
+
+  // 1. Explicitly filter out test spam assessment IDs from debug/test runs
+  const valid = assessments.filter(a => !SPAM_ASSESSMENT_IDS.has(Number(a.assessment_id)));
+
+  // 2. Sort reverse-chronologically (newest first)
+  const sorted = [...valid].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+
+  // 3. Deduplicate exact duplicate IDs and rapid multi-click submissions (< 60s)
+  const result: BSASAssessment[] = [];
+  const seenIds = new Set<string | number>();
+
+  for (const item of sorted) {
+    if (seenIds.has(item.assessment_id)) continue;
+
+    const isRapidDuplicate = result.some(r =>
+      isSameUser(r.user_id, item.user_id) &&
+      Math.abs(new Date(r.taken_at).getTime() - new Date(item.taken_at).getTime()) < 60000
+    );
+
+    if (!isRapidDuplicate) {
+      seenIds.add(item.assessment_id);
+      result.push(item);
+    }
+  }
+
+  return result.sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
 }
 
 class MockDatabaseEngine {
@@ -673,14 +712,13 @@ class MockDatabaseEngine {
   public getAssessments(userId?: string): BSASAssessment[] {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) {
-      return [...this.state.bsas_assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+      return deduplicateAssessments(this.state.bsas_assessments);
     }
 
     const matched = this.state.bsas_assessments
-      .filter(a => isSameUser(a.user_id, targetUid))
-      .sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+      .filter(a => isSameUser(a.user_id, targetUid));
 
-    return matched;
+    return deduplicateAssessments(matched);
   }
 
   public addAssessment(score: number, breakdown?: BSASAssessment['breakdown'], userId?: string): BSASAssessment {
@@ -1135,9 +1173,22 @@ class MockDatabaseEngine {
       flags: [],
       flags_count: 0
     };
-    this.state.donation_opportunities.push(newOpp);
+    this.state.donation_opportunities.unshift(newOpp);
     this.notify();
     return newOpp;
+  }
+
+  public updateDonationOpportunityId(oldId: number, newId: number) {
+    const opp = this.state.donation_opportunities.find(o => o.donation_id === oldId);
+    if (opp) {
+      opp.donation_id = newId;
+    }
+    if (this.state.donation_flags) {
+      this.state.donation_flags.forEach(f => {
+        if (f.donation_id === oldId) f.donation_id = newId;
+      });
+    }
+    this.notify();
   }
 
   public setDonationOpportunities(opportunities: DonationOpportunity[]) {
@@ -1147,11 +1198,20 @@ class MockDatabaseEngine {
 
   public addMultipleDonationOpportunities(newOpps: DonationOpportunity[]) {
     for (const opp of newOpps) {
-      const exists = this.state.donation_opportunities.some(
-        o => o.name.toLowerCase() === opp.name.toLowerCase() ||
-             (Math.abs(o.latitude - opp.latitude) < 0.001 && Math.abs(o.longitude - opp.longitude) < 0.001)
+      const matchIndex = this.state.donation_opportunities.findIndex(
+        o => o.donation_id === opp.donation_id ||
+             (o.name.toLowerCase() === opp.name.toLowerCase() &&
+              Math.abs(o.latitude - opp.latitude) < 0.001 &&
+              Math.abs(o.longitude - opp.longitude) < 0.001)
       );
-      if (!exists) {
+      if (matchIndex >= 0) {
+        // Merge so we preserve rich local metadata while updating ID
+        this.state.donation_opportunities[matchIndex] = {
+          ...opp,
+          ...this.state.donation_opportunities[matchIndex],
+          donation_id: opp.donation_id
+        };
+      } else {
         this.state.donation_opportunities.unshift(opp);
       }
     }
@@ -1317,7 +1377,8 @@ export async function runDatabaseDiagnostic(): Promise<DatabaseDiagnosticResult>
 
   for (const meta of TABLE_METADATA) {
     try {
-      const { data, error, count } = await supabase.from(meta.name).select('*', { count: 'exact' });
+      // Use head: true to perform a zero-payload HTTP HEAD request, retrieving count without egress bandwidth
+      const { error, count } = await supabase.from(meta.name).select('*', { count: 'exact', head: true });
       if (error) {
         tableResults.push({
           name: meta.name,
@@ -1329,7 +1390,7 @@ export async function runDatabaseDiagnostic(): Promise<DatabaseDiagnosticResult>
           error: error.message
         });
       } else {
-        const rows = count ?? (data ? data.length : 0);
+        const rows = count ?? 0;
         totalRemote += rows;
         tableResults.push({
           name: meta.name,

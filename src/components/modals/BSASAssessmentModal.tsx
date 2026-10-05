@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { BrainCircuit, CheckCircle2, ArrowLeft, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, ArrowLeft, ArrowRight, Sparkles, AlertCircle, X } from 'lucide-react';
 import { BSASAssessment } from '../../types/database';
 
 /**
@@ -46,7 +46,8 @@ interface BSASAssessmentModalProps {
 }
 
 export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
-  onComplete
+  onComplete,
+  onCancel
 }) => {
   const [viewMode, setViewMode] = useState<'stepper' | 'scroll'>('stepper');
   const [currentIndex, setCurrentIndex] = useState<number>(0);
@@ -161,6 +162,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
 
   // Check all questions on submission (TC_BSAS_07)
   const handleSubmitAssessment = () => {
+    if (isSubmitting || isFinishing) return;
     const unansweredIndices = BSAS_28_ITEMS.map((_, idx) => idx).filter(idx => answers[idx] === undefined);
     if (unansweredIndices.length > 0) {
       setUnansweredError(`One or more questions (${unansweredIndices.length} remaining) remain unanswered. Please complete all questions before submitting.`);
@@ -356,6 +358,24 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
             >
               View Recovery Analysis
             </button>
+
+            {onCancel && (
+              <button
+                type="button"
+                className="btn btn-g"
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '8px 18px',
+                  fontSize: 12,
+                  borderRadius: 24,
+                  opacity: 0.85
+                }}
+                onClick={onCancel}
+              >
+                Go to Virtual Closet directly &rarr;
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -376,7 +396,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
           overflow: 'hidden'
         }}
       >
-                {/* Header / Brand & Progress Counter */}
+        {/* Header / Brand & Progress Counter */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <BrainCircuit className="ico" style={{ color: 'var(--primary)', width: 20, height: 20 }} />
@@ -385,24 +405,38 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
             </strong>
           </div>
 
-          {/* View mode toggle */}
-          <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 3, borderRadius: 8 }}>
-            <button
-              type="button"
-              className={`btn ${viewMode === 'stepper' ? 'btn-p' : 'btn-g'}`}
-              style={{ fontSize: 11, padding: '2px 8px' }}
-              onClick={() => setViewMode('stepper')}
-            >
-              Step-by-Step
-            </button>
-            <button
-              type="button"
-              className={`btn ${viewMode === 'scroll' ? 'btn-p' : 'btn-g'}`}
-              style={{ fontSize: 11, padding: '2px 8px' }}
-              onClick={() => setViewMode('scroll')}
-            >
-              Scroll All Questions
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* View mode toggle */}
+            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 3, borderRadius: 8 }}>
+              <button
+                type="button"
+                className={`btn ${viewMode === 'stepper' ? 'btn-p' : 'btn-g'}`}
+                style={{ fontSize: 11, padding: '2px 8px' }}
+                onClick={() => setViewMode('stepper')}
+              >
+                Step-by-Step
+              </button>
+              <button
+                type="button"
+                className={`btn ${viewMode === 'scroll' ? 'btn-p' : 'btn-g'}`}
+                style={{ fontSize: 11, padding: '2px 8px' }}
+                onClick={() => setViewMode('scroll')}
+              >
+                Scroll All Questions
+              </button>
+            </div>
+
+            {onCancel && (
+              <button
+                type="button"
+                className="btn btn-g"
+                title="Exit to closet"
+                style={{ padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={onCancel}
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            )}
           </div>
         </div>
 

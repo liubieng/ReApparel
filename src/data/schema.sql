@@ -196,6 +196,9 @@ BEGIN
         WHERE log_id = r.log_id;
 
         finalized_count := finalized_count + 1;
+    END LOOP;
+
+    RETURN finalized_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, pg_temp;
@@ -228,21 +231,21 @@ CREATE POLICY "Public read donation spots" ON donation_opportunity FOR SELECT US
 
 -- User profiles
 CREATE POLICY "Users viewable by authenticated users" ON users FOR SELECT USING (true);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING ((SELECT auth.uid()) = user_id);
 
 -- BSAS assessments: Private to owner
-CREATE POLICY "BSAS owner select" ON bsas_assessment FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "BSAS owner insert" ON bsas_assessment FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "BSAS owner select" ON bsas_assessment FOR SELECT USING ((SELECT auth.uid()) = user_id);
+CREATE POLICY "BSAS owner insert" ON bsas_assessment FOR INSERT WITH CHECK ((SELECT auth.uid()) = user_id);
 
 -- Clothing items: Owner manages, friends can view
-CREATE POLICY "Clothing owner all" ON clothing_item FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Clothing owner all" ON clothing_item FOR ALL USING ((SELECT auth.uid()) = user_id);
 CREATE POLICY "Friends can view closet items" ON clothing_item FOR SELECT USING (
-    auth.uid() = user_id OR
+    (SELECT auth.uid()) = user_id OR
     EXISTS (
         SELECT 1 FROM friend_request
         WHERE status = 'accepted' AND (
-            (sender_id = auth.uid() AND receiver_id = clothing_item.user_id) OR
-            (receiver_id = auth.uid() AND sender_id = clothing_item.user_id)
+            (sender_id = (SELECT auth.uid()) AND receiver_id = clothing_item.user_id) OR
+            (receiver_id = (SELECT auth.uid()) AND sender_id = clothing_item.user_id)
         )
     )
 );
@@ -250,34 +253,47 @@ CREATE POLICY "Friends can view closet items" ON clothing_item FOR SELECT USING 
 -- Item tags viewable if clothing item is viewable
 CREATE POLICY "Item tags viewable" ON item_tag FOR SELECT USING (true);
 CREATE POLICY "Item tags manageable by item owner" ON item_tag FOR ALL USING (
-    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = item_tag.item_id AND clothing_item.user_id = auth.uid())
+    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = item_tag.item_id AND clothing_item.user_id = (SELECT auth.uid()))
 );
 
 -- Daily wear logs
-CREATE POLICY "Daily log owner all" ON daily_clothing_log FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Daily log owner all" ON daily_clothing_log FOR ALL USING ((SELECT auth.uid()) = user_id);
 CREATE POLICY "Daily log item owner all" ON daily_log_item FOR ALL USING (
-    EXISTS (SELECT 1 FROM daily_clothing_log WHERE daily_clothing_log.log_id = daily_log_item.log_id AND daily_clothing_log.user_id = auth.uid())
+    EXISTS (SELECT 1 FROM daily_clothing_log WHERE daily_clothing_log.log_id = daily_log_item.log_id AND daily_clothing_log.user_id = (SELECT auth.uid()))
 );
 
 -- Friend requests
-CREATE POLICY "Friend requests participant select" ON friend_request FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Friend requests sender insert" ON friend_request FOR INSERT WITH CHECK (auth.uid() = sender_id);
-CREATE POLICY "Friend requests participant update" ON friend_request FOR UPDATE USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Friend requests participant select" ON friend_request FOR SELECT USING ((SELECT auth.uid()) = sender_id OR (SELECT auth.uid()) = receiver_id);
+CREATE POLICY "Friend requests sender insert" ON friend_request FOR INSERT WITH CHECK ((SELECT auth.uid()) = sender_id);
+CREATE POLICY "Friend requests participant update" ON friend_request FOR UPDATE USING ((SELECT auth.uid()) = sender_id OR (SELECT auth.uid()) = receiver_id);
 
 -- Borrows
 CREATE POLICY "Borrow viewable by borrower or lender" ON borrow FOR SELECT USING (
-    auth.uid() = borrower_id OR
-    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = borrow.item_id AND clothing_item.user_id = auth.uid())
+    (SELECT auth.uid()) = borrower_id OR
+    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = borrow.item_id AND clothing_item.user_id = (SELECT auth.uid()))
 );
-CREATE POLICY "Borrow insert by borrower" ON borrow FOR INSERT WITH CHECK (auth.uid() = borrower_id);
+CREATE POLICY "Borrow insert by borrower" ON borrow FOR INSERT WITH CHECK ((SELECT auth.uid()) = borrower_id);
 CREATE POLICY "Borrow update by parties" ON borrow FOR UPDATE USING (
-    auth.uid() = borrower_id OR
-    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = borrow.item_id AND clothing_item.user_id = auth.uid())
+    (SELECT auth.uid()) = borrower_id OR
+    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = borrow.item_id AND clothing_item.user_id = (SELECT auth.uid()))
 );
 
 -- Donation flags
 CREATE POLICY "Donation flags viewable by all" ON donation_flag FOR SELECT USING (true);
-CREATE POLICY "Donation flags insert by authenticated" ON donation_flag FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Donation flags insert by authenticated" ON donation_flag FOR INSERT WITH CHECK ((SELECT auth.uid()) = user_id);
+
+-- --------------------------------------------------------------------
+-- Performance Indexes for High-Frequency Queries and RLS Subqueries
+-- --------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_clothing_item_user ON clothing_item (user_id);
+CREATE INDEX IF NOT EXISTS idx_friend_request_status_users ON friend_request (status, sender_id, receiver_id);
+CREATE INDEX IF NOT EXISTS idx_daily_clothing_log_user_date ON daily_clothing_log (user_id, log_date);
+CREATE INDEX IF NOT EXISTS idx_daily_log_item_log_id ON daily_log_item (log_id);
+CREATE INDEX IF NOT EXISTS idx_borrow_borrower ON borrow (borrower_id);
+CREATE INDEX IF NOT EXISTS idx_borrow_item ON borrow (item_id);
+CREATE INDEX IF NOT EXISTS idx_donation_flag_donation_id ON donation_flag (donation_id);
+CREATE INDEX IF NOT EXISTS idx_item_tag_item_id ON item_tag (item_id);
+CREATE INDEX IF NOT EXISTS idx_bsas_assessment_user ON bsas_assessment (user_id);
 
 -- --------------------------------------------------------------------
 -- Compatibility Views for Exact Spec Nomenclature

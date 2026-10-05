@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (customTitle) return customTitle;
     switch (currentView) {
       case 'closet':
-        return 'MyCloset';
+        return 'My Closet';
       case 'recovery':
         return 'Recovery Progress';
       case 'closet-statistics':
@@ -40,30 +40,30 @@ export const Header: React.FC<HeaderProps> = ({
       case 'all-friends-closets':
         return 'Friends Closets';
       case 'donations':
-        return 'Donation Options';
+        return 'Donation Opportunities';
       case 'profile':
         return 'Profile';
       case 'settings':
         return 'Settings';
       case 'daily-log':
-        return 'Daily Clothing Usage';
+        return 'Daily Clothing Log';
       default:
         return 'ReApparel';
     }
   };
 
   const title = getWireframeTitle();
-  const displayName = currentUser 
+  const displayName = currentUser
     ? `${currentUser.first_name ? currentUser.first_name[0] + '.' : ''} ${currentUser.last_name || currentUser.first_name || 'User'}`
     : 'M. Cruz';
 
   return (
-    <div className="top" style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'space-between', 
-      padding: '12px 24px', 
-      background: 'var(--surface)', 
+    <div className="top" style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px 24px',
+      background: 'var(--surface)',
       borderBottom: '1px solid var(--border)',
       position: 'sticky',
       top: 0,
@@ -71,18 +71,18 @@ export const Header: React.FC<HeaderProps> = ({
     }}>
       {/* Mobile Menu Icon (Mobile Only) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button 
-          type="button" 
-          className="icobtn mobile-menu-btn" 
+        <button
+          type="button"
+          className="icobtn mobile-menu-btn"
           onClick={onOpenMobileSidebar}
           aria-label="Open navigation sidebar"
         >
           <Menu className="ico" style={{ width: 18, height: 18 }} />
         </button>
 
-        <h1 style={{ 
-          fontFamily: 'var(--font-display)', 
-          fontSize: 22, 
+        <h1 style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 22,
           margin: 0,
           color: 'var(--text)',
           fontWeight: 600
@@ -93,9 +93,9 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right: Theme Toggle & User Profile Chip */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button 
-          type="button" 
-          className="icobtn" 
+        <button
+          type="button"
+          className="icobtn"
           onClick={onToggleTheme}
           aria-label="Toggle visual theme"
           title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}

@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout } from './supabaseClient';
 import { User, FriendRequest, Borrow, ClothingItem } from '../types/database';
 
 export const friendsService = {
@@ -78,9 +78,12 @@ export const friendsService = {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('user_id, email, first_name, last_name, friend_code, created_at');
+      const { data, error } = await withTimeout(
+        supabase
+          .from('users')
+          .select('user_id, email, first_name, last_name, friend_code, created_at'),
+        3000
+      );
       if (error || !data || data.length === 0) return;
       (data as User[]).forEach(u => mockDatabase.upsertUser(u));
     } catch {

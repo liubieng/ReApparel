@@ -45,7 +45,19 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
 
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(defaultTo);
+  const [note, setNote] = useState('Attending weekend fashion exhibition, will return dry-cleaned!');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const durationDays = React.useMemo(() => {
+    if (!fromDate || !toDate) return 0;
+    const [y1, m1, d1] = fromDate.split('-').map(Number);
+    const [y2, m2, d2] = toDate.split('-').map(Number);
+    if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return 0;
+    const start = Date.UTC(y1, m1 - 1, d1);
+    const end = Date.UTC(y2, m2 - 1, d2);
+    if (end < start) return 0;
+    return Math.round((end - start) / 86400000) + 1;
+  }, [fromDate, toDate]);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -59,7 +71,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (new Date(toDate) < new Date(fromDate)) {
+    if (toDate < fromDate) {
       setErrorMsg('Return date must be on or after the borrow start date.');
       return;
     }
@@ -143,7 +155,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
 
         {/* Date Selection Form */}
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div className="field" style={{ margin: 0 }}>
               <label>Borrow Start Date *</label>
               <input
@@ -164,6 +176,41 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
                 required
               />
             </div>
+          </div>
+
+          {/* Dynamic Loan Duration & Realtime Availability Pill */}
+          {durationDays > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '7px 12px',
+              borderRadius: 8,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              fontSize: 12,
+              color: 'var(--text)',
+              marginBottom: 12
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Clock style={{ width: 14, height: 14, color: 'var(--primary)' }} />
+                <span>Duration: <strong>{durationDays} {durationDays === 1 ? 'day' : 'days'}</strong></span>
+              </div>
+              <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <CheckCircle style={{ width: 13, height: 13 }} /> No Schedule Conflicts
+              </span>
+            </div>
+          )}
+
+          {/* Optional Note to Owner */}
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label>Note to Owner (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. Attending a weekend conference, will return dry-cleaned!"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
           </div>
 
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>

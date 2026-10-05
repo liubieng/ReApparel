@@ -12,6 +12,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { BSASAssessment, ClothingItem, Borrow } from '../types/database';
+import { deduplicateAssessments } from '../services/closetService';
 
 /**
  * ============================================================================
@@ -107,15 +108,20 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   // Accordion state for "How to interpret your BSAS Score" (starts collapsed by default)
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
 
+  // Deduplicate assessments to filter test spam & rapid duplicates
+  const deduplicatedAssessments = useMemo(() => {
+    return deduplicateAssessments(assessments);
+  }, [assessments]);
+
   // Assessments sorted chronologically (oldest to newest for bar chart)
   const sortedAsc = useMemo(() => {
-    return [...assessments].sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
-  }, [assessments]);
+    return [...deduplicatedAssessments].sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
+  }, [deduplicatedAssessments]);
 
   // Assessments sorted reverse chronologically (newest first for comparison)
   const sortedDesc = useMemo(() => {
-    return [...assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
-  }, [assessments]);
+    return [...deduplicatedAssessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
+  }, [deduplicatedAssessments]);
 
   const latestAssessment = sortedAsc[sortedAsc.length - 1];
 
@@ -159,6 +165,39 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     }
 
     return results;
+  }, [garments]);
+
+  // "Shop Your Closet" Pairs (One least-worn and one unworn item from each category)
+  const shopYourClosetByCategory = useMemo(() => {
+    const categories = ['Tops', 'Bottoms', 'Dresses', 'Shoes', 'Outerwear'];
+    return categories.map(cat => {
+      const itemsInCat = garments.filter(g => 
+        (g.category || g.type_tag || '').toLowerCase() === cat.toLowerCase()
+      );
+      if (itemsInCat.length === 0) return null;
+
+      // 1. Unworn item (wear_count === 0)
+      const unworn = itemsInCat.find(g => (g.worn_count ?? g.wear_count ?? 0) === 0) || null;
+
+      // 2. Least worn item (wear count > 0 if available, distinct from unworn if possible)
+      const wornItems = itemsInCat
+        .filter(g => (g.worn_count ?? g.wear_count ?? 0) > 0)
+        .sort((a, b) => (a.worn_count ?? a.wear_count ?? 0) - (b.worn_count ?? b.wear_count ?? 0));
+      
+      const leastWorn = wornItems.length > 0 ? wornItems[0] : null;
+
+      return {
+        category: cat,
+        leastWorn,
+        unworn,
+        totalItems: itemsInCat.length
+      };
+    }).filter(Boolean) as {
+      category: string;
+      leastWorn: ClothingItem | null;
+      unworn: ClothingItem | null;
+      totalItems: number;
+    }[];
   }, [garments]);
 
   // Active accepted borrows
@@ -217,7 +256,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                     style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 20 }}
                     onClick={onStartRetakeAssessment}
                   >
-                    Retake Test
+                    {sortedAsc.length === 0 ? 'Take Check-In' : 'Retake Check-In'}
                   </button>
                 ) : (
                   <button
@@ -447,7 +486,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                   }}
                   onClick={onNavigateToStatistics}
                 >
-                  see Full Statistics
+                  Full Statistics
                 </button>
               )}
             </div>
@@ -491,7 +530,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
             {/* Most to Least Worn */}
             <div style={{ marginBottom: 20 }}>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: 10 }}>
-                Most to Least Worn
+                {garments.length > 5 ? 'Top 5 Most to Least Worn' : 'Most to Least Worn'}
               </span>
               {garments.length === 0 ? (
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, background: 'var(--surface-2)', borderRadius: 10 }}>
@@ -533,6 +572,144 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                         </div>
                       );
                     })}
+                </div>
+              )}
+            </div>
+
+            {/* "Shop Your Closet" - One least-worn and one unworn item from each category */}
+            <div style={{
+              marginBottom: 20,
+              background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: '14px 16px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Sparkles style={{ width: 16, height: 16, color: 'var(--primary)' }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>Shop Your Closet</span>
+                  </div>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    Rediscover neglected garments: one least-worn &amp; one unworn item per category
+                  </span>
+                </div>
+              </div>
+
+              {shopYourClosetByCategory.length === 0 ? (
+                <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+                  Add clothes across categories to generate your "Shop Your Closet" recommendations.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {shopYourClosetByCategory.map(({ category, leastWorn, unworn }) => (
+                    <div 
+                      key={category}
+                      style={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        padding: '10px 12px'
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)' }} />
+                        {category}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                        {/* 1. Least-Worn Item */}
+                        {leastWorn ? (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: 8,
+                            borderRadius: 8,
+                            background: 'var(--surface-2)',
+                            border: '1px solid var(--border)'
+                          }}>
+                            <div style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 6,
+                              flexShrink: 0,
+                              backgroundColor: leastWorn.image_url?.startsWith('#') ? leastWorn.image_url : 'var(--surface)',
+                              backgroundImage: leastWorn.image_url?.startsWith('#') ? undefined : `url("${leastWorn.image_url}")`,
+                              backgroundSize: 'contain',
+                              backgroundRepeat: 'no-repeat',
+                              backgroundPosition: 'center'
+                            }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
+                                Least Worn
+                              </span>
+                              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {leastWorn.name || leastWorn.category}
+                              </div>
+                              <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                                Worn {leastWorn.worn_count ?? leastWorn.wear_count ?? 0}×
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: 8, fontStyle: 'italic' }}>
+                            No worn item in this category.
+                          </div>
+                        )}
+
+                        {/* 2. Unworn Item */}
+                        {unworn ? (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: 8,
+                            borderRadius: 8,
+                            background: 'rgba(239, 68, 68, 0.04)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)'
+                          }}>
+                            <div style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: 6,
+                              flexShrink: 0,
+                              backgroundColor: unworn.image_url?.startsWith('#') ? unworn.image_url : 'var(--surface)',
+                              backgroundImage: unworn.image_url?.startsWith('#') ? undefined : `url("${unworn.image_url}")`,
+                              backgroundSize: 'contain',
+                              backgroundRepeat: 'no-repeat',
+                              backgroundPosition: 'center'
+                            }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
+                                Unworn (0×)
+                              </span>
+                              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {unworn.name || unworn.category}
+                              </div>
+                              <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>
+                                Wear this today!
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: 8,
+                            borderRadius: 8,
+                            background: 'var(--surface-2)',
+                            fontSize: 11,
+                            color: 'var(--text-muted)'
+                          }}>
+                            <span style={{ color: 'var(--primary)', fontWeight: 700 }}>✓</span>
+                            All items worn at least once!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
