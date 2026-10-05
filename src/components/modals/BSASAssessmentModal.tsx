@@ -358,24 +358,6 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
             >
               View Recovery Analysis
             </button>
-
-            {onCancel && (
-              <button
-                type="button"
-                className="btn btn-g"
-                style={{
-                  width: '100%',
-                  justifyContent: 'center',
-                  padding: '8px 18px',
-                  fontSize: 12,
-                  borderRadius: 24,
-                  opacity: 0.85
-                }}
-                onClick={onCancel}
-              >
-                Go to Virtual Closet directly &rarr;
-              </button>
-            )}
           </div>
         </div>
       </div>
