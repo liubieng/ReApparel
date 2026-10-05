@@ -357,7 +357,16 @@ export default function App() {
           (payload: any) => {
             const uid = mockDatabase.getCurrentUser()?.user_id;
             if (!uid) return;
-            if (payload?.new) {
+            if (payload?.eventType === 'DELETE') {
+              if (payload.old?.request_id) {
+                mockDatabase.deleteFriendRequest(payload.old.request_id);
+              }
+              friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
+                setFriendRequests(friendsService.getFriendRequests());
+                setFriends(friendsService.getConnectedFriends());
+                setNotifications(friendsService.getNotifications(uid));
+              }).catch(() => {});
+            } else if (payload?.new) {
               const r = payload.new;
               if (r.sender_id === uid || r.receiver_id === uid) {
                 mockDatabase.upsertFriendRequest({
@@ -577,6 +586,21 @@ export default function App() {
     await friendsService.respondToRequest(requestId, 'rejected');
     toast('Friend request declined.');
     await loadData();
+  };
+
+  const handleRemoveFriend = (friendId: string, friendName?: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Remove Friend?',
+      message: `Are you sure you want to remove ${friendName || 'this friend'} from your friends list? You will no longer be able to view their closet or borrow their clothes.`,
+      confirmLabel: 'Remove Friend',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        await friendsService.removeFriend(friendId);
+        toast(`Removed ${friendName || 'friend'} from your friends list.`);
+        await loadData();
+      }
+    });
   };
 
   // Borrow Request & Lending Actions
@@ -879,6 +903,7 @@ export default function App() {
               friendRequests={friendRequests}
               onAcceptFriendRequest={handleAcceptFriendRequest}
               onRejectFriendRequest={handleRejectFriendRequest}
+              onRemoveFriend={handleRemoveFriend}
               onInitiateBorrow={(friend, item) => {
                 const isBorrowed = item.status === 'Borrowed' || 
                                    item.is_active === false || 

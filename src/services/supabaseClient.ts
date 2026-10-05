@@ -1100,6 +1100,21 @@ class MockDatabaseEngine {
     }
   }
 
+  public removeFriend(userIdA: string, userIdB: string) {
+    if (!this.state.friend_requests) return;
+    this.state.friend_requests = this.state.friend_requests.filter(
+      r => !((isSameUser(r.sender_id, userIdA) && isSameUser(r.receiver_id, userIdB)) ||
+             (isSameUser(r.sender_id, userIdB) && isSameUser(r.receiver_id, userIdA)))
+    );
+    this.notify();
+  }
+
+  public deleteFriendRequest(requestId: number) {
+    if (!this.state.friend_requests) return;
+    this.state.friend_requests = this.state.friend_requests.filter(r => r.request_id !== requestId);
+    this.notify();
+  }
+
   // --- NOTIFICATIONS SYSTEM ---
   public getNotifications(userId?: string): AppNotification[] {
     const targetUid = userId || this.currentUserId;

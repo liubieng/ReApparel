@@ -12,7 +12,8 @@ import {
   ArrowUpDown,
   UserCheck,
   Inbox,
-  RotateCcw
+  RotateCcw,
+  UserMinus
 } from 'lucide-react';
 import { User, FriendRequest, ClothingItem } from '../types/database';
 import { friendsService } from '../services/friendsService';
@@ -36,6 +37,7 @@ interface FriendsViewProps {
   friendRequests: FriendRequest[];
   onAcceptFriendRequest: (requestId: number, senderName?: string) => Promise<void>;
   onRejectFriendRequest: (requestId: number) => Promise<void>;
+  onRemoveFriend?: (friendId: string, friendName?: string) => void;
   onInitiateBorrow: (friend: User, garment: ClothingItem) => void;
   onRefreshData: () => Promise<void>;
   toast: (msg: string) => void;
@@ -51,6 +53,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   friendRequests,
   onAcceptFriendRequest,
   onRejectFriendRequest,
+  onRemoveFriend,
   onInitiateBorrow,
   onRefreshData,
   toast
@@ -586,7 +589,21 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
             {viewingFriend.first_name}'s Closet
           </h2>
 
-          <div style={{ width: 90 }} />
+          {onRemoveFriend ? (
+            <button
+              type="button"
+              className="btn btn-g"
+              style={{ fontSize: 11.5, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 5 }}
+              onClick={async () => {
+                await onRemoveFriend(viewingFriend.user_id, `${viewingFriend.first_name} ${viewingFriend.last_name}`);
+                setSubView('list');
+              }}
+            >
+              <UserMinus className="ico" style={{ width: 13, height: 13 }} /> Remove Friend
+            </button>
+          ) : (
+            <div style={{ width: 90 }} />
+          )}
         </div>
 
         {/* Filter & Sort Bar (All, Type, Length, Color, Sort) */}
@@ -1156,21 +1173,43 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Right: 'View Closet' Button (Figure .10.1) */}
-                <button
-                  type="button"
-                  className="btn btn-p"
-                  style={{
-                    borderRadius: 20,
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    padding: '7px 16px',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onClick={() => handleOpenFriendCloset(friend)}
-                >
-                  View Closet
-                </button>
+                {/* Right: Actions (View Closet + Remove Friend) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-p"
+                    style={{
+                      borderRadius: 20,
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      padding: '7px 16px',
+                      whiteSpace: 'nowrap'
+                    }}
+                    onClick={() => handleOpenFriendCloset(friend)}
+                  >
+                    View Closet
+                  </button>
+
+                  {onRemoveFriend && (
+                    <button
+                      type="button"
+                      className="btn btn-g"
+                      title="Remove friend from list"
+                      style={{
+                        borderRadius: 20,
+                        fontSize: 12,
+                        padding: '7px 12px',
+                        color: 'var(--danger)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                      onClick={() => onRemoveFriend(friend.user_id, `${friend.first_name} ${friend.last_name}`)}
+                    >
+                      <UserMinus className="ico" style={{ width: 13, height: 13 }} /> Remove
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

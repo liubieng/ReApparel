@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, isSameUser } from './supabaseClient';
 import { User, FriendRequest, Borrow, ClothingItem } from '../types/database';
 
 export const friendsService = {
@@ -186,6 +186,41 @@ export const friendsService = {
     });
 
     return allUsers.filter(u => friendIds.has(u.user_id));
+  },
+
+  async removeFriend(friendId: string): Promise<void> {
+    const currentUser = mockDatabase.getCurrentUser();
+    if (!currentUser) return;
+    const currentUid = currentUser.user_id;
+
+    // Find any matching friend_request ids
+    const matchingReqs = mockDatabase.getFriendRequests().filter(
+      r => (isSameUser(r.sender_id, currentUid) && isSameUser(r.receiver_id, friendId)) ||
+           (isSameUser(r.sender_id, friendId) && isSameUser(r.receiver_id, currentUid))
+    );
+    const requestIds = matchingReqs.map(r => r.request_id);
+
+    // Remove locally
+    mockDatabase.removeFriend(currentUid, friendId);
+
+    // Remove from Supabase
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        if (requestIds.length > 0) {
+          await supabase
+            .from('friend_request')
+            .delete()
+            .in('request_id', requestIds);
+        }
+        await supabase
+          .from('friend_request')
+          .delete()
+          .or(`and(sender_id.eq.${currentUid},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUid})`);
+      } catch (err) {
+        console.warn('[friendsService] removeFriend Supabase delete error:', err);
+      }
+    }
   },
 
   getFriendCloset(friendId: string): ClothingItem[] {
