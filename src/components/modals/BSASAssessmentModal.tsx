@@ -425,18 +425,6 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
                 Scroll All Questions
               </button>
             </div>
-
-            {onCancel && (
-              <button
-                type="button"
-                className="btn btn-g"
-                title="Exit to closet"
-                style={{ padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                onClick={onCancel}
-              >
-                <X style={{ width: 14, height: 14 }} />
-              </button>
-            )}
           </div>
         </div>
 

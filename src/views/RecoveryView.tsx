@@ -127,14 +127,20 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
 
   // 30-Day Cooldown logic
   const cooldownInfo = useMemo(() => {
-    if (!latestAssessment) return { canTake: true, daysRemaining: 0 };
+    if (!latestAssessment) return { canTake: true, daysRemaining: 0, nextDueDate: null };
     const lastDate = new Date(latestAssessment.taken_at);
     const msSince = Date.now() - lastDate.getTime() + simulatedDaysOffset * 86400000;
     const daysSince = Math.floor(msSince / 86400000);
     const daysRemaining = Math.max(0, 30 - daysSince);
+    const nextDate = new Date(lastDate.getTime() + 30 * 86400000);
+    const nextDueDate = nextDate.toLocaleDateString(undefined, { 
+      month: 'short', 
+      day: 'numeric' 
+    });
     return {
       canTake: daysRemaining === 0,
-      daysRemaining
+      daysRemaining,
+      nextDueDate
     };
   }, [latestAssessment, simulatedDaysOffset]);
 
@@ -259,16 +265,24 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                     {sortedAsc.length === 0 ? 'Take Check-In' : 'Retake Check-In'}
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className="btn btn-g"
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20 }}
-                    onClick={onSimulateCooldownAdvance}
-                    title="Panel Defense: Fast forward 30 days"
+                  <div
+                    style={{ 
+                      fontSize: 11, 
+                      padding: '4px 10px', 
+                      borderRadius: 20, 
+                      background: 'var(--surface-2)', 
+                      color: 'var(--text-muted)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      border: '1px solid var(--border)',
+                      userSelect: 'none'
+                    }}
+                    title={cooldownInfo.nextDueDate ? `Next check-in scheduled for ${cooldownInfo.nextDueDate}` : undefined}
                   >
-                    <RotateCcw className="ico" style={{ width: 11, height: 11 }} />
-                    <span>Cooldown ({cooldownInfo.daysRemaining}d)</span>
-                  </button>
+                    <Clock className="ico" style={{ width: 11, height: 11, color: 'var(--text-muted)' }} />
+                    <span>Next test: {cooldownInfo.nextDueDate ? `${cooldownInfo.nextDueDate} (${cooldownInfo.daysRemaining}d)` : `in ${cooldownInfo.daysRemaining}d`}</span>
+                  </div>
                 )}
               </div>
             </div>

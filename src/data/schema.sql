@@ -231,6 +231,7 @@ CREATE POLICY "Public read donation spots" ON donation_opportunity FOR SELECT US
 
 -- User profiles
 CREATE POLICY "Users viewable by authenticated users" ON users FOR SELECT USING (true);
+CREATE POLICY "Users can insert own profile" ON users FOR INSERT WITH CHECK (true);
 CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING ((SELECT auth.uid()) = user_id);
 
 -- BSAS assessments: Private to owner

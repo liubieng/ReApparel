@@ -82,8 +82,13 @@ const DEFAULT_FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 export function getStoredSupabaseConfig(): SupabaseConfig {
   const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || DEFAULT_FALLBACK_URL;
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || DEFAULT_FALLBACK_KEY;
-  const storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
+  let storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
   const storedKey = safeStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
+
+  // Sanitize any extra slashes in protocol (e.g., https:/// -> https://)
+  if (storedUrl && storedUrl.startsWith('http')) {
+    storedUrl = storedUrl.replace(/^https?:\/+/i, (match) => match.toLowerCase().startsWith('https') ? 'https://' : 'http://').trim();
+  }
 
   if (storedUrl === 'off' || storedKey === 'off' || storedUrl === 'disabled') {
     return {
