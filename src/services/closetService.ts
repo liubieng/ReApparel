@@ -51,6 +51,9 @@ export const closetService = {
             } as ClothingItem;
           });
 
+          // Register remote items in mockDatabase store for cross-device lookups and borrow actions
+          remoteItems.forEach(rem => mockDatabase.upsertClothingItem(rem));
+
           // Deduplicate and merge remote items with local items, preserving higher wear counts
           const merged = remoteItems.map(rem => {
             const loc = localItems.find(l => l.item_id === rem.item_id);

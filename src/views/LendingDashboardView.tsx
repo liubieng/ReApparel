@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Borrow, User } from '../types/database';
 import { checkDateOverlap } from '../components/modals/BorrowModal';
+import { isSameUser } from '../services/supabaseClient';
 
 /**
  * ============================================================================
@@ -45,12 +46,17 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
   const [activeTab, setActiveTab] = useState<'yours' | 'friends'>('yours');
 
   // Requests the current user sent to borrow other people's garments
-  const myRequests = borrows.filter(b => b.borrower_id === currentUser.user_id);
+  const myRequests = borrows.filter(b => 
+    b.borrower_id === currentUser.user_id || isSameUser(b.borrower_id, currentUser.user_id)
+  );
 
   // Requests friends sent to borrow the current user's garments
   const friendsRequests = borrows.filter(b => {
     // Current user is the owner of the garment
-    return b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id;
+    return isSameUser(b.lender?.user_id, currentUser.user_id) || 
+           isSameUser(b.item?.user_id, currentUser.user_id) ||
+           b.lender?.user_id === currentUser.user_id || 
+           b.item?.user_id === currentUser.user_id;
   });
 
   const handleAcceptWithConflictCheck = (borrow: Borrow) => {

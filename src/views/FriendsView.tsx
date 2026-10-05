@@ -284,6 +284,11 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     r => r.receiver_id === currentUser.user_id && r.status === 'pending'
   );
 
+  // Pending outgoing requests
+  const outgoingRequests = friendRequests.filter(
+    r => r.sender_id === currentUser.user_id && r.status === 'pending'
+  );
+
   // Helper to render filter pills matching Virtual Closet: Row 1 categories + Reset, Row 2 color tag pills with color dots
   const renderFilterBar = () => (
     <div style={{
@@ -1045,15 +1050,42 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {incomingRequests.map(req => {
-              const sender = req.sender;
+              const sender = req.sender || friendsService.getAllUsers().find(u => u.user_id === req.sender_id);
               const senderName = sender ? `${sender.first_name} ${sender.last_name}` : 'A fellow user';
               return (
-                <div key={req.request_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--surface)', borderRadius: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{senderName}</span>
+                <div key={req.request_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{senderName}</span>
+                    {sender?.friend_code && (
+                      <code style={{ fontSize: 11, color: 'var(--text-muted)' }}>({sender.friend_code})</code>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" className="btn btn-p" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => onAcceptFriendRequest(req.request_id, senderName)}>Accept</button>
-                    <button type="button" className="btn btn-g" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => onRejectFriendRequest(req.request_id)}>Decline</button>
+                    <button type="button" className="btn btn-g" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }} onClick={() => onRejectFriendRequest(req.request_id)}>Decline</button>
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Outgoing Pending Requests Banner (if any) */}
+      {outgoingRequests.length > 0 && (
+        <div className="card" style={{ padding: 12, marginBottom: 16, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <span style={{ fontSize: 13 }}>⏳</span>
+            <strong style={{ fontSize: 12.5 }}>Pending Outgoing Requests ({outgoingRequests.length})</strong>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {outgoingRequests.map(req => {
+              const receiver = req.receiver || friendsService.getAllUsers().find(u => u.user_id === req.receiver_id);
+              const receiverName = receiver ? `${receiver.first_name} ${receiver.last_name}` : 'Friend';
+              return (
+                <div key={req.request_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--surface)', borderRadius: 8, fontSize: 12 }}>
+                  <span>Request sent to <strong>{receiverName}</strong> {receiver?.friend_code && <code style={{ fontSize: 11, marginLeft: 4 }}>({receiver.friend_code})</code>}</span>
+                  <span className="pill" style={{ fontSize: 10, padding: '2px 8px', fontWeight: 600 }}>Awaiting Acceptance</span>
                 </div>
               );
             })}

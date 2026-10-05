@@ -487,7 +487,7 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
           {/* Social Media Link / Post Reference */}
           <div>
             <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-              Announcement / Social Post URL (Facebook, Instagram, or Website)
+              Announcement / Social Post URL (Optional - leave blank if none)
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
               <select

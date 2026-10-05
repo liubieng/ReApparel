@@ -154,6 +154,15 @@ CREATE TABLE donation_opportunity (
     longitude NUMERIC(11,8) NOT NULL,
     hours TEXT DEFAULT 'Mon-Sun 8:00 AM - 8:00 PM',
     accepted_types TEXT DEFAULT 'Clothing, Shoes, Linens, Bags',
+    city TEXT,
+    province TEXT,
+    barangay TEXT,
+    organizer TEXT,
+    post_url TEXT,
+    post_platform TEXT,
+    post_title TEXT,
+    post_snippet TEXT,
+    is_live_drive BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -226,9 +235,14 @@ ALTER TABLE borrow ENABLE ROW LEVEL SECURITY;
 ALTER TABLE donation_opportunity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE donation_flag ENABLE ROW LEVEL SECURITY;
 
--- Tags & Donation centers are public read
+-- Tags & Donation centers are community accessible
 CREATE POLICY "Public read tags" ON tag FOR SELECT USING (true);
-CREATE POLICY "Public read donation spots" ON donation_opportunity FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Public read donation spots" ON donation_opportunity;
+DROP POLICY IF EXISTS "Anon full access donation_opportunity" ON donation_opportunity;
+CREATE POLICY "Anon full access donation_opportunity" ON donation_opportunity FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon full access donation_flag" ON donation_flag;
+CREATE POLICY "Anon full access donation_flag" ON donation_flag FOR ALL USING (true) WITH CHECK (true);
 
 -- User profiles
 CREATE POLICY "Users viewable by authenticated users" ON users FOR SELECT USING (true);
@@ -264,21 +278,19 @@ CREATE POLICY "Daily log item owner all" ON daily_log_item FOR ALL USING (
     EXISTS (SELECT 1 FROM daily_clothing_log WHERE daily_clothing_log.log_id = daily_log_item.log_id AND daily_clothing_log.user_id = (SELECT auth.uid()))
 );
 
--- Friend requests
-CREATE POLICY "Friend requests participant select" ON friend_request FOR SELECT USING ((SELECT auth.uid()) = sender_id OR (SELECT auth.uid()) = receiver_id);
-CREATE POLICY "Friend requests sender insert" ON friend_request FOR INSERT WITH CHECK ((SELECT auth.uid()) = sender_id);
-CREATE POLICY "Friend requests participant update" ON friend_request FOR UPDATE USING ((SELECT auth.uid()) = sender_id OR (SELECT auth.uid()) = receiver_id);
+-- Friend requests (Allow anon client communication)
+DROP POLICY IF EXISTS "Friend requests participant select" ON friend_request;
+DROP POLICY IF EXISTS "Friend requests sender insert" ON friend_request;
+DROP POLICY IF EXISTS "Friend requests participant update" ON friend_request;
+DROP POLICY IF EXISTS "Anon full access friend_request" ON friend_request;
+CREATE POLICY "Anon full access friend_request" ON friend_request FOR ALL USING (true) WITH CHECK (true);
 
--- Borrows
-CREATE POLICY "Borrow viewable by borrower or lender" ON borrow FOR SELECT USING (
-    (SELECT auth.uid()) = borrower_id OR
-    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = borrow.item_id AND clothing_item.user_id = (SELECT auth.uid()))
-);
-CREATE POLICY "Borrow insert by borrower" ON borrow FOR INSERT WITH CHECK ((SELECT auth.uid()) = borrower_id);
-CREATE POLICY "Borrow update by parties" ON borrow FOR UPDATE USING (
-    (SELECT auth.uid()) = borrower_id OR
-    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = borrow.item_id AND clothing_item.user_id = (SELECT auth.uid()))
-);
+-- Borrows (Allow anon client lending)
+DROP POLICY IF EXISTS "Borrow viewable by borrower or lender" ON borrow;
+DROP POLICY IF EXISTS "Borrow insert by borrower" ON borrow;
+DROP POLICY IF EXISTS "Borrow update by parties" ON borrow;
+DROP POLICY IF EXISTS "Anon full access borrow" ON borrow;
+CREATE POLICY "Anon full access borrow" ON borrow FOR ALL USING (true) WITH CHECK (true);
 
 -- Donation flags
 CREATE POLICY "Donation flags viewable by all" ON donation_flag FOR SELECT USING (true);
@@ -333,5 +345,20 @@ INSERT INTO tag (tag_name, tag_type) VALUES
     ('Pink', 'Color'),
     ('Neutral', 'Color')
 ON CONFLICT (tag_name, tag_type) DO NOTHING;
+
+-- --------------------------------------------------------------------
+-- Row Level Security (RLS) Configuration for Anon Client Connection
+-- --------------------------------------------------------------------
+ALTER TABLE IF EXISTS users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clothing_item DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS item_tag DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS tag DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS friend_request DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS borrow DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS donation_opportunity DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS donation_flag DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS daily_clothing_log DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS daily_log_item DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bsas_assessment DISABLE ROW LEVEL SECURITY;
 
 

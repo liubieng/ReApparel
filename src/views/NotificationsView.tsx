@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, Borrow, FriendRequest, AppNotification } from '../types/database';
 import { friendsService } from '../services/friendsService';
+import { isSameUser } from '../services/supabaseClient';
 import { Inbox, ChevronDown, Check, X, Eye } from 'lucide-react';
 
 /**
@@ -41,7 +42,10 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 }) => {
   // Pending incoming borrow requests
   const pendingBorrows = borrows.filter(b => 
-    (b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id) && 
+    (isSameUser(b.lender?.user_id, currentUser.user_id) || 
+     isSameUser(b.item?.user_id, currentUser.user_id) ||
+     b.lender?.user_id === currentUser.user_id || 
+     b.item?.user_id === currentUser.user_id) && 
     b.status === 'Pending'
   );
 
@@ -136,6 +140,92 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                         {item.message}
                       </p>
                     )}
+
+                    {/* Quick Action buttons for friend request notifications in Inbox */}
+                    {item.type === 'friend_request' && (() => {
+                      const pendingReq = friendRequests.find(r => 
+                        (r.request_id === item.request_id || 
+                         (r.sender_id === item.sender_id && r.receiver_id === currentUser.user_id)) && 
+                        r.status === 'pending'
+                      );
+                      if (pendingReq) {
+                        return (
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 6 }}>
+                            {onAcceptFriend && (
+                              <button
+                                type="button"
+                                className="btn btn-p"
+                                style={{ fontSize: 11, padding: '3px 10px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAcceptFriend(pendingReq.request_id);
+                                }}
+                              >
+                                <Check className="ico" style={{ width: 11, height: 11 }} /> Accept
+                              </button>
+                            )}
+                            {onDenyFriend && (
+                              <button
+                                type="button"
+                                className="btn btn-g"
+                                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--danger)' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDenyFriend(pendingReq.request_id);
+                                }}
+                              >
+                                <X className="ico" style={{ width: 11, height: 11 }} /> Decline
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Quick Action buttons for borrow notifications in Inbox */}
+                    {(item.type === 'borrow' || item.type === 'borrow_request') && (() => {
+                      const pendingBorrow = borrows.find(b => 
+                        (b.borrow_id === item.request_id || 
+                         (isSameUser(b.borrower_id, item.sender_id) && 
+                          (isSameUser(b.lender?.user_id, currentUser.user_id) || isSameUser(b.item?.user_id, currentUser.user_id)))) && 
+                        b.status === 'Pending'
+                      );
+                      if (pendingBorrow) {
+                        return (
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 6 }}>
+                            {onAcceptBorrow && (
+                              <button
+                                type="button"
+                                className="btn btn-p"
+                                style={{ fontSize: 11, padding: '3px 10px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAcceptBorrow(pendingBorrow.borrow_id);
+                                }}
+                              >
+                                <Check className="ico" style={{ width: 11, height: 11 }} /> Accept Loan
+                              </button>
+                            )}
+                            {onDenyBorrow && (
+                              <button
+                                type="button"
+                                className="btn btn-g"
+                                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--danger)' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDenyBorrow(pendingBorrow.borrow_id);
+                                }}
+                              >
+                                <X className="ico" style={{ width: 11, height: 11 }} /> Decline
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                       {item.time}
                     </span>
@@ -274,53 +364,63 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
               ))}
 
               {/* Incoming Friend Requests */}
-              {pendingFriends.map(req => (
-                <div
-                  key={req.request_id}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    background: 'var(--surface-2)',
-                    border: '1px solid var(--border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ fontSize: 13, color: 'var(--text)' }}>
-                      Friend Request from {req.sender?.first_name || 'Peer'}
-                    </strong>
-                    <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--primary)', color: '#ffffff' }}>
-                      FRIEND
-                    </span>
-                  </div>
+              {pendingFriends.map(req => {
+                const sender = req.sender || friendsService.getAllUsers().find(u => u.user_id === req.sender_id);
+                const senderDisplayName = sender ? `${sender.first_name} ${sender.last_name}` : 'Peer';
+                return (
+                  <div
+                    key={req.request_id}
+                    style={{
+                      padding: 12,
+                      borderRadius: 8,
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: 13, color: 'var(--text)' }}>
+                        Friend Request from {senderDisplayName}
+                      </strong>
+                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--primary)', color: '#ffffff' }}>
+                        FRIEND
+                      </span>
+                    </div>
 
-                  {/* Actions matching Figure .8.1: [Accept] [Deny] */}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                    {onAcceptFriend && (
-                      <button
-                        type="button"
-                        className="btn btn-p"
-                        style={{ fontSize: 11.5, padding: '4px 10px' }}
-                        onClick={() => onAcceptFriend(req.request_id)}
-                      >
-                        <Check className="ico" style={{ width: 12, height: 12 }} /> Accept
-                      </button>
+                    {sender?.friend_code && (
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                        Friend code: <code style={{ fontWeight: 600 }}>{sender.friend_code}</code>
+                      </div>
                     )}
-                    {onDenyFriend && (
-                      <button
-                        type="button"
-                        className="btn btn-g"
-                        style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--danger)' }}
-                        onClick={() => onDenyFriend(req.request_id)}
-                      >
-                        <X className="ico" style={{ width: 12, height: 12 }} /> Deny
-                      </button>
-                    )}
+
+                    {/* Actions matching Figure .8.1: [Accept] [Deny] */}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                      {onAcceptFriend && (
+                        <button
+                          type="button"
+                          className="btn btn-p"
+                          style={{ fontSize: 11.5, padding: '4px 10px' }}
+                          onClick={() => onAcceptFriend(req.request_id)}
+                        >
+                          <Check className="ico" style={{ width: 12, height: 12 }} /> Accept
+                        </button>
+                      )}
+                      {onDenyFriend && (
+                        <button
+                          type="button"
+                          className="btn btn-g"
+                          style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--danger)' }}
+                          onClick={() => onDenyFriend(req.request_id)}
+                        >
+                          <X className="ico" style={{ width: 12, height: 12 }} /> Deny
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

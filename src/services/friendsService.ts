@@ -19,55 +19,109 @@ export const friendsService = {
   },
 
   async sendFriendRequest(friendCode: string): Promise<{ success: boolean; message: string }> {
+    const cleanCode = friendCode.trim().toUpperCase();
+    const currentUser = mockDatabase.getCurrentUser();
+    if (!currentUser) {
+      return { success: false, message: 'Please log in or register first.' };
+    }
+
     // 1. Try local lookup first (same-device accounts)
-    let res = mockDatabase.sendFriendRequest(friendCode);
+    let targetUser = mockDatabase.getAllUsers().find(u => u.friend_code.toUpperCase() === cleanCode);
 
     // 2. If not found locally, query Supabase for the user by friend_code
-    if (!res.success && res.message.includes('not found')) {
+    if (!targetUser) {
       const supabase = getSupabase();
       if (supabase) {
         try {
           const { data, error } = await supabase
             .from('users')
             .select('*')
-            .ilike('friend_code', friendCode.trim())
+            .ilike('friend_code', cleanCode)
             .limit(1);
 
           if (!error && data && data.length > 0) {
-            // Merge the remote user into local DB so the connection can proceed
-            const remoteUser = data[0] as User;
-            mockDatabase.upsertUser(remoteUser);
-            // Retry local lookup now that the user is available
-            res = mockDatabase.sendFriendRequest(friendCode);
+            targetUser = data[0] as User;
+            mockDatabase.upsertUser(targetUser);
           }
         } catch {
-          // Network unavailable — fall through with original not-found message
+          // Network unavailable — fall through
         }
       }
     }
 
-    // 3. Persist the newly created friend_request to Supabase
-    if (res.success) {
+    // 3. Dispatch to local database engine to create pending friend request
+    const res = mockDatabase.sendFriendRequest(friendCode);
+
+    // 4. Persist the pending friend_request to Supabase
+    if (res.success && targetUser) {
       const supabase = getSupabase();
       if (supabase) {
         try {
-          const reqs = mockDatabase.getFriendRequests();
-          const latest = reqs[0];
-          if (latest) {
-            const isSenderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(latest.sender_id);
-            const isReceiverUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(latest.receiver_id);
-            if (isSenderUuid && isReceiverUuid) {
-              supabase.from('friend_request').insert([{
-                sender_id: latest.sender_id,
-                receiver_id: latest.receiver_id,
-                status: latest.status
-              }]).then(() => {}, () => {});
+          const { data, error } = await supabase
+            .from('friend_request')
+            .upsert([
+              {
+                sender_id: currentUser.user_id,
+                receiver_id: targetUser.user_id,
+                status: 'pending',
+                updated_at: new Date().toISOString()
+              }
+            ], { onConflict: 'sender_id,receiver_id' })
+            .select();
+
+          if (error) {
+            console.warn('[friendsService] Supabase friend_request error:', error.message);
+          } else if (data && data[0]) {
+            const reqs = mockDatabase.getFriendRequests();
+            const localReq = reqs.find(
+              r => r.sender_id === currentUser.user_id && targetUser && r.receiver_id === targetUser.user_id
+            );
+            if (localReq) {
+              localReq.request_id = data[0].request_id;
+              mockDatabase.upsertFriendRequest(localReq);
             }
           }
-        } catch {}
+        } catch (err) {
+          console.warn('[friendsService] Failed to persist friend_request:', err);
+        }
       }
     }
     return res;
+  },
+
+  /**
+   * Fetches incoming and outgoing friend requests from Supabase and merges them into the local store.
+   */
+  async fetchFriendRequestsFromSupabase(userId?: string): Promise<FriendRequest[]> {
+    const supabase = getSupabase();
+    const uid = userId || mockDatabase.getCurrentUser()?.user_id;
+    if (!supabase || !uid) return mockDatabase.getFriendRequests();
+
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('friend_request')
+          .select('*')
+          .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
+        4000
+      );
+
+      if (!error && data && Array.isArray(data)) {
+        data.forEach((r: any) => {
+          mockDatabase.upsertFriendRequest({
+            request_id: r.request_id,
+            sender_id: r.sender_id,
+            receiver_id: r.receiver_id,
+            status: r.status,
+            updated_at: r.updated_at || new Date().toISOString()
+          });
+        });
+      }
+    } catch (err) {
+      console.warn('[friendsService] fetchFriendRequestsFromSupabase error:', err);
+    }
+
+    return mockDatabase.getFriendRequests();
   },
 
   /**
@@ -91,20 +145,25 @@ export const friendsService = {
     }
   },
 
-  respondToRequest(requestId: number, status: 'accepted' | 'rejected') {
+  async respondToRequest(requestId: number, status: 'accepted' | 'rejected'): Promise<void> {
     mockDatabase.respondToFriendRequest(requestId, status);
     const supabase = getSupabase();
     if (supabase) {
       try {
         const req = mockDatabase.getFriendRequests().find(r => r.request_id === requestId);
         if (req) {
-          supabase
+          const { error } = await supabase
             .from('friend_request')
             .update({ status: req.status, updated_at: req.updated_at })
-            .match({ sender_id: req.sender_id, receiver_id: req.receiver_id })
-            .then(() => {}, () => {});
+            .or(`request_id.eq.${requestId},and(sender_id.eq.${req.sender_id},receiver_id.eq.${req.receiver_id})`);
+
+          if (error) {
+            console.warn('[friendsService] Supabase respondToRequest error:', error.message);
+          }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[friendsService] Error in respondToRequest:', err);
+      }
     }
   },
 
@@ -152,37 +211,134 @@ export const friendsService = {
     return allBorrows.filter(b => b.borrower_id === currentUser.user_id);
   },
 
-  requestBorrow(itemId: number, startDate: string, endDate: string): Borrow {
+  async requestBorrow(itemId: number, startDate: string, endDate: string): Promise<Borrow> {
     const borrow = mockDatabase.createBorrowRequest(itemId, startDate, endDate);
     const supabase = getSupabase();
     if (supabase) {
       try {
         const isBorrowerUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(borrow.borrower_id);
         if (isBorrowerUuid) {
-          supabase.from('borrow').insert([{
-            borrower_id: borrow.borrower_id,
-            item_id: borrow.item_id,
-            start_date: borrow.start_date,
-            end_date: borrow.end_date,
-            status: borrow.status
-          }]).then(() => {}, () => {});
+          const { data, error } = await supabase
+            .from('borrow')
+            .insert([{
+              borrower_id: borrow.borrower_id,
+              item_id: borrow.item_id,
+              start_date: borrow.start_date,
+              end_date: borrow.end_date,
+              status: borrow.status
+            }])
+            .select();
+
+          if (error) {
+            console.warn('[friendsService] Supabase insert borrow error:', error.message);
+          } else if (data && data[0]) {
+            borrow.borrow_id = data[0].borrow_id;
+            mockDatabase.upsertBorrow(borrow);
+          }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[friendsService] Failed to insert borrow to Supabase:', err);
+      }
     }
     return borrow;
   },
 
-  updateBorrowStatus(borrowId: number, status: Borrow['status']) {
+  /**
+   * Fetches borrow records from Supabase and merges them into the local store,
+   * ensuring incoming requests and status updates trigger real-time notifications for the other user.
+   */
+  async fetchBorrowsFromSupabase(userId?: string): Promise<Borrow[]> {
+    const supabase = getSupabase();
+    const uid = userId || mockDatabase.getCurrentUser()?.user_id;
+    if (!supabase || !uid) return mockDatabase.getBorrows();
+
+    try {
+      let data: any[] | null = null;
+      let error: any = null;
+
+      // Try selecting with joined clothing_item
+      const joinRes = await withTimeout(
+        supabase
+          .from('borrow')
+          .select('*, clothing_item(*)'),
+        4000
+      );
+      data = joinRes.data;
+      error = joinRes.error;
+
+      // If join fails (e.g. relationship not defined in schema cache), fallback to simple select
+      if (error || !data) {
+        console.warn('[friendsService] borrow join with clothing_item failed, falling back to simple select:', error?.message);
+        const simpleRes = await withTimeout(
+          supabase
+            .from('borrow')
+            .select('*'),
+          4000
+        );
+        data = simpleRes.data;
+        error = simpleRes.error;
+      }
+
+      if (!error && data && Array.isArray(data)) {
+        // Find any item_ids that are not yet registered in local mockDatabase
+        const knownItemIds = new Set(mockDatabase.getClothingItems().map(i => i.item_id));
+        const missingItemIds = data
+          .map((r: any) => r.item_id)
+          .filter((id: number) => id && !knownItemIds.has(id));
+
+        if (missingItemIds.length > 0) {
+          try {
+            const { data: remoteItems } = await supabase
+              .from('clothing_item')
+              .select('*')
+              .in('item_id', missingItemIds);
+            if (remoteItems && Array.isArray(remoteItems)) {
+              remoteItems.forEach((it: any) => mockDatabase.upsertClothingItem(it));
+            }
+          } catch (e) {
+            console.warn('[friendsService] error fetching missing clothing items for borrows:', e);
+          }
+        }
+
+        data.forEach((r: any) => {
+          if (r.clothing_item) {
+            mockDatabase.upsertClothingItem(r.clothing_item);
+          }
+          mockDatabase.upsertBorrow({
+            borrow_id: r.borrow_id,
+            borrower_id: r.borrower_id,
+            item_id: r.item_id,
+            start_date: r.start_date,
+            end_date: r.end_date,
+            status: r.status,
+            created_at: r.created_at || new Date().toISOString(),
+            item: r.clothing_item
+          });
+        });
+      }
+    } catch (err) {
+      console.warn('[friendsService] fetchBorrowsFromSupabase error:', err);
+    }
+
+    return mockDatabase.getBorrows();
+  },
+
+  async updateBorrowStatus(borrowId: number, status: Borrow['status']): Promise<void> {
     mockDatabase.updateBorrowStatus(borrowId, status);
     const supabase = getSupabase();
     if (supabase) {
       try {
-        supabase
+        const { error } = await supabase
           .from('borrow')
           .update({ status })
-          .eq('borrow_id', borrowId)
-          .then(() => {}, () => {});
-      } catch {}
+          .eq('borrow_id', borrowId);
+
+        if (error) {
+          console.warn('[friendsService] Supabase updateBorrowStatus error:', error.message);
+        }
+      } catch (err) {
+        console.warn('[friendsService] updateBorrowStatus error:', err);
+      }
     }
   },
 

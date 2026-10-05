@@ -60,7 +60,7 @@ export const mapsService = {
         );
 
         // Fallback: If table does not yet have the extra columns, insert core schema fields
-        if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+        if (error && (error.code === 'PGRST204' || error.code === '42703' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
           const corePayload = {
             name: opp.name.trim(),
             address: opp.address.trim(),
@@ -85,10 +85,14 @@ export const mapsService = {
           mockDatabase.updateDonationOpportunityId(created.donation_id, data.donation_id);
           created.donation_id = data.donation_id;
         } else if (error) {
-          console.warn('Supabase remote donation sync notice (saved locally):', error.message);
+          console.warn('Supabase remote donation sync notice:', error.message);
+          if (error.code === '42501') {
+            throw new Error('Supabase RLS policy blocked the donation upload. Please run the SQL fix in Supabase SQL Editor.');
+          }
         }
       } catch (err: any) {
-        console.warn('Supabase remote donation sync timeout (saved locally):', err?.message || err);
+        if (err?.message?.includes('RLS')) throw err;
+        console.warn('Supabase remote donation sync notice (saved locally):', err?.message || err);
       }
     }
     return created;

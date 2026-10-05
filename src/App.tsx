@@ -247,7 +247,9 @@ export default function App() {
           closetService.getItems(user.user_id).catch(() => mockDatabase.getClothingItems(user.user_id)),
           closetService.getAssessments(user.user_id).catch(() => mockDatabase.getAssessments(user.user_id)),
           closetService.getDailyLogs(user.user_id).catch(() => mockDatabase.getDailyLogs(user.user_id)),
-          friendsService.fetchAndMergeUsersFromSupabase().catch(() => {})
+          friendsService.fetchAndMergeUsersFromSupabase().catch(() => {}),
+          friendsService.fetchFriendRequestsFromSupabase(user.user_id).catch(() => []),
+          friendsService.fetchBorrowsFromSupabase(user.user_id).catch(() => [])
         ];
 
         // DEMO-SAFE DONATION FETCHING:
@@ -264,6 +266,9 @@ export default function App() {
         if (userLogs) setDailyLogs(userLogs);
         setAllUsers(mockDatabase.getAllUsers());
         setFriends(friendsService.getConnectedFriends());
+        setFriendRequests(friendsService.getFriendRequests());
+        setBorrows(friendsService.getBorrows());
+        setNotifications(friendsService.getNotifications(user.user_id));
         setOpportunities(mapsService.getDonationOpportunities());
       } catch {
         // Local data is already fully rendered
@@ -323,8 +328,87 @@ export default function App() {
     }).catch(() => {});
   }, [view, currentUser]);
 
-  // Supabase Realtime Listener: when any device adds/updates a donation opportunity,
-  // merge the changed row straight from the event payload (no extra table query).
+  // Fetch/refresh friend requests and borrows whenever user navigates to Friends, Requests, or Notifications tab
+  useEffect(() => {
+    if (view !== 'friends' && view !== 'notifications' && view !== 'requests') return;
+    const uid = currentUser?.user_id;
+    if (!uid) return;
+    Promise.all([
+      friendsService.fetchFriendRequestsFromSupabase(uid).catch(() => []),
+      friendsService.fetchBorrowsFromSupabase(uid).catch(() => [])
+    ]).then(() => {
+      setFriendRequests(friendsService.getFriendRequests());
+      setFriends(friendsService.getConnectedFriends());
+      setBorrows(friendsService.getBorrows());
+      setNotifications(friendsService.getNotifications(uid));
+    }).catch(() => {});
+  }, [view, currentUser]);
+
+  // Supabase Realtime Listener for friend requests across devices
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const channel = supabase
+        .channel('realtime_app_friend_requests')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'friend_request' },
+          (payload: any) => {
+            const uid = mockDatabase.getCurrentUser()?.user_id;
+            if (!uid) return;
+            if (payload?.new) {
+              const r = payload.new;
+              if (r.sender_id === uid || r.receiver_id === uid) {
+                mockDatabase.upsertFriendRequest({
+                  request_id: r.request_id,
+                  sender_id: r.sender_id,
+                  receiver_id: r.receiver_id,
+                  status: r.status,
+                  updated_at: r.updated_at || new Date().toISOString()
+                });
+                setFriendRequests(friendsService.getFriendRequests());
+                setFriends(friendsService.getConnectedFriends());
+                setNotifications(friendsService.getNotifications(uid));
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch {}
+  }, []);
+
+  // Supabase Realtime Listener for borrows across devices
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const channel = supabase
+        .channel('realtime_app_borrows')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'borrow' },
+          async (payload: any) => {
+            const uid = mockDatabase.getCurrentUser()?.user_id;
+            if (!uid) return;
+            await friendsService.fetchBorrowsFromSupabase(uid);
+            setBorrows(friendsService.getBorrows());
+            setNotifications(friendsService.getNotifications(uid));
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch {}
+  }, []);
+
+  // Supabase Realtime Listener for community donation opportunities
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -484,31 +568,35 @@ export default function App() {
 
   // Friend Request Actions
   const handleAcceptFriendRequest = async (requestId: number, senderName?: string) => {
-    friendsService.respondToRequest(requestId, 'accepted');
+    await friendsService.respondToRequest(requestId, 'accepted');
     toast(`Connected with ${senderName || 'friend'}!`);
     await loadData();
   };
 
   const handleRejectFriendRequest = async (requestId: number) => {
-    friendsService.respondToRequest(requestId, 'rejected');
+    await friendsService.respondToRequest(requestId, 'rejected');
     toast('Friend request declined.');
     await loadData();
   };
 
   // Borrow Request & Lending Actions
-  const handleSubmitBorrow = (itemId: number, fromDate: string, toDate: string) => {
-    friendsService.requestBorrow(itemId, fromDate, toDate);
+  const handleSubmitBorrow = async (itemId: number, fromDate: string, toDate: string) => {
+    if (borrowContext?.garment) {
+      mockDatabase.upsertClothingItem(borrowContext.garment);
+    }
+    await friendsService.requestBorrow(itemId, fromDate, toDate);
     setBorrowContext(null);
     setView('requests');
-    loadData();
+    await loadData();
+    toast('Borrow request sent to lender!');
   };
 
   const handleCancelBorrow = (borrowId: number, startDate: string) => {
-    const doCancel = () => {
-      friendsService.updateBorrowStatus(borrowId, 'Rejected');
+    const doCancel = async () => {
+      await friendsService.updateBorrowStatus(borrowId, 'Rejected');
       setConfirmDialog(prev => ({ ...prev, isOpen: false }));
       toast('Borrow request cancelled.');
-      loadData();
+      await loadData();
     };
 
     if (new Date(startDate) > new Date()) {
@@ -523,8 +611,8 @@ export default function App() {
     }
   };
 
-  const handleRespondBorrow = (borrowId: number, newStatus: 'Accepted' | 'Rejected' | 'Returned') => {
-    friendsService.updateBorrowStatus(borrowId, newStatus);
+  const handleRespondBorrow = async (borrowId: number, newStatus: 'Accepted' | 'Rejected' | 'Returned') => {
+    await friendsService.updateBorrowStatus(borrowId, newStatus);
     if (newStatus === 'Accepted') {
       toast('Borrow request accepted! Loan schedule active.');
     } else if (newStatus === 'Returned') {
@@ -532,7 +620,7 @@ export default function App() {
     } else {
       toast('Borrow request declined.');
     }
-    loadData();
+    await loadData();
   };
 
   // Account Deletion Safeguard with confirmation dialog (TC_ACCDEL_02, TC_ACCDEL_03, Figure 34.4)

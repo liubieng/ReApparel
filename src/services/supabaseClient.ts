@@ -640,6 +640,16 @@ class MockDatabaseEngine {
     return matched;
   }
 
+  public upsertClothingItem(item: ClothingItem) {
+    if (!this.state.clothing_items) this.state.clothing_items = [];
+    const idx = this.state.clothing_items.findIndex(i => i.item_id === item.item_id);
+    if (idx >= 0) {
+      this.state.clothing_items[idx] = { ...this.state.clothing_items[idx], ...item };
+    } else {
+      this.state.clothing_items.unshift(item);
+    }
+  }
+
   public getItemById(itemId: number): ClothingItem | undefined {
     return this.state.clothing_items.find(i => i.item_id === itemId);
   }
@@ -982,7 +992,7 @@ class MockDatabaseEngine {
       request_id: Date.now(),
       sender_id: currentUser.user_id,
       receiver_id: targetUser.user_id,
-      status: 'accepted',
+      status: 'pending',
       updated_at: new Date().toISOString()
     };
 
@@ -991,10 +1001,10 @@ class MockDatabaseEngine {
     // Create notification for recipient
     if (!this.state.notifications) this.state.notifications = [];
     this.state.notifications.unshift({
-      id: `notif-fr-${Date.now()}`,
+      id: `notif-fr-${newReq.request_id}`,
       user_id: targetUser.user_id,
-      title: `${currentUser.first_name} added you as a friend!`,
-      message: `${currentUser.first_name} ${currentUser.last_name} (${currentUser.friend_code}) connected with you using your friend code.`,
+      title: `${currentUser.first_name} sent you a friend request!`,
+      message: `${currentUser.first_name} ${currentUser.last_name} (${currentUser.friend_code}) wants to connect with you.`,
       time: 'Just now',
       type: 'friend_request',
       read: false,
@@ -1006,7 +1016,51 @@ class MockDatabaseEngine {
     });
 
     this.notify();
-    return { success: true, message: `Connected with ${targetUser.first_name} ${targetUser.last_name}! Added to your friends list.` };
+    return { success: true, message: `Friend request sent to ${targetUser.first_name} ${targetUser.last_name}! Pending approval.` };
+  }
+
+  public upsertFriendRequest(req: FriendRequest) {
+    if (!this.state.friend_requests) this.state.friend_requests = [];
+    const idx = this.state.friend_requests.findIndex(
+      r => (r.request_id && req.request_id && r.request_id === req.request_id) ||
+           (r.sender_id === req.sender_id && r.receiver_id === req.receiver_id) ||
+           (r.sender_id === req.receiver_id && r.receiver_id === req.sender_id)
+    );
+
+    if (idx >= 0) {
+      this.state.friend_requests[idx] = { ...this.state.friend_requests[idx], ...req };
+    } else {
+      this.state.friend_requests.unshift(req);
+    }
+
+    // Auto-create notification for recipient if request is pending
+    const currentUid = this.getCurrentUser()?.user_id;
+    if (req.status === 'pending' && currentUid && isSameUser(req.receiver_id, currentUid)) {
+      if (!this.state.notifications) this.state.notifications = [];
+      const alreadyNotified = this.state.notifications.some(
+        n => n.type === 'friend_request' && (n.request_id === req.request_id || (n.sender_id === req.sender_id && n.receiver_id === req.receiver_id))
+      );
+      if (!alreadyNotified) {
+        const sender = this.state.users.find(u => u.user_id === req.sender_id || isSameUser(u.user_id, req.sender_id));
+        const receiver = this.state.users.find(u => u.user_id === req.receiver_id || isSameUser(u.user_id, req.receiver_id));
+        this.state.notifications.unshift({
+          id: `notif-fr-${req.request_id || Date.now()}`,
+          user_id: req.receiver_id,
+          title: `${sender ? sender.first_name : 'A user'} sent you a friend request!`,
+          message: `${sender ? `${sender.first_name} ${sender.last_name} (${sender.friend_code})` : 'A user'} wants to connect with you.`,
+          time: 'Recently',
+          type: 'friend_request',
+          read: false,
+          sender_name: sender ? `${sender.first_name} ${sender.last_name}` : undefined,
+          sender_id: req.sender_id,
+          receiver_id: req.receiver_id,
+          receiver_name: receiver ? `${receiver.first_name} ${receiver.last_name}` : undefined,
+          request_id: req.request_id
+        });
+      }
+    }
+
+    this.notify();
   }
 
   public respondToFriendRequest(requestId: number, newStatus: 'accepted' | 'rejected') {
@@ -1017,6 +1071,13 @@ class MockDatabaseEngine {
 
       const sender = this.state.users.find(u => u.user_id === req.sender_id);
       const receiver = this.state.users.find(u => u.user_id === req.receiver_id);
+
+      // Clean up incoming friend request notification for receiver
+      if (this.state.notifications) {
+        this.state.notifications = this.state.notifications.filter(
+          n => !(n.type === 'friend_request' && (n.request_id === requestId || (n.sender_id === req.sender_id && n.receiver_id === req.receiver_id)))
+        );
+      }
 
       if (newStatus === 'accepted' && sender && receiver) {
         if (!this.state.notifications) this.state.notifications = [];
@@ -1074,11 +1135,107 @@ class MockDatabaseEngine {
 
   public getBorrows(): Borrow[] {
     return this.state.borrows.map(b => {
-      const item = this.state.clothing_items.find(i => i.item_id === b.item_id);
-      const borrower = this.state.users.find(u => u.user_id === b.borrower_id);
-      const lender = item ? this.state.users.find(u => u.user_id === item.user_id) : undefined;
+      const item = this.state.clothing_items.find(i => i.item_id === b.item_id) || b.item;
+      const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
+      const lender = item 
+        ? (this.state.users.find(u => u.user_id === item.user_id || isSameUser(u.user_id, item.user_id)) || b.lender) 
+        : b.lender;
       return { ...b, item, borrower, lender };
     });
+  }
+
+  public upsertBorrow(b: Borrow) {
+    if (!this.state.borrows) this.state.borrows = [];
+    const idx = this.state.borrows.findIndex(
+      item => (b.borrow_id && item.borrow_id === b.borrow_id) ||
+              (item.borrower_id === b.borrower_id && item.item_id === b.item_id && item.start_date === b.start_date)
+    );
+
+    if (idx >= 0) {
+      this.state.borrows[idx] = { ...this.state.borrows[idx], ...b };
+    } else {
+      this.state.borrows.unshift(b);
+    }
+
+    // Update item status if accepted or returned
+    const clothingItem = this.state.clothing_items.find(i => i.item_id === b.item_id) || b.item;
+    if (clothingItem) {
+      if (b.status === 'Accepted') {
+        clothingItem.status = 'Borrowed';
+      } else if (b.status === 'Returned' || b.status === 'Rejected') {
+        clothingItem.status = 'Available';
+      }
+    }
+
+    const lenderId = clothingItem?.user_id || b.lender?.user_id;
+
+    // Auto-generate notification for the lender if incoming borrow is Pending
+    if (b.status === 'Pending' && lenderId) {
+      if (!this.state.notifications) this.state.notifications = [];
+      const alreadyNotified = this.state.notifications.some(
+        n => (n.type === 'borrow' || n.type === 'borrow_request') && 
+             (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId))
+      );
+      if (!alreadyNotified) {
+        const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
+        this.state.notifications.unshift({
+          id: `notif-borrow-${b.borrow_id || Date.now()}`,
+          user_id: lenderId,
+          title: `New borrow request!`,
+          message: `${borrower ? `${borrower.first_name} ${borrower.last_name}` : 'A friend'} requested to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
+          time: 'Recently',
+          type: 'borrow',
+          read: false,
+          sender_name: borrower ? `${borrower.first_name} ${borrower.last_name}` : undefined,
+          sender_id: b.borrower_id,
+          receiver_id: lenderId,
+          request_id: b.borrow_id
+        });
+      }
+    }
+
+    // Auto-generate notification for the borrower if borrow was updated by lender (Accepted / Rejected / Returned)
+    if (b.borrower_id && b.status !== 'Pending') {
+      if (!this.state.notifications) this.state.notifications = [];
+      // Clean up previous pending request notification for the lender
+      if (lenderId) {
+        this.state.notifications = this.state.notifications.filter(
+          n => !(n.type === 'borrow' && (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId)))
+        );
+      }
+      const notifId = `notif-bw-status-${b.borrow_id}-${b.status}`;
+      const alreadyNotified = this.state.notifications.some(n => n.id === notifId);
+      if (!alreadyNotified) {
+        const lender = this.state.users.find(u => u.user_id === lenderId || (lenderId && isSameUser(u.user_id, lenderId))) || b.lender;
+        let notifTitle = 'Borrow request updated';
+        let notifMsg = `Your borrow request for "${clothingItem?.name || 'garment'}" was updated to ${b.status}.`;
+        if (b.status === 'Accepted') {
+          notifTitle = 'Borrow request approved!';
+          notifMsg = `${lender ? lender.first_name : 'Your friend'} approved your request to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`;
+        } else if (b.status === 'Rejected') {
+          notifTitle = 'Borrow request declined';
+          notifMsg = `${lender ? lender.first_name : 'The lender'} was unable to approve your request for "${clothingItem?.name || 'clothing item'}".`;
+        } else if (b.status === 'Returned') {
+          notifTitle = 'Item marked as returned';
+          notifMsg = `"${clothingItem?.name || 'clothing item'}" has been marked as returned to ${lender ? lender.first_name : 'owner'}.`;
+        }
+        this.state.notifications.unshift({
+          id: notifId,
+          user_id: b.borrower_id,
+          title: notifTitle,
+          message: notifMsg,
+          time: 'Recently',
+          type: 'borrow',
+          read: false,
+          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+          sender_id: lenderId,
+          receiver_id: b.borrower_id,
+          request_id: b.borrow_id
+        });
+      }
+    }
+
+    this.notify();
   }
 
   public createBorrowRequest(itemId: number, startDate: string, endDate: string): Borrow {
@@ -1099,13 +1256,17 @@ class MockDatabaseEngine {
     if (item && item.user_id) {
       if (!this.state.notifications) this.state.notifications = [];
       this.state.notifications.unshift({
-        id: `notif-req-${Date.now()}`,
+        id: `notif-req-${newBorrow.borrow_id}`,
         user_id: item.user_id,
         title: `New borrow request!`,
         message: `${borrower?.first_name || 'A friend'} requested to borrow "${item.name}" from ${startDate} to ${endDate}.`,
         time: 'Just now',
         type: 'borrow',
-        read: false
+        read: false,
+        sender_name: borrower ? `${borrower.first_name} ${borrower.last_name}` : undefined,
+        sender_id: borrower?.user_id,
+        receiver_id: item.user_id,
+        request_id: newBorrow.borrow_id
       });
     }
 
@@ -1126,7 +1287,15 @@ class MockDatabaseEngine {
         }
       }
       const lender = this.getCurrentUser();
-      if (!this.state.notifications) this.state.notifications = [];
+      if (this.state.notifications) {
+        // Clear pending request notification for the lender
+        this.state.notifications = this.state.notifications.filter(
+          n => !(n.type === 'borrow' && n.request_id === borrowId && isSameUser(n.user_id, lender?.user_id || ''))
+        );
+      } else {
+        this.state.notifications = [];
+      }
+
       if (status === 'Accepted') {
         this.state.notifications.unshift({
           id: `notif-bw-${Date.now()}`,
@@ -1135,7 +1304,11 @@ class MockDatabaseEngine {
           message: `${lender?.first_name || 'Your friend'} approved your request to borrow "${item?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
           time: 'Just now',
           type: 'borrow',
-          read: false
+          read: false,
+          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+          sender_id: lender?.user_id,
+          receiver_id: b.borrower_id,
+          request_id: borrowId
         });
       } else if (status === 'Returned') {
         this.state.notifications.unshift({
@@ -1145,7 +1318,11 @@ class MockDatabaseEngine {
           message: `"${item?.name || 'clothing item'}" has been marked as returned to ${lender?.first_name || 'owner'}. Thank you for mindful borrowing!`,
           time: 'Just now',
           type: 'borrow',
-          read: false
+          read: false,
+          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+          sender_id: lender?.user_id,
+          receiver_id: b.borrower_id,
+          request_id: borrowId
         });
       } else if (status === 'Rejected') {
         this.state.notifications.unshift({
@@ -1155,7 +1332,11 @@ class MockDatabaseEngine {
           message: `${lender?.first_name || 'Owner'} was unable to approve your request for "${item?.name || 'clothing item'}".`,
           time: 'Just now',
           type: 'borrow',
-          read: false
+          read: false,
+          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+          sender_id: lender?.user_id,
+          receiver_id: b.borrower_id,
+          request_id: borrowId
         });
       }
       this.notify();

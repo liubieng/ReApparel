@@ -219,13 +219,30 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     });
   }, [opportunities, selectedRegion, selectedBarangay, selectedCountry, selectedProvince, selectedCity, searchQuery, selectedCategory, maxDistanceKm, onlyActiveDrives, userLocation]);
 
-  // Dynamic social media posts derived from verified opportunities
+  // Social media & community announcements: display active drives; link is optional (only rendered if provided)
   const facebookPosts = useMemo(() => {
-    return filteredOpportunities.filter(o => o.post_platform === 'facebook' && (o.post_snippet || o.post_title));
+    return filteredOpportunities.filter(o => {
+      const url = o.post_url?.trim().toLowerCase() || '';
+      const isFb = o.post_platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.me');
+      return isFb && (o.is_live_drive || o.post_title || o.post_snippet || url);
+    });
   }, [filteredOpportunities]);
 
   const instagramPosts = useMemo(() => {
-    return filteredOpportunities.filter(o => o.post_platform === 'instagram' && (o.post_snippet || o.post_title));
+    return filteredOpportunities.filter(o => {
+      const url = o.post_url?.trim().toLowerCase() || '';
+      const isIg = o.post_platform === 'instagram' || url.includes('instagram.com');
+      return isIg && o.post_platform !== 'facebook' && (o.is_live_drive || o.post_title || o.post_snippet || url);
+    });
+  }, [filteredOpportunities]);
+
+  const otherPosts = useMemo(() => {
+    return filteredOpportunities.filter(o => {
+      const url = o.post_url?.trim().toLowerCase() || '';
+      const isFb = o.post_platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.me');
+      const isIg = o.post_platform === 'instagram' || url.includes('instagram.com');
+      return !isFb && !isIg && (o.post_platform === 'announcement' || o.post_platform === 'community' || o.post_snippet || url);
+    });
   }, [filteredOpportunities]);
 
   // Sync external highlightId
@@ -457,7 +474,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
               Social Media Posts
             </h3>
 
-            {facebookPosts.length === 0 && instagramPosts.length === 0 ? (
+            {facebookPosts.length === 0 && instagramPosts.length === 0 && otherPosts.length === 0 ? (
               <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
                   No active social posts
@@ -517,12 +534,59 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
 
                 {/* Instagram Section */}
                 {instagramPosts.length > 0 && (
-                  <div>
+                  <div style={{ marginBottom: otherPosts.length > 0 ? 20 : 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'block', marginBottom: 8 }}>
                       Instagram
                     </span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {instagramPosts.map(post => (
+                        <div
+                          key={post.donation_id}
+                          style={{
+                            padding: 12,
+                            background: 'var(--surface-2)',
+                            borderRadius: 10,
+                            border: '1px solid var(--border)',
+                            fontSize: 12
+                          }}
+                        >
+                          <strong style={{ display: 'block', fontSize: 12.5, marginBottom: 4, color: 'var(--text)' }}>
+                            {post.organizer || post.name}
+                          </strong>
+                          {post.post_snippet && (
+                            <p style={{ margin: '0 0 6px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                              &ldquo;{post.post_snippet}&rdquo;
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 10.5, color: 'var(--primary)', fontWeight: 600 }}>
+                              {post.post_date || 'Active Drive'}
+                            </span>
+                            {post.post_url && (
+                              <a
+                                href={post.post_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 11, color: 'var(--primary)', textDecoration: 'underline' }}
+                              >
+                                View post &rarr;
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Other Platforms Section */}
+                {otherPosts.length > 0 && (
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'block', marginBottom: 8 }}>
+                      Other Links
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {otherPosts.map(post => (
                         <div
                           key={post.donation_id}
                           style={{
