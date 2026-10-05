@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, isSameUser } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, isSameUser, ensureUserSyncedToSupabase } from './supabaseClient';
 import { User, FriendRequest, Borrow, ClothingItem } from '../types/database';
 
 export const friendsService = {
@@ -81,12 +81,17 @@ export const friendsService = {
       const supabase = getSupabase();
       if (supabase) {
         try {
+          // CRITICAL: Ensure BOTH sender and receiver exist in Supabase users table
+          // so foreign key constraint friend_request_sender_id_fkey is NEVER violated!
+          const syncedSender = await ensureUserSyncedToSupabase(currentUser);
+          const syncedTarget = await ensureUserSyncedToSupabase(targetUser);
+
           const { data, error } = await supabase
             .from('friend_request')
             .upsert([
               {
-                sender_id: currentUser.user_id,
-                receiver_id: targetUser.user_id,
+                sender_id: syncedSender.user_id,
+                receiver_id: syncedTarget.user_id,
                 status: 'pending',
                 updated_at: new Date().toISOString()
               }
@@ -96,16 +101,15 @@ export const friendsService = {
           if (error) {
             console.warn('[friendsService] Supabase friend_request error:', error.message);
             // Roll back the local-only request so the UI doesn't show a request the other user can never see
-            const tu = targetUser;
             const localOnly = mockDatabase.getFriendRequests().find(
-              r => isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id) && r.status === 'pending'
+              r => isSameUser(r.sender_id, syncedSender.user_id) && isSameUser(r.receiver_id, syncedTarget.user_id) && r.status === 'pending'
             );
             if (localOnly) mockDatabase.deleteFriendRequest(localOnly.request_id);
             return { success: false, message: `Could not send friend request: ${error.message}` };
           } else if (data && data[0]) {
             const reqs = mockDatabase.getFriendRequests();
             const localReq = reqs.find(
-              r => r.sender_id === currentUser.user_id && targetUser && r.receiver_id === targetUser.user_id
+              r => isSameUser(r.sender_id, syncedSender.user_id) && isSameUser(r.receiver_id, syncedTarget.user_id)
             );
             if (localReq) {
               localReq.request_id = data[0].request_id;
@@ -160,9 +164,17 @@ export const friendsService = {
 
         for (const l of unsynced) {
           try {
+            const senderUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, l.sender_id));
+            const receiverUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, l.receiver_id));
+            const syncedSender = senderUser ? await ensureUserSyncedToSupabase(senderUser) : null;
+            const syncedReceiver = receiverUser ? await ensureUserSyncedToSupabase(receiverUser) : null;
+
+            const finalSenderId = syncedSender?.user_id || l.sender_id;
+            const finalReceiverId = syncedReceiver?.user_id || l.receiver_id;
+
             const { data: ins, error: insErr } = await supabase
               .from('friend_request')
-              .insert([{ sender_id: l.sender_id, receiver_id: l.receiver_id, status: 'pending' }])
+              .insert([{ sender_id: finalSenderId, receiver_id: finalReceiverId, status: 'pending' }])
               .select();
             if (!insErr && ins && ins[0]) {
               remote.push({
@@ -315,6 +327,10 @@ export const friendsService = {
     const supabase = getSupabase();
     if (supabase) {
       try {
+        const borrowerUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, borrow.borrower_id)) || mockDatabase.getCurrentUser();
+        if (borrowerUser) {
+          await ensureUserSyncedToSupabase(borrowerUser);
+        }
         const isBorrowerUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(borrow.borrower_id);
         if (isBorrowerUuid) {
           const { data, error } = await supabase

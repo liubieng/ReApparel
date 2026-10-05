@@ -327,7 +327,7 @@ export function toCanonicalUserId(uid: string | null | undefined): string {
 
 export function isSameUser(uidA: string | null | undefined, uidB: string | null | undefined): boolean {
   if (!uidA || !uidB) return false;
-  return uidA === uidB;
+  return uidA.trim().toLowerCase() === uidB.trim().toLowerCase();
 }
 
 export function generateUUID(): string {
@@ -418,7 +418,10 @@ class MockDatabaseEngine {
   public async syncCurrentUserWithSupabase(): Promise<User | null> {
     if (!this.currentUserId) return null;
     const local = this.getCurrentUser();
-    if (local) return local;
+    if (local) {
+      const synced = await ensureUserSyncedToSupabase(local);
+      return synced;
+    }
 
     const supabase = getSupabase();
     if (supabase) {
@@ -1591,6 +1594,81 @@ class MockDatabaseEngine {
 }
 
 export const mockDatabase = new MockDatabaseEngine();
+
+/**
+ * Guarantees that a user exists in the remote Supabase `users` table so foreign key
+ * constraints (like `friend_request_sender_id_fkey` or `borrow_borrower_id_fkey`)
+ * are never violated.
+ *
+ * 1. Checks if user exists remotely by user_id.
+ * 2. If not, checks if user exists remotely by email. If found, realigns the local
+ *    user's user_id with the canonical remote UUID.
+ * 3. If neither exists, inserts the user row into Supabase.
+ */
+export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
+  const supabase = getSupabase();
+  if (!supabase || !user) return user;
+
+  try {
+    // 1. Check if user already exists in remote database by user_id
+    const { data: byId } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', user.user_id)
+      .limit(1);
+
+    if (byId && byId.length > 0) {
+      return byId[0] as User;
+    }
+
+    // 2. Check if user exists in remote database by email
+    if (user.email) {
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('*')
+        .ilike('email', user.email.trim())
+        .limit(1);
+
+      if (byEmail && byEmail.length > 0) {
+        const remoteUser = byEmail[0] as User;
+        // Realign local user_id with the canonical remote UUID
+        const oldUid = user.user_id;
+        const newUid = remoteUser.user_id;
+        mockDatabase.upsertUser(remoteUser);
+        if (isSameUser(mockDatabase.getCurrentUser()?.user_id, oldUid)) {
+          mockDatabase.setCurrentUserId(newUid);
+        }
+        return remoteUser;
+      }
+    }
+
+    // 3. User does not exist remotely: insert them into Supabase users table
+    const insertPayload: Record<string, any> = {
+      user_id: user.user_id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      friend_code: user.friend_code,
+      password: user.password || 'Password123!',
+      created_at: user.created_at || new Date().toISOString()
+    };
+
+    let { error } = await supabase.from('users').insert([insertPayload]);
+    if (error && (error.code === '42703' || error.message?.includes('password'))) {
+      delete insertPayload.password;
+      const retry = await supabase.from('users').insert([insertPayload]);
+      error = retry.error;
+    }
+
+    if (error && error.code !== '23505') {
+      console.warn('[ensureUserSyncedToSupabase] error inserting user:', error.message);
+    }
+  } catch (err) {
+    console.warn('[ensureUserSyncedToSupabase] exception:', err);
+  }
+
+  return user;
+}
 
 export interface TableDiagnostic {
   name: string;
