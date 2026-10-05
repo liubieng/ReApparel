@@ -49,7 +49,31 @@ export const friendsService = {
       }
     }
 
-    // 3. Dispatch to local database engine to create pending friend request
+    // 3. If a local-only request exists (never reached Supabase), drop it so it can be re-sent
+    if (targetUser) {
+      const tu = targetUser;
+      const stale = mockDatabase.getFriendRequests().find(
+        r => r.status === 'pending' && isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id)
+      );
+      if (stale) {
+        const supabase = getSupabase();
+        if (supabase) {
+          try {
+            const { data } = await supabase
+              .from('friend_request')
+              .select('request_id')
+              .eq('sender_id', currentUser.user_id)
+              .eq('receiver_id', tu.user_id)
+              .limit(1);
+            if (!data || data.length === 0) {
+              mockDatabase.deleteFriendRequest(stale.request_id);
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // 4. Dispatch to local database engine to create pending friend request
     const res = mockDatabase.sendFriendRequest(friendCode);
 
     // 4. Persist the pending friend_request to Supabase
@@ -71,6 +95,13 @@ export const friendsService = {
 
           if (error) {
             console.warn('[friendsService] Supabase friend_request error:', error.message);
+            // Roll back the local-only request so the UI doesn't show a request the other user can never see
+            const tu = targetUser;
+            const localOnly = mockDatabase.getFriendRequests().find(
+              r => isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id) && r.status === 'pending'
+            );
+            if (localOnly) mockDatabase.deleteFriendRequest(localOnly.request_id);
+            return { success: false, message: `Could not send friend request: ${error.message}` };
           } else if (data && data[0]) {
             const reqs = mockDatabase.getFriendRequests();
             const localReq = reqs.find(
@@ -98,6 +129,11 @@ export const friendsService = {
     if (!supabase || !uid) return mockDatabase.getFriendRequests();
 
     try {
+      // 1. Push any local pending requests that never reached Supabase (e.g. sent while offline)
+      const localPending = mockDatabase.getFriendRequests().filter(
+        r => r.status === 'pending' && isSameUser(r.sender_id, uid)
+      );
+
       const { data, error } = await withTimeout(
         supabase
           .from('friend_request')
@@ -107,15 +143,43 @@ export const friendsService = {
       );
 
       if (!error && data && Array.isArray(data)) {
-        data.forEach((r: any) => {
-          mockDatabase.upsertFriendRequest({
-            request_id: r.request_id,
-            sender_id: r.sender_id,
-            receiver_id: r.receiver_id,
-            status: r.status,
-            updated_at: r.updated_at || new Date().toISOString()
-          });
-        });
+        const remote: FriendRequest[] = data.map((r: any) => ({
+          request_id: r.request_id,
+          sender_id: r.sender_id,
+          receiver_id: r.receiver_id,
+          status: r.status,
+          updated_at: r.updated_at || new Date().toISOString()
+        }));
+
+        const unsynced = localPending.filter(
+          l => !remote.some(r =>
+            (isSameUser(r.sender_id, l.sender_id) && isSameUser(r.receiver_id, l.receiver_id)) ||
+            (isSameUser(r.sender_id, l.receiver_id) && isSameUser(r.receiver_id, l.sender_id))
+          )
+        );
+
+        for (const l of unsynced) {
+          try {
+            const { data: ins, error: insErr } = await supabase
+              .from('friend_request')
+              .insert([{ sender_id: l.sender_id, receiver_id: l.receiver_id, status: 'pending' }])
+              .select();
+            if (!insErr && ins && ins[0]) {
+              remote.push({
+                request_id: ins[0].request_id,
+                sender_id: ins[0].sender_id,
+                receiver_id: ins[0].receiver_id,
+                status: ins[0].status,
+                updated_at: ins[0].updated_at || new Date().toISOString()
+              });
+            } else if (insErr) {
+              console.warn('[friendsService] Could not push unsynced friend_request:', insErr.message);
+            }
+          } catch {}
+        }
+
+        // 2. Supabase is the source of truth: replace local copies with remote rows
+        mockDatabase.replaceFriendRequestsForUser(uid, remote);
       }
     } catch (err) {
       console.warn('[friendsService] fetchFriendRequestsFromSupabase error:', err);

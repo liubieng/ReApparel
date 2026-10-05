@@ -1034,8 +1034,8 @@ class MockDatabaseEngine {
     }
 
     // Auto-create notification for recipient if request is pending
-    const currentUid = this.getCurrentUser()?.user_id;
-    if (req.status === 'pending' && currentUid && isSameUser(req.receiver_id, currentUid)) {
+    // (always keyed to receiver_id so it shows whenever the receiver opens their account)
+    if (req.status === 'pending' && req.receiver_id) {
       if (!this.state.notifications) this.state.notifications = [];
       const alreadyNotified = this.state.notifications.some(
         n => n.type === 'friend_request' && (n.request_id === req.request_id || (n.sender_id === req.sender_id && n.receiver_id === req.receiver_id))
@@ -1059,6 +1059,88 @@ class MockDatabaseEngine {
         });
       }
     }
+
+    this.notify();
+  }
+
+  /**
+   * Replaces all local friend requests involving `userId` with the authoritative remote list
+   * from Supabase. Removes stale local copies (e.g. a request still "pending" locally after the
+   * other user accepted it on another device) and keeps notifications in sync.
+   */
+  public replaceFriendRequestsForUser(userId: string, remote: FriendRequest[]) {
+    if (!this.state.friend_requests) this.state.friend_requests = [];
+    if (!this.state.notifications) this.state.notifications = [];
+
+    const involves = (r: FriendRequest) => isSameUser(r.sender_id, userId) || isSameUser(r.receiver_id, userId);
+
+    // Detect outgoing requests that were pending locally but have since been accepted remotely
+    const previouslyPendingOutgoing = this.state.friend_requests.filter(
+      r => r.status === 'pending' && isSameUser(r.sender_id, userId)
+    );
+    remote.forEach(r => {
+      if (r.status !== 'accepted' || !isSameUser(r.sender_id, userId)) return;
+      const wasPending = previouslyPendingOutgoing.some(p => isSameUser(p.receiver_id, r.receiver_id));
+      if (!wasPending) return;
+      const receiver = this.state.users.find(u => isSameUser(u.user_id, r.receiver_id));
+      this.state.notifications.unshift({
+        id: `notif-acc-${r.request_id}-${Date.now()}`,
+        user_id: userId,
+        title: `${receiver ? receiver.first_name : 'Your friend'} accepted your friend request!`,
+        message: `You and ${receiver ? `${receiver.first_name} ${receiver.last_name}` : 'your friend'} are now connected friends. You can view their closet and borrow clothes!`,
+        time: 'Just now',
+        type: 'friend_request',
+        read: false,
+        sender_name: receiver ? `${receiver.first_name} ${receiver.last_name}` : undefined,
+        sender_id: r.receiver_id,
+        receiver_id: userId,
+        request_id: r.request_id
+      });
+    });
+
+    // Drop every local request involving this user, then insert the remote ones
+    this.state.friend_requests = this.state.friend_requests.filter(r => !involves(r));
+    remote.forEach(r => {
+      const { sender, receiver, ...plain } = r as any;
+      this.state.friend_requests.unshift(plain);
+    });
+
+    // Remove friend_request notifications that no longer correspond to a pending request
+    this.state.notifications = this.state.notifications.filter(n => {
+      if (n.type !== 'friend_request' || !n.user_id || !isSameUser(n.user_id, userId)) return true;
+      // "accepted" notifications (sent to the original sender) are kept
+      if (n.id?.startsWith('notif-acc-')) return true;
+      return remote.some(r =>
+        r.status === 'pending' &&
+        (r.request_id === n.request_id || (isSameUser(r.sender_id, n.sender_id) && isSameUser(r.receiver_id, n.receiver_id)))
+      );
+    });
+
+    // Ensure pending incoming requests have a notification
+    remote.forEach(r => {
+      if (r.status !== 'pending' || !isSameUser(r.receiver_id, userId)) return;
+      const alreadyNotified = this.state.notifications.some(
+        n => n.type === 'friend_request' &&
+             (n.request_id === r.request_id || (isSameUser(n.sender_id, r.sender_id) && isSameUser(n.receiver_id, r.receiver_id)))
+      );
+      if (alreadyNotified) return;
+      const sender = this.state.users.find(u => isSameUser(u.user_id, r.sender_id));
+      const receiver = this.state.users.find(u => isSameUser(u.user_id, r.receiver_id));
+      this.state.notifications.unshift({
+        id: `notif-fr-${r.request_id}`,
+        user_id: r.receiver_id,
+        title: `${sender ? sender.first_name : 'A user'} sent you a friend request!`,
+        message: `${sender ? `${sender.first_name} ${sender.last_name} (${sender.friend_code})` : 'A user'} wants to connect with you.`,
+        time: 'Recently',
+        type: 'friend_request',
+        read: false,
+        sender_name: sender ? `${sender.first_name} ${sender.last_name}` : undefined,
+        sender_id: r.sender_id,
+        receiver_id: r.receiver_id,
+        receiver_name: receiver ? `${receiver.first_name} ${receiver.last_name}` : undefined,
+        request_id: r.request_id
+      });
+    });
 
     this.notify();
   }

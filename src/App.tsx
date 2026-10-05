@@ -328,21 +328,38 @@ export default function App() {
     }).catch(() => {});
   }, [view, currentUser]);
 
-  // Fetch/refresh friend requests and borrows whenever user navigates to Friends, Requests, or Notifications tab
+  // Fetch/refresh friend requests and borrows whenever user navigates to Friends, Requests, or Notifications tab.
+  // Also re-syncs periodically (while the tab is visible) and on window focus, as a fallback
+  // in case Supabase Realtime is not enabled for these tables.
   useEffect(() => {
     if (view !== 'friends' && view !== 'notifications' && view !== 'requests') return;
     const uid = currentUser?.user_id;
     if (!uid) return;
-    Promise.all([
-      friendsService.fetchFriendRequestsFromSupabase(uid).catch(() => []),
-      friendsService.fetchBorrowsFromSupabase(uid).catch(() => [])
-    ]).then(() => {
-      setFriendRequests(friendsService.getFriendRequests());
-      setFriends(friendsService.getConnectedFriends());
-      setBorrows(friendsService.getBorrows());
-      setNotifications(friendsService.getNotifications(uid));
-    }).catch(() => {});
-  }, [view, currentUser]);
+
+    const refresh = () => {
+      Promise.all([
+        friendsService.fetchFriendRequestsFromSupabase(uid).catch(() => []),
+        friendsService.fetchBorrowsFromSupabase(uid).catch(() => [])
+      ]).then(() => {
+        setFriendRequests(friendsService.getFriendRequests());
+        setFriends(friendsService.getConnectedFriends());
+        setBorrows(friendsService.getBorrows());
+        setNotifications(friendsService.getNotifications(uid));
+      }).catch(() => {});
+    };
+
+    refresh();
+    const pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 10000);
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(pollTimer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [view, currentUser?.user_id]);
 
   // Supabase Realtime Listener for friend requests across devices
   useEffect(() => {
