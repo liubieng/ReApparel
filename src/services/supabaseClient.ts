@@ -1545,6 +1545,32 @@ class MockDatabaseEngine {
     this.notify();
   }
 
+  /**
+   * Cache assessments fetched from Supabase into the local store (silently — no listener
+   * notification, to avoid re-render loops) so local re-hydration never drops them.
+   */
+  public mergeRemoteAssessments(remote: BSASAssessment[]): void {
+    let changed = false;
+    for (const r of remote) {
+      const exists = this.state.bsas_assessments.some(l =>
+        l.assessment_id === r.assessment_id ||
+        (isSameUser(l.user_id, r.user_id) &&
+          Math.abs(new Date(l.taken_at).getTime() - new Date(r.taken_at).getTime()) < 60000)
+      );
+      if (!exists) {
+        this.state.bsas_assessments.push(r);
+        changed = true;
+      }
+    }
+    if (changed) {
+      try {
+        safeStorage.setItem(STORAGE_KEY_MOCK_DATA, JSON.stringify(this.state));
+      } catch (e) {
+        console.warn('Failed to persist mock database state:', e);
+      }
+    }
+  }
+
   public updateAssessmentId(oldId: number, newId: number) {
     const assessment = this.state.bsas_assessments.find(a => a.assessment_id === oldId);
     if (assessment) {

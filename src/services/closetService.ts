@@ -199,6 +199,8 @@ export const closetService = {
 
         if (!error && data && data.length > 0) {
           const remoteAssessments = deduplicateAssessments(data as BSASAssessment[]);
+          // Cache into the local store so local re-hydration (on navigation) keeps them
+          mockDatabase.mergeRemoteAssessments(remoteAssessments);
           const merged = [...remoteAssessments];
 
           localAssessments.forEach(loc => {
