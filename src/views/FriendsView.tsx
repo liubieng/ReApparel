@@ -109,33 +109,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0;
 
-  // Friends items counts cache: friend_id -> count
-  const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
-
   // Detail item modal state (TC_FCLOSET_03)
   const [detailItem, setDetailItem] = useState<{ item: ClothingItem; owner: User } | null>(null);
-
-  // Preload garment counts for friend rows (only public items TC_FCLOSET_03)
-  useEffect(() => {
-    let isMounted = true;
-    const loadCounts = async () => {
-      const counts: Record<string, number> = {};
-      for (const friend of friends) {
-        try {
-          const items = await closetService.getItems(friend.user_id);
-          const publicItems = items.filter(i => i.is_public !== false);
-          counts[friend.user_id] = publicItems.length;
-        } catch {
-          counts[friend.user_id] = 0;
-        }
-      }
-      if (isMounted) setItemCounts(counts);
-    };
-    if (friends.length > 0) {
-      loadCounts();
-    }
-    return () => { isMounted = false; };
-  }, [friends]);
 
   // Copy Friend Code
   const handleCopyCode = () => {
@@ -1130,7 +1105,6 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filteredFriends.map(friend => {
             const initials = `${friend.first_name[0] || ''}${friend.last_name[0] || ''}`.toUpperCase();
-            const count = itemCounts[friend.user_id] ?? 0;
 
             return (
               <div
@@ -1145,7 +1119,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                   gap: 12
                 }}
               >
-                {/* Left: Avatar Circle + Name & Items count */}
+                {/* Left: Avatar Circle + Name */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{
                     width: 44,
@@ -1164,12 +1138,9 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     {initials}
                   </div>
                   <div>
-                    <strong style={{ fontSize: 14, display: 'block', color: 'var(--text)' }}>
+                    <strong style={{ fontSize: 14, color: 'var(--text)' }}>
                       {friend.first_name} {friend.last_name}
                     </strong>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {count} items
-                    </span>
                   </div>
                 </div>
 

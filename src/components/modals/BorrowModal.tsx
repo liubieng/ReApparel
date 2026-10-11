@@ -67,6 +67,15 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
     }
   }, [isOpen, garment?.item_id]);
 
+  const hasConflict = React.useMemo(() => {
+    if (!garment || !fromDate || !toDate) return false;
+    return existingBorrows.some(b => {
+      const isSameItem = b.item_id === garment.item_id;
+      const isApproved = b.status === 'Accepted' || (b.status as string) === 'approved';
+      return isSameItem && isApproved && checkDateOverlap(fromDate, toDate, b.start_date, b.end_date);
+    });
+  }, [existingBorrows, garment, fromDate, toDate]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -76,14 +85,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
       return;
     }
 
-    // Check for overlapping approved/accepted borrows on this item
-    const hasOverlapConflict = existingBorrows.some(b => {
-      const isSameItem = b.item_id === garment.item_id;
-      const isApproved = b.status === 'Accepted' || (b.status as string) === 'approved';
-      return isSameItem && isApproved && checkDateOverlap(fromDate, toDate, b.start_date, b.end_date);
-    });
-
-    if (hasOverlapConflict) {
+    if (hasConflict) {
       setErrorMsg('This item is already approved for another borrower during these dates. Please choose different dates.');
       return;
     }
@@ -196,14 +198,20 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
                 <Clock style={{ width: 14, height: 14, color: 'var(--primary)' }} />
                 <span>Duration: <strong>{durationDays} {durationDays === 1 ? 'day' : 'days'}</strong></span>
               </div>
-              <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <CheckCircle style={{ width: 13, height: 13 }} /> No Schedule Conflicts
-              </span>
+              {hasConflict ? (
+                <span style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <AlertCircle style={{ width: 13, height: 13 }} /> Schedule Conflict
+                </span>
+              ) : (
+                <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <CheckCircle style={{ width: 13, height: 13 }} /> No Schedule Conflicts
+                </span>
+              )}
             </div>
           )}
 
           {/* Optional Note to Owner */}
-          <div className="field" style={{ marginBottom: 14 }}>
+          <div className="field" style={{ marginBottom: 16 }}>
             <label>Note to Owner (Optional)</label>
             <input
               type="text"
@@ -211,10 +219,6 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
-          </div>
-
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-            🛡️ <strong>Automated Conflict Guard:</strong> The system validates dates to prevent double-booking items among friends.
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
