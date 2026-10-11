@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload } from 'lucide-react';
 import { ClothingItem } from '../../types/database';
-import { CATEGORIES, CURATED_COLOR_FAMILIES } from '../../data/seedData';
+import { CATEGORIES, NORMAL_CLOTHING_COLORS } from '../../data/seedData';
 import { removeBackgroundClientSide } from '../../utils/imageProcessing';
 
 interface EditItemModalProps {
@@ -254,31 +254,36 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 </span>
               )}
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 6, marginTop: 4, maxHeight: 110, overflowY: 'auto' }}>
-              {CURATED_COLOR_FAMILIES.map(f => {
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              {NORMAL_CLOTHING_COLORS.map(f => {
                 const isSelected = color === f.name;
                 return (
                   <button
                     key={f.name}
                     type="button"
-                    className="btn btn-g"
+                    className={`pill ${isSelected ? 'on' : ''}`}
                     style={{
-                      padding: '4px 8px',
-                      fontSize: 11,
-                      justifyContent: 'flex-start',
-                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      background: isSelected ? 'var(--surface-2)' : 'var(--surface)'
+                      cursor: 'pointer',
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      borderRadius: 20,
+                      background: isSelected ? 'var(--primary)' : 'var(--surface-2)',
+                      color: isSelected ? '#ffffff' : 'var(--text)',
+                      border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                      fontWeight: isSelected ? 600 : 500,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
                     }}
                     onClick={() => { setColor(f.name); setColorHex(f.hex); }}
                   >
                     <span style={{
-                      width: 12,
-                      height: 12,
+                      width: 9,
+                      height: 9,
                       borderRadius: '50%',
-                      background: f.hex,
+                      backgroundColor: f.hex,
                       display: 'inline-block',
-                      marginRight: 4,
-                      border: '1px solid rgba(0,0,0,0.15)'
+                      border: f.name === 'White' ? '1px solid #cbd5e1' : 'none'
                     }} />
                     <span>{f.name}</span>
                   </button>
