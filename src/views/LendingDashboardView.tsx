@@ -189,7 +189,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Status Pill (Figure .9.1) */}
+                    {/* Status Pill (Figure .9.1) & Action Buttons */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTop: '1px solid var(--border)' }}>
                       <span style={{
                         fontSize: 10.5,
@@ -198,10 +198,10 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                         letterSpacing: '0.04em',
                         padding: '3px 8px',
                         borderRadius: 6,
-                        background: isAccepted ? 'rgba(34, 197, 94, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : 'var(--danger-soft)',
-                        color: isAccepted ? '#16a34a' : isPending ? '#ca8a04' : 'var(--danger)'
+                        background: isAccepted ? 'rgba(34, 197, 94, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : isReturned ? 'rgba(59, 130, 246, 0.15)' : 'var(--danger-soft)',
+                        color: isAccepted ? '#16a34a' : isPending ? '#ca8a04' : isReturned ? '#2563eb' : 'var(--danger)'
                       }}>
-                        STATUS: {borrow.status.toUpperCase()}
+                        STATUS: {isAccepted ? 'BORROWED' : isReturned ? 'RETURNED' : borrow.status.toUpperCase()}
                       </span>
 
                       {isPending && (
@@ -212,6 +212,17 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                           onClick={() => onCancelBorrow(borrow.borrow_id, borrow.start_date)}
                         >
                           Cancel
+                        </button>
+                      )}
+                      {isAccepted && (
+                        <button
+                          type="button"
+                          className="btn btn-g"
+                          style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--primary)', borderColor: 'var(--primary)' }}
+                          onClick={() => onRespondBorrow(borrow.borrow_id, 'Returned')}
+                        >
+                          <CheckCircle2 className="ico" style={{ width: 13, height: 13 }} />
+                          <span>Mark as Returned</span>
                         </button>
                       )}
                     </div>
@@ -246,6 +257,8 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                 const borrowerName = borrower ? `${borrower.first_name} ${borrower.last_name}` : 'A friend';
                 const isPending = borrow.status === 'Pending';
                 const isAccepted = borrow.status === 'Accepted' || (borrow.status as string) === 'approved';
+                const isReturned = borrow.status === 'Returned';
+                const isRejected = borrow.status === 'Rejected';
 
                 return (
                   <div
@@ -306,10 +319,23 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Action Buttons: [Accept] [Deny] matching Figure .9.1 */}
-                    <div style={{ display: 'flex', gap: 8, paddingTop: 6, borderTop: '1px solid var(--border)', justifyContent: 'flex-end' }}>
+                    {/* Status Pill & Action Buttons */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTop: '1px solid var(--border)' }}>
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        background: isAccepted ? 'rgba(34, 197, 94, 0.15)' : isPending ? 'rgba(234, 179, 8, 0.15)' : isReturned ? 'rgba(59, 130, 246, 0.15)' : 'var(--danger-soft)',
+                        color: isAccepted ? '#16a34a' : isPending ? '#ca8a04' : isReturned ? '#2563eb' : 'var(--danger)'
+                      }}>
+                        STATUS: {isAccepted ? 'BORROWED' : isReturned ? 'RETURNED' : borrow.status.toUpperCase()}
+                      </span>
+
                       {isPending ? (
-                        <>
+                        <div style={{ display: 'flex', gap: 8 }}>
                           <button
                             type="button"
                             className="btn btn-p"
@@ -326,7 +352,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                           >
                             Deny
                           </button>
-                        </>
+                        </div>
                       ) : isAccepted ? (
                         <button
                           type="button"
@@ -337,9 +363,13 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                           <CheckCircle2 className="ico" style={{ width: 13, height: 13 }} />
                           <span>Mark as Returned</span>
                         </button>
+                      ) : isReturned ? (
+                        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>
+                          Item Returned
+                        </span>
                       ) : (
                         <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>
-                          Status: {borrow.status}
+                          Declined
                         </span>
                       )}
                     </div>

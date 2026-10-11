@@ -689,7 +689,7 @@ export default function App() {
   const handleRespondBorrow = async (borrowId: number, newStatus: 'Accepted' | 'Rejected' | 'Returned') => {
     await friendsService.updateBorrowStatus(borrowId, newStatus);
     if (newStatus === 'Accepted') {
-      toast('Borrow request accepted! Loan schedule active.');
+      toast('Borrow request accepted! Garment is now marked as borrowed.');
     } else if (newStatus === 'Returned') {
       toast('Item marked as returned! Garment is back in your closet.');
     } else {
