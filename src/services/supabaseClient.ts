@@ -94,7 +94,7 @@ export function getStoredSupabaseConfig(): SupabaseConfig {
 
   // Sanitize any extra slashes in protocol (e.g., https:/// -> https://)
   if (storedUrl && storedUrl.startsWith('http')) {
-    storedUrl = storedUrl.replace(/^https?:\/+/i, (match) => match.toLowerCase().startsWith('https') ? 'https://' : 'http://').trim();
+    storedUrl = storedUrl.replace(/^https?:\/+/i, (match: string) => match.toLowerCase().startsWith('https') ? 'https://' : 'http://').trim();
   }
 
   if (storedUrl === 'off' || storedKey === 'off' || storedUrl === 'disabled') {
@@ -339,6 +339,12 @@ export function generateUUID(): string {
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+}
+
+/** Today's date (YYYY-MM-DD) in the user's LOCAL timezone — toISOString() would use UTC and mis-date logs. */
+export function getLocalDateString(d: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export const SPAM_ASSESSMENT_IDS = new Set<number>([72, 73, 74, 75, 76, 77]);
@@ -813,9 +819,10 @@ class MockDatabaseEngine {
     this.autoFinalizePastLogs(dateString);
 
     const targetUid = this.currentUserId || 'a0000000-0000-0000-0000-000000000001';
-    let log = this.state.daily_clothing_logs.find(
-      l => isSameUser(l.user_id, targetUid) && l.log_date === dateString
-    );
+    // Several outfits can share one date; always resolve to the earliest-created one (stable)
+    let log = this.state.daily_clothing_logs
+      .filter(l => isSameUser(l.user_id, targetUid) && l.log_date === dateString)
+      .sort((a, b) => a.log_id - b.log_id)[0];
     if (!log) {
       log = {
         log_id: Date.now(),
@@ -845,6 +852,25 @@ class MockDatabaseEngine {
     this.state.daily_clothing_logs.unshift(newLog);
     this.notify();
     return newLog;
+  }
+
+  /**
+   * Adds remote logs only for dates/ids that do not exist locally. Local outfits are authoritative:
+   * Supabase stores a single row per (user, date) while the app supports several outfits per day,
+   * so blindly overwriting local outfits with remote rows swaps/duplicates/erases them.
+   */
+  public mergeRemoteDailyLogs(remote: DailyClothingLog[]): void {
+    let changed = false;
+    for (const r of remote) {
+      const exists = this.state.daily_clothing_logs.some(
+        l => l.log_id === r.log_id || (isSameUser(l.user_id, r.user_id) && l.log_date === r.log_date)
+      );
+      if (!exists) {
+        this.state.daily_clothing_logs.push(r);
+        changed = true;
+      }
+    }
+    if (changed) this.notify();
   }
 
   public upsertDailyLog(log: DailyClothingLog): void {
@@ -921,7 +947,7 @@ class MockDatabaseEngine {
 
   // Simulate automated midnight finalization (3.3 Midnight Finalization)
   public simulateMidnightFinalization(dateString?: string): DailyClothingLog | null {
-    const todayStr = dateString || new Date().toISOString().split('T')[0];
+    const todayStr = dateString || getLocalDateString();
     const log = this.getTodayLog(todayStr);
     if (log && !log.is_finalized) {
       return this.finalizeDailyLog(log.log_id);

@@ -6,7 +6,8 @@ import {
   safeStorage, 
   STORAGE_KEY_ACTIVE_USER, 
   STORAGE_KEY_ACTIVE_VIEW,
-  deduplicateAssessments
+  deduplicateAssessments,
+  getLocalDateString
 } from './services/supabaseClient';
 import { closetService } from './services/closetService';
 import { friendsService } from './services/friendsService';
@@ -130,7 +131,7 @@ export default function App() {
   const [todayLog, setTodayLog] = useState<DailyClothingLog>({
     log_id: 0,
     user_id: '',
-    log_date: new Date().toISOString().slice(0, 10),
+    log_date: getLocalDateString(),
     is_finalized: false,
     finalized_at: null,
     items: []
@@ -203,7 +204,7 @@ export default function App() {
     if (user) {
       setGarments(mockDatabase.getClothingItems(user.user_id));
       setAssessments(mockDatabase.getAssessments(user.user_id));
-      setTodayLog(mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10)));
+      setTodayLog(mockDatabase.getTodayLog(getLocalDateString()));
       setFriends(friendsService.getConnectedFriends());
       setFriendRequests(friendsService.getFriendRequests());
       setBorrows(friendsService.getBorrows());
@@ -289,7 +290,7 @@ export default function App() {
       setView('login');
       setGarments(mockDatabase.getClothingItems());
       setAssessments(mockDatabase.getAssessments());
-      setTodayLog(mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10)));
+      setTodayLog(mockDatabase.getTodayLog(getLocalDateString()));
       setFriends([]);
       setFriendRequests([]);
       setBorrows([]);
@@ -548,9 +549,16 @@ export default function App() {
   };
 
   // Daily Outfit Log Handlers
+  // NOTE: every mutation below updates the local store synchronously, and the mockDatabase
+  // subscription (syncLocalState) re-renders immediately. Remote sync happens in the background,
+  // so we deliberately do NOT await a full remote loadData() here (that made every tap slow and let
+  // stale server responses flicker/revert the outfit).
   const handleToggleGarmentInOutfit = async (garment: ClothingItem, targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
-    const targetLog = dailyLogs.find(l => l.log_id === targetId) || todayLog;
+    // Read the freshest local log (React state can lag behind rapid taps)
+    const targetLog = mockDatabase.getDailyLogs().find(l => l.log_id === targetId)
+      || dailyLogs.find(l => l.log_id === targetId)
+      || todayLog;
     if (targetLog.is_finalized) {
       toast("This outfit record is already locked & finalized.");
       return;
@@ -561,42 +569,36 @@ export default function App() {
       ? current.filter(i => i.item_id !== garment.item_id)
       : [...current, garment];
 
-    await closetService.updateTodayItems(targetId, updated);
-    await loadData();
     toast(exists ? `Removed ${garment.name} from outfit` : `Added ${garment.name} to outfit`);
+    await closetService.updateTodayItems(targetId, updated);
   };
 
   const handleFinalizeDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.finalizeDailyLog(targetId);
-    await loadData();
     toast("Outfit finalized! Cumulative wear counts updated.");
   };
 
   const handleEditDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.unlockDailyLogForEditing(targetId);
-    await loadData();
     toast("Outfit opened for editing. You can adjust your garments and re-finalize.");
   };
 
   const handleDeleteDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.deleteDailyLog(targetId);
-    await loadData();
     toast("Outfit record cleared.");
   };
 
   const handleCreateDailyLog = async (dateStr: string, title: string) => {
     const newLog = await closetService.createDailyLog(dateStr, title);
-    await loadData();
     toast(`Created new outfit record: ${title}`);
     return newLog;
   };
 
   const handleSimulateMidnight = async () => {
     await closetService.simulateMidnightFinalization();
-    await loadData();
     toast("🕛 00:00 Midnight Job Simulated: Outfit locked & wear counts incremented!");
   };
 

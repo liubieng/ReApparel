@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString } from './supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../types/database';
 
 export { deduplicateAssessments };
@@ -8,6 +8,76 @@ export interface BSASCooldownInfo {
   daysRemaining: number;
   lastTakenDate: string | null;
   retakeDueDate: string | null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Remote daily-log writes run strictly one after another so rapid clicks can never interleave
+// a delete/insert pair and corrupt the stored rows.
+let dailyLogSyncChain: Promise<void> = Promise.resolve();
+
+/**
+ * Pushes the CURRENT local state of one date to Supabase. Supabase keeps a single row per
+ * (user, date), so all of the day's outfits are stored as one combined set of garments.
+ */
+async function pushDateToRemote(userId: string, logDate: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const canonicalUid = toCanonicalUserId(userId);
+  if (!UUID_RE.test(canonicalUid)) return;
+
+  try {
+    // Read local state at execution time so queued rapid edits coalesce into the latest result
+    const logs = mockDatabase.getDailyLogs(userId).filter(l => l.log_date === logDate);
+
+    if (logs.length === 0) {
+      // Every outfit for this date was removed locally — remove the remote row too
+      const { data: existing } = await supabase
+        .from('daily_clothing_log')
+        .select('log_id')
+        .eq('user_id', canonicalUid)
+        .eq('log_date', logDate);
+      const ids = (existing || []).map((r: any) => r.log_id);
+      if (ids.length > 0) {
+        await supabase.from('daily_log_item').delete().in('log_id', ids);
+        await supabase.from('daily_clothing_log').delete().in('log_id', ids);
+      }
+      return;
+    }
+
+    const itemIds = new Set<number>();
+    logs.forEach(l => (l.items || []).forEach(i => itemIds.add(i.item_id)));
+    const allFinalized = logs.every(l => l.is_finalized);
+
+    const { data: remoteLog } = await supabase
+      .from('daily_clothing_log')
+      .upsert({
+        user_id: canonicalUid,
+        log_date: logDate,
+        is_finalized: allFinalized,
+        finalized_at: allFinalized ? (logs.find(l => l.finalized_at)?.finalized_at ?? new Date().toISOString()) : null
+      }, { onConflict: 'user_id,log_date' })
+      .select()
+      .single();
+
+    if (remoteLog) {
+      await supabase.from('daily_log_item').delete().eq('log_id', remoteLog.log_id);
+      if (itemIds.size > 0) {
+        try {
+          await supabase.from('daily_log_item').insert(
+            Array.from(itemIds).map(item_id => ({ log_id: remoteLog.log_id, item_id }))
+          );
+        } catch {}
+      }
+    }
+  } catch {}
+}
+
+function queueDateSync(userId: string, logDate: string): Promise<void> {
+  dailyLogSyncChain = dailyLogSyncChain
+    .then(() => pushDateToRemote(userId, logDate))
+    .catch(() => {});
+  return dailyLogSyncChain;
 }
 
 export const closetService = {
@@ -293,7 +363,7 @@ export const closetService = {
 
   // --- DAILY LOGS ---
   async getTodayLog(): Promise<DailyClothingLog> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     return mockDatabase.getTodayLog(today);
   },
 
@@ -350,10 +420,9 @@ export const closetService = {
             };
           });
 
-          // Sync into mockDatabase
-          remoteLogs.forEach(rem => {
-            mockDatabase.upsertDailyLog(rem);
-          });
+          // Local outfits are authoritative; only add remote dates missing locally
+          // (a blind overwrite swapped/erased same-day outfits on every refresh).
+          mockDatabase.mergeRemoteDailyLogs(remoteLogs);
 
           return mockDatabase.getDailyLogs(targetUid);
         }
@@ -370,40 +439,12 @@ export const closetService = {
   },
 
   async updateTodayItems(logId: number, items: ClothingItem[]): Promise<DailyClothingLog | null> {
+    // Local update is synchronous and notifies the UI immediately.
     const localLog = mockDatabase.updateTodayLogItems(logId, items);
 
-    // Sync to Supabase if configured
-    const supabase = getSupabase();
-    if (supabase && localLog) {
-      try {
-        const canonicalUid = toCanonicalUserId(localLog.user_id);
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid);
-        if (isUuid) {
-          const { data: remoteLog } = await supabase
-            .from('daily_clothing_log')
-            .upsert({
-              user_id: canonicalUid,
-              log_date: localLog.log_date,
-              is_finalized: localLog.is_finalized,
-              finalized_at: localLog.finalized_at
-            }, { onConflict: 'user_id,log_date' })
-            .select()
-            .single();
-
-          if (remoteLog) {
-            await supabase.from('daily_log_item').delete().eq('log_id', remoteLog.log_id);
-            if (items.length > 0) {
-              const logItems = items.map(i => ({
-                log_id: remoteLog.log_id,
-                item_id: i.item_id
-              }));
-              try {
-                await supabase.from('daily_log_item').insert(logItems);
-              } catch {}
-            }
-          }
-        }
-      } catch {}
+    // Remote sync runs in the background (serialized) so the UI never waits on the network.
+    if (localLog) {
+      void queueDateSync(localLog.user_id, localLog.log_date);
     }
 
     return localLog;
@@ -442,7 +483,7 @@ export const closetService = {
   },
 
   async unlockDailyLogForEditing(logId: number): Promise<boolean> {
-    const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10));
+    const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(getLocalDateString());
     const wasFinalized = logBefore?.is_finalized;
     const items = logBefore?.items || [];
 
@@ -471,7 +512,7 @@ export const closetService = {
   },
 
   async deleteDailyLog(logId: number): Promise<boolean> {
-    const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(new Date().toISOString().slice(0, 10));
+    const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(getLocalDateString());
     const wasFinalized = logBefore?.is_finalized;
     const items = logBefore?.items || [];
 
@@ -488,11 +529,15 @@ export const closetService = {
         );
       } catch {}
     }
+    // Reflect the removal/unlock remotely so a deleted outfit can't be resurrected by the next fetch
+    if (logBefore) {
+      void queueDateSync(logBefore.user_id, logBefore.log_date);
+    }
     return result;
   },
 
   async simulateMidnightFinalization(): Promise<DailyClothingLog | null> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const log = mockDatabase.getTodayLog(today);
     if (log && !log.is_finalized) {
       return this.finalizeDailyLog(log.log_id);

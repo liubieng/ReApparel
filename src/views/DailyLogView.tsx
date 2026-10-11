@@ -124,7 +124,10 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
 
   // Outfits logged for today (TC_USAGE_06)
   const todayOutfits = useMemo(() => {
-    const list = dailyLogs.filter(l => l.log_date === todayLog.log_date);
+    // Oldest first (by creation id) so ordinal names (First, Second, ...) stay attached to the same outfit
+    const list = dailyLogs
+      .filter(l => l.log_date === todayLog.log_date)
+      .sort((a, b) => a.log_id - b.log_id);
     if (list.length === 0) return [todayLog];
     return list;
   }, [dailyLogs, todayLog]);
@@ -203,7 +206,10 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
 
   const handleDeleteOutfit = async (logId: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    // Deleting a finalized outfit only unlocks it (it still exists), so stay on it
+    const wasFinalized = todayOutfits.find(l => l.log_id === logId)?.is_finalized;
     await onDeleteLog(logId);
+    if (wasFinalized) return;
     const remaining = todayOutfits.filter(l => l.log_id !== logId);
     if (remaining.length > 0) {
       setActiveLogId(remaining[0].log_id);
