@@ -226,6 +226,12 @@ function loadInitialMockState(): MockDatabaseState {
         parsed.bsas_assessments = deduplicateAssessments(parsed.bsas_assessments);
       }
       if (parsed.daily_clothing_logs && Array.isArray(parsed.daily_clothing_logs)) {
+        const seenLogIds = new Set<number>();
+        parsed.daily_clothing_logs = parsed.daily_clothing_logs.filter((l: DailyClothingLog) => {
+          if (!l || typeof l.log_id !== 'number' || seenLogIds.has(l.log_id)) return false;
+          seenLogIds.add(l.log_id);
+          return true;
+        });
         parsed.daily_clothing_logs.forEach((log: DailyClothingLog) => {
           if (log.items && Array.isArray(log.items)) {
             log.items.forEach((item: ClothingItem) => {
@@ -784,10 +790,16 @@ class MockDatabaseEngine {
   // --- DAILY CLOTHING LOGS ---
   public getDailyLogs(userId?: string): DailyClothingLog[] {
     const targetUid = userId || this.currentUserId;
-    if (!targetUid) return [];
+    if (!targetUid) {
+      return [...this.state.daily_clothing_logs].sort((a, b) => b.log_date.localeCompare(a.log_date));
+    }
     return this.state.daily_clothing_logs
       .filter(l => isSameUser(l.user_id, targetUid))
       .sort((a, b) => b.log_date.localeCompare(a.log_date));
+  }
+
+  public getDailyLogById(logId: number): DailyClothingLog | undefined {
+    return this.state.daily_clothing_logs.find(l => l.log_id === logId);
   }
 
   // Automated locking (scheduled Supabase pg_cron job / edge trigger at 00:00 midnight)
@@ -838,8 +850,8 @@ class MockDatabaseEngine {
     return log;
   }
 
-  public createDailyLog(dateString: string, title?: string): DailyClothingLog {
-    const targetUid = this.currentUserId || 'a0000000-0000-0000-0000-000000000001';
+  public createDailyLog(dateString: string, title?: string, userId?: string): DailyClothingLog {
+    const targetUid = userId || this.currentUserId || 'a0000000-0000-0000-0000-000000000001';
     const newLog: DailyClothingLog = {
       log_id: Date.now() + Math.floor(Math.random() * 1000),
       user_id: toCanonicalUserId(targetUid),
@@ -875,7 +887,7 @@ class MockDatabaseEngine {
 
   public upsertDailyLog(log: DailyClothingLog): void {
     const idx = this.state.daily_clothing_logs.findIndex(
-      l => l.log_id === log.log_id || (isSameUser(l.user_id, log.user_id) && l.log_date === log.log_date)
+      l => l.log_id === log.log_id
     );
     if (idx !== -1) {
       this.state.daily_clothing_logs[idx] = { ...this.state.daily_clothing_logs[idx], ...log };

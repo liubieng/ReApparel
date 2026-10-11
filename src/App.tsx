@@ -555,10 +555,17 @@ export default function App() {
   // stale server responses flicker/revert the outfit).
   const handleToggleGarmentInOutfit = async (garment: ClothingItem, targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
-    // Read the freshest local log (React state can lag behind rapid taps)
-    const targetLog = mockDatabase.getDailyLogs().find(l => l.log_id === targetId)
+    // Read the freshest local log for this targetId. Never fall back to todayLog if targeting another outfit!
+    const targetLog = mockDatabase.getDailyLogById(targetId)
+      || mockDatabase.getDailyLogs(currentUser?.user_id).find(l => l.log_id === targetId)
       || dailyLogs.find(l => l.log_id === targetId)
-      || todayLog;
+      || (targetId === todayLog.log_id ? todayLog : null);
+
+    if (!targetLog) {
+      console.warn('Target outfit not found for toggle:', targetId);
+      return;
+    }
+
     if (targetLog.is_finalized) {
       toast("This outfit record is already locked & finalized.");
       return;
@@ -571,28 +578,45 @@ export default function App() {
 
     toast(exists ? `Removed ${garment.name} from outfit` : `Added ${garment.name} to outfit`);
     await closetService.updateTodayItems(targetId, updated);
+    setDailyLogs(prev => prev.map(l => l.log_id === targetId ? { ...l, items: updated } : l));
+    if (todayLog.log_id === targetId) {
+      setTodayLog(prev => ({ ...prev, items: updated }));
+    }
   };
 
   const handleFinalizeDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
-    await closetService.finalizeDailyLog(targetId);
+    const res = await closetService.finalizeDailyLog(targetId);
+    if (res) {
+      setDailyLogs(prev => prev.map(l => l.log_id === targetId ? { ...l, is_finalized: true, finalized_at: res.finalized_at } : l));
+      if (todayLog.log_id === targetId) {
+        setTodayLog(prev => ({ ...prev, is_finalized: true, finalized_at: res.finalized_at }));
+      }
+    }
     toast("Outfit finalized! Cumulative wear counts updated.");
   };
 
   const handleEditDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.unlockDailyLogForEditing(targetId);
+    setDailyLogs(prev => prev.map(l => l.log_id === targetId ? { ...l, is_finalized: false, finalized_at: null } : l));
+    if (todayLog.log_id === targetId) {
+      setTodayLog(prev => ({ ...prev, is_finalized: false, finalized_at: null }));
+    }
     toast("Outfit opened for editing. You can adjust your garments and re-finalize.");
   };
 
   const handleDeleteDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.deleteDailyLog(targetId);
+    setDailyLogs(prev => prev.filter(l => l.log_id !== targetId));
     toast("Outfit record cleared.");
   };
 
   const handleCreateDailyLog = async (dateStr: string, title: string) => {
-    const newLog = await closetService.createDailyLog(dateStr, title);
+    const activeUid = currentUser?.user_id;
+    const newLog = await closetService.createDailyLog(dateStr, title, activeUid);
+    setDailyLogs(prev => [newLog, ...prev.filter(l => l.log_id !== newLog.log_id)]);
     toast(`Created new outfit record: ${title}`);
     return newLog;
   };

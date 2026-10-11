@@ -106,10 +106,28 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     });
   }, [closetGarments, closetSelectedTypes, closetSelectedColors]);
 
+  // Outfits logged for today (TC_USAGE_06) - deduplicated by log_id
+  const todayOutfits = useMemo(() => {
+    const map = new Map<number, DailyClothingLog>();
+    if (todayLog && todayLog.log_id) {
+      map.set(todayLog.log_id, todayLog);
+    }
+    dailyLogs.forEach(l => {
+      if (l.log_date === todayLog.log_date) {
+        map.set(l.log_id, l);
+      }
+    });
+    const list = Array.from(map.values()).sort((a, b) => a.log_id - b.log_id);
+    return list.length > 0 ? list : [todayLog];
+  }, [dailyLogs, todayLog]);
+
   // Find currently active log being viewed or edited
   const activeLog = useMemo(() => {
-    return dailyLogs.find(l => l.log_id === activeLogId) || todayLog;
-  }, [dailyLogs, activeLogId, todayLog]);
+    const found = todayOutfits.find(l => l.log_id === activeLogId)
+      || dailyLogs.find(l => l.log_id === activeLogId);
+    if (found) return found;
+    return todayOutfits[0] || todayLog;
+  }, [todayOutfits, dailyLogs, activeLogId, todayLog]);
 
   // Keep activeLogId in sync when todayLog initializes with real database ID
   React.useEffect(() => {
@@ -121,16 +139,6 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   const isEditingHistorical = activeLog.log_date !== todayLog.log_date;
   const isLocked = activeLog.is_finalized;
   const selectedItems = activeLog.items || [];
-
-  // Outfits logged for today (TC_USAGE_06)
-  const todayOutfits = useMemo(() => {
-    // Oldest first (by creation id) so ordinal names (First, Second, ...) stay attached to the same outfit
-    const list = dailyLogs
-      .filter(l => l.log_date === todayLog.log_date)
-      .sort((a, b) => a.log_id - b.log_id);
-    if (list.length === 0) return [todayLog];
-    return list;
-  }, [dailyLogs, todayLog]);
 
   // Ordinal outfit naming: First Outfit, Second Outfit, Third Outfit, etc.
   const OUTFIT_ORDINALS = [

@@ -434,8 +434,8 @@ export const closetService = {
     return localLogs;
   },
 
-  async createDailyLog(dateString: string, title?: string): Promise<DailyClothingLog> {
-    return mockDatabase.createDailyLog(dateString, title);
+  async createDailyLog(dateString: string, title?: string, userId?: string): Promise<DailyClothingLog> {
+    return mockDatabase.createDailyLog(dateString, title, userId);
   },
 
   async updateTodayItems(logId: number, items: ClothingItem[]): Promise<DailyClothingLog | null> {
