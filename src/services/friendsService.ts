@@ -49,27 +49,47 @@ export const friendsService = {
       }
     }
 
-    // 3. If a local-only request exists (never reached Supabase), drop it so it can be re-sent
+    // 3. Reconcile with Supabase (source of truth) so stale/denied requests never block a re-send
     if (targetUser) {
       const tu = targetUser;
-      const stale = mockDatabase.getFriendRequests().find(
-        r => r.status === 'pending' && isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id)
-      );
-      if (stale) {
-        const supabase = getSupabase();
-        if (supabase) {
-          try {
-            const { data } = await supabase
-              .from('friend_request')
-              .select('request_id')
-              .eq('sender_id', currentUser.user_id)
-              .eq('receiver_id', tu.user_id)
-              .limit(1);
-            if (!data || data.length === 0) {
-              mockDatabase.deleteFriendRequest(stale.request_id);
+      const betweenUs = (r: { sender_id: string; receiver_id: string }) =>
+        (isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id)) ||
+        (isSameUser(r.sender_id, tu.user_id) && isSameUser(r.receiver_id, currentUser.user_id));
+      const dropLocalNonAccepted = () => {
+        mockDatabase.getFriendRequests()
+          .filter(r => betweenUs(r) && r.status !== 'accepted')
+          .forEach(r => mockDatabase.deleteFriendRequest(r.request_id));
+      };
+
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('friend_request')
+            .select('request_id, status')
+            .or(`and(sender_id.eq.${currentUser.user_id},receiver_id.eq.${tu.user_id}),and(sender_id.eq.${tu.user_id},receiver_id.eq.${currentUser.user_id})`);
+
+          if (!error && data) {
+            if (data.some((r: any) => r.status === 'accepted')) {
+              return { success: false, message: 'You are already friends with this person!' };
             }
-          } catch {}
+            // Purge denied requests from the database so they stop blocking new ones
+            const rejectedIds = data.filter((r: any) => r.status === 'rejected').map((r: any) => r.request_id);
+            if (rejectedIds.length > 0) {
+              await supabase.from('friend_request').delete().in('request_id', rejectedIds);
+            }
+            // If nothing is genuinely pending remotely, any local pending/rejected copy is stale
+            if (!data.some((r: any) => r.status === 'pending')) {
+              dropLocalNonAccepted();
+            }
+          }
+        } catch {
+          // Network unavailable — fall back to local handling below
         }
+      } else {
+        mockDatabase.getFriendRequests()
+          .filter(r => betweenUs(r) && r.status === 'rejected')
+          .forEach(r => mockDatabase.deleteFriendRequest(r.request_id));
       }
     }
 

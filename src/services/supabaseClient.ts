@@ -988,7 +988,12 @@ class MockDatabaseEngine {
       if (existing.status === 'accepted') {
         return { success: false, message: 'You are already friends with this person!' };
       }
-      return { success: false, message: 'A pending request already exists between you.' };
+      if (existing.status === 'rejected') {
+        // A denied request must not block the sender from trying again
+        this.state.friend_requests = this.state.friend_requests.filter(r => r !== existing);
+      } else {
+        return { success: false, message: 'A pending request already exists between you.' };
+      }
     }
 
     const newReq: FriendRequest = {
