@@ -5,7 +5,8 @@ import {
   getStoredSupabaseConfig, 
   safeStorage, 
   STORAGE_KEY_ACTIVE_USER, 
-  STORAGE_KEY_ACTIVE_VIEW 
+  STORAGE_KEY_ACTIVE_VIEW,
+  deduplicateAssessments
 } from './services/supabaseClient';
 import { closetService } from './services/closetService';
 import { friendsService } from './services/friendsService';
@@ -262,7 +263,14 @@ export default function App() {
         const [items, userAssessments, userLogs] = await Promise.all(fetchPromises);
 
         if (items) setGarments(items);
-        if (userAssessments) setAssessments(userAssessments);
+        // Merge with the CURRENT local store: the remote fetch may have started before the user
+        // submitted a BSAS, so a stale response must never overwrite a newer local assessment.
+        if (userAssessments) {
+          setAssessments(deduplicateAssessments([
+            ...userAssessments,
+            ...mockDatabase.getAssessments(user.user_id)
+          ]));
+        }
         if (userLogs) setDailyLogs(userLogs);
         setAllUsers(mockDatabase.getAllUsers());
         setFriends(friendsService.getConnectedFriends());
