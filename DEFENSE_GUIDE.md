@@ -19,58 +19,57 @@ ReApparel is a web platform that combines **behavioral psychology** with **digit
 
 ---
 
-## 2. System Architecture & File Structure
+## 2. System Architecture & Work Breakdown Structure (WBS) File Mapping
 
-ReApparel follows a **Separation of Concerns (SoC)** architecture. The codebase is broken down into modular, self-contained components:
+ReApparel follows a **Separation of Concerns (SoC)** and **Modular Feature-Driven Architecture** aligned with the 6 WBS modules:
 
 ```
 src/
-├── App.tsx                          # Root Application Controller & Global State Coordinator (~480 lines)
+├── App.tsx                          # Root Application Controller & Global State Coordinator
+├── modules/
+│   ├── BSAS/                        # [WBS 1.0] Bergen Shopping Addiction Scale (BSAS)
+│   │   ├── BSASIntroView.tsx        # 1.2 Educational Onboarding on the 7 Clinical Dimensions
+│   │   ├── BSASAssessmentModal.tsx  # 1.1 7-Step Diagnostic Stepper & Scoring
+│   │   └── index.ts                 # Module exports (1.3 Retake & Review)
+│   ├── VirtualCloset/               # [WBS 2.0] Virtual Closet
+│   │   ├── VirtualClosetView.tsx    # 2.2 Multi-Attribute Wardrobe Grid (Filters, Search, Display)
+│   │   ├── AddItemModal.tsx         # 2.1 Image Upload, 2.1.2 Item Tagging
+│   │   ├── EditItemModal.tsx        # 2.3 Clothing Item Update
+│   │   ├── DeleteCascadeModal.tsx   # 2.3 Clothing Item Deletion (Cascade Warning)
+│   │   ├── imageProcessing.ts       # 2.1.1 Canvas Perceptual Color Background Removal
+│   │   └── index.ts                 # Module exports
+│   ├── DailyClothingLog/            # [WBS 3.0] Daily Clothing Log
+│   │   ├── DailyLogView.tsx         # 3.1 Log Daily Wear, 3.2 Update/Delete, 3.3 Midnight Finalization
+│   │   └── index.ts                 # Module exports
+│   ├── RecoveryProgress/            # [WBS 4.0] Recovery Progress
+│   │   ├── RecoveryView.tsx         # 4.1 Longitudinal BSAS Score Line Chart & Cooldown Status
+│   │   ├── ClosetStatisticsView.tsx # 4.2 Utilization, 4.2.2 Most/Least Worn, 4.2.3 Prompts
+│   │   └── index.ts                 # Module exports
+│   ├── FriendsAndRequestBoard/      # [WBS 5.0] Friends and Request Board
+│   │   ├── FriendsView.tsx          # 5.1.1 Friend Code, 5.1.2 Directory, 5.1.3 Friend Closet
+│   │   ├── LendingDashboardView.tsx # 5.1.4 Borrow Request Board (Sent/Received, Returns)
+│   │   ├── NotificationsView.tsx    # Social Request & Borrow Notifications
+│   │   ├── BorrowModal.tsx          # Borrow Date Selection with Interval Conflict Guard
+│   │   ├── friendsService.ts        # P2P Business Logic & Conflict Detection Algorithm
+│   │   └── index.ts                 # Module exports
+│   └── DonationMap/                 # [WBS 6.0] Donation Map
+│       ├── DonationMapSection.tsx   # 6.0 Donation Module Coordinator
+│       ├── CascadingFilters.tsx     # 6.1 & 6.2 Filter Location (Country, Province, City, Radius)
+│       ├── MapContainer.tsx         # 6.3 Google Maps + Offline Vector Fallback Grid
+│       ├── OpportunityDrawer.tsx    # 6.4 Donation Opportunity Details Display
+│       ├── OpportunityCard.tsx      # 6.4 Nearby Opportunity Card with Distance & Flags
+│       ├── AddDonationModal.tsx     # Crowdsource New Drop-off Hubs
+│       ├── FlagModal.tsx            # 6.5 Community Flagging Dialog (Inaccurate/Inactive)
+│       ├── mapsService.ts           # Geocoding & Proximity Business Logic
+│       ├── locationDirectory.ts     # Philippine Geographic Hierarchy
+│       └── index.ts                 # Module exports
 ├── components/
-│   ├── Auth/
-│   │   └── AuthView.tsx             # Authentication (Login/Register, Friend Code Login, Demo Profiles)
-│   ├── BSAS/
-│   │   ├── BSASIntroView.tsx        # Educational Onboarding on the 7 Clinical Dimensions
-│   │   └── BSASAssessmentModal.tsx  # 7-Step Diagnostic Stepper with 0–7 Scoring & Cutoff Calculation
-│   ├── VirtualCloset/
-│   │   ├── VirtualClosetView.tsx    # Multi-Attribute Wardrobe Grid (Active Categories, Colors, Wear Counts)
-│   │   ├── AddItemModal.tsx         # Add Garment (Single Category/Type Enforcement, Canvas BG Removal)
-│   │   └── EditItemModal.tsx        # Edit Garment Details & Photos
-│   ├── DailyLog/
-│   │   └── DailyLogView.tsx         # Daily Outfit Logger & 00:00 Midnight Finalization Simulator
-│   ├── Recovery/
-│   │   └── RecoveryView.tsx         # Longitudinal BSAS Score Line Chart, Cooldown, & SDG 12 Metrics
-│   ├── Friends/
-│   │   ├── FriendsView.tsx          # Friend Code Exchange & Friend Wardrobe Browsing
-│   │   ├── BorrowModal.tsx          # Borrow Date Selection with Schedule Overlap Conflict Guard
-│   │   └── LendingDashboardView.tsx # Requests Sent & Received, Approval, & Return Tracking
-│   ├── Profile/
-│   │   └── ProfileView.tsx          # User Identity, Fast Profile Switcher, Account Deletion Guard
-│   ├── Settings/
-│   │   └── SettingsView.tsx         # Visual Theme (Dark/Light) & Supabase Connection Modal Trigger
-│   ├── Navigation/
-│   │   ├── Sidebar.tsx              # Desktop & Mobile Drawer Navigation with Badge Counters
-│   │   └── Header.tsx               # Mobile Top App Bar with Theme Toggle
-│   ├── Modals/
-│   │   ├── DeleteCascadeModal.tsx   # PostgreSQL Cascade Awareness Confirmation Modal
-│   │   └── ConfirmModal.tsx         # Reusable Generic Confirmation Dialog
-│   ├── DonationMap/
-│   │   ├── CascadingFilters.tsx     # Country, Province, City cascading selects & distance radius
-│   │   ├── MapContainer.tsx         # Google Maps + Offline Vector Fallback Grid with custom pins
-│   │   ├── OpportunityDrawer.tsx    # Selected opportunity spotlight drawer & navigation
-│   │   ├── OpportunityCard.tsx      # Nearby location card with distance & flag counters
-│   │   └── FlagModal.tsx            # Community inaccuracy/inactivity reporting dialog
-│   ├── DonationMapSection.tsx       # Donation Module Coordinator (~340 lines)
-│   └── DatabaseModal.tsx            # Supabase Cloud Database Configuration & PostgreSQL Schema
-├── services/
-│   ├── closetService.ts             # Business logic for Garments, BSAS assessments, & Daily Logs
-│   ├── friendsService.ts            # Business logic for Connections and Borrow Schedules
-│   ├── mapsService.ts               # Business logic for Donation drop-off hubs & flags
-│   └── supabaseClient.ts            # Hybrid Offline MockDatabase & Live Supabase PostgreSQL client
-├── types/
-│   └── database.ts                  # TypeScript Entity Models matching the 11 Relational Tables
-└── utils/
-    └── imageProcessing.ts           # HTML5 Canvas Perceptual Color Distance & Silhouette Extraction
+│   ├── layout/                      # Shared Layout Elements (Header.tsx, Sidebar.tsx)
+│   └── modals/                      # Shared Modals (ConfirmModal.tsx, DatabaseModal.tsx)
+├── views/                           # General Account Views (AuthView.tsx, ProfileView.tsx, SettingsView.tsx)
+├── services/                        # Shared Infrastructure (closetService.ts, supabaseClient.ts)
+├── types/                           # Entity Models (database.ts matching 11 relational tables)
+└── data/                            # Database Seed & Schemas (schema.sql, seedData.ts)
 ```
 
 ---

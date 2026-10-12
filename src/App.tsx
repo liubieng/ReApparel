@@ -25,28 +25,42 @@ import {
   AppNotification 
 } from './types/database';
 
-// Modular view components
+// User Identity, Auth, & Settings
 import { AuthView } from './views/AuthView';
-import { BSASIntroView } from './views/BSASIntroView';
-import { VirtualClosetView } from './views/VirtualClosetView';
-import { DailyLogView } from './views/DailyLogView';
-import { RecoveryView } from './views/RecoveryView';
-import { FriendsView } from './views/FriendsView';
-import { LendingDashboardView } from './views/LendingDashboardView';
 import { ProfileView } from './views/ProfileView';
 import { SettingsView } from './views/SettingsView';
-import { DonationMapSection } from './views/DonationMapSection';
-import { NotificationsView } from './views/NotificationsView';
-import { ClosetStatisticsView } from './views/ClosetStatisticsView';
 
-// Layout & Modal dialog components
+// Module 1.0: Bergen Shopping Addiction Scale (BSAS)
+import { BSASIntroView, BSASAssessmentModal } from './modules/BSAS';
+
+// Module 2.0: Virtual Closet
+import { 
+  VirtualClosetView, 
+  AddItemModal, 
+  EditItemModal, 
+  DeleteCascadeModal 
+} from './modules/VirtualCloset';
+
+// Module 3.0: Daily Clothing Log
+import { DailyLogView } from './modules/DailyClothingLog';
+
+// Module 4.0: Recovery Progress
+import { RecoveryView, ClosetStatisticsView } from './modules/RecoveryProgress';
+
+// Module 5.0: Friends and Request Board
+import { 
+  FriendsView, 
+  LendingDashboardView, 
+  NotificationsView, 
+  BorrowModal 
+} from './modules/FriendsAndRequestBoard';
+
+// Module 6.0: Donation Map
+import { DonationMapSection } from './modules/DonationMap';
+
+// Layout & Reusable Dialog Components
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
-import { BSASAssessmentModal } from './components/modals/BSASAssessmentModal';
-import { AddItemModal } from './components/modals/AddItemModal';
-import { EditItemModal } from './components/modals/EditItemModal';
-import { BorrowModal } from './components/modals/BorrowModal';
-import { DeleteCascadeModal } from './components/modals/DeleteCascadeModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { DatabaseModal } from './components/modals/DatabaseModal';
 import { BrainCircuit } from 'lucide-react';
