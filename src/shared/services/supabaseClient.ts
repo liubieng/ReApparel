@@ -1322,9 +1322,9 @@ class MockDatabaseEngine {
       const item = this.state.clothing_items.find(i => i.item_id === b.item_id) || b.item;
       const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
       const lender = item
-        ? (this.state.users.find(u => u.user_id === item.user_id || isSameUser(u.user_id, item.user_id)) || b.lender)
+        ? (this.state.users.find(u => u.user_id === item.user_id || isSameUser(u.user_id, item.user_id)) || b.lender || (item.user_id ? { user_id: item.user_id } : undefined))
         : b.lender;
-      return { ...b, item, borrower, lender };
+      return { ...b, item, borrower, lender: lender as any };
     });
   }
 

@@ -360,4 +360,27 @@ ALTER TABLE IF EXISTS daily_clothing_log DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS daily_log_item DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS bsas_assessment DISABLE ROW LEVEL SECURITY;
 
+-- --------------------------------------------------------------------
+-- Supabase Realtime Publication for Live Cross-Client Sync
+-- --------------------------------------------------------------------
+DO $$
+BEGIN
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE clothing_item;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
+    EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
+
+
 

@@ -372,14 +372,13 @@ export const friendsService = {
       const joinRes = await withTimeout(
         supabase
           .from('borrow')
-          .select('*, clothing_item(*)'),
+          .select('*, clothing_item(item_id, user_id, name), borrower:users!borrower_id(user_id, first_name, last_name, email)'),
         4000
       );
       data = joinRes.data;
       error = joinRes.error;
 
       if (error || !data) {
-        console.warn('[friendsService] borrow join with clothing_item failed, falling back to simple select:', error?.message);
         const simpleRes = await withTimeout(
           supabase
             .from('borrow')
@@ -391,30 +390,24 @@ export const friendsService = {
       }
 
       if (!error && data && Array.isArray(data)) {
-
-        const knownItemIds = new Set(mockDatabase.getClothingItems().map(i => i.item_id));
-        const missingItemIds = data
-          .map((r: any) => r.item_id)
-          .filter((id: number) => id && !knownItemIds.has(id));
-
-        if (missingItemIds.length > 0) {
-          try {
-            const { data: remoteItems } = await supabase
-              .from('clothing_item')
-              .select('*')
-              .in('item_id', missingItemIds);
-            if (remoteItems && Array.isArray(remoteItems)) {
-              remoteItems.forEach((it: any) => mockDatabase.upsertClothingItem(it));
-            }
-          } catch (e) {
-            console.warn('[friendsService] error fetching missing clothing items for borrows:', e);
-          }
-        }
-
         data.forEach((r: any) => {
-          if (r.clothing_item) {
-            mockDatabase.upsertClothingItem(r.clothing_item);
+          const rawItem = r.clothing_item;
+          const localItem = mockDatabase.getItemById(r.item_id);
+          const item = localItem || rawItem;
+
+          const rawBorrower = r.borrower;
+          const localBorrower = mockDatabase.getAllUsers().find(u => u.user_id === r.borrower_id || isSameUser(u.user_id, r.borrower_id));
+          const borrower = localBorrower || rawBorrower;
+
+          const lenderId = item?.user_id;
+          const lender = lenderId
+            ? (mockDatabase.getAllUsers().find(u => u.user_id === lenderId || isSameUser(u.user_id, lenderId)) || { user_id: lenderId })
+            : undefined;
+
+          if (rawBorrower && !localBorrower) {
+            mockDatabase.upsertUser(rawBorrower as User);
           }
+
           mockDatabase.upsertBorrow({
             borrow_id: r.borrow_id,
             borrower_id: r.borrower_id,
@@ -423,7 +416,9 @@ export const friendsService = {
             end_date: r.end_date,
             status: r.status,
             created_at: r.created_at || new Date().toISOString(),
-            item: r.clothing_item
+            item: item,
+            borrower: borrower,
+            lender: lender as any
           });
         });
       }
