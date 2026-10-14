@@ -355,7 +355,7 @@ export default function App() {
   // Also re-syncs periodically (while the tab is visible) and on window focus, as a fallback
   // in case Supabase Realtime is not enabled for these tables.
   useEffect(() => {
-    if (view !== 'friends' && view !== 'notifications' && view !== 'requests') return;
+    if (view !== 'friends' && view !== 'notifications' && view !== 'requests' && view !== 'recovery') return;
     const uid = currentUser?.user_id;
     if (!uid) return;
 
@@ -908,6 +908,7 @@ export default function App() {
 
           {view === 'recovery' && (
             <RecoveryView
+              currentUser={currentUser}
               assessments={assessments}
               garments={garments}
               borrows={borrows}

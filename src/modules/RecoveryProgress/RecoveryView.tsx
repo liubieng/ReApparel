@@ -11,8 +11,9 @@ import {
   Info,
   UserCheck
 } from 'lucide-react';
-import { BSASAssessment, ClothingItem, Borrow } from '../../types/database';
+import { BSASAssessment, ClothingItem, Borrow, User } from '../../types/database';
 import { deduplicateAssessments } from '../../services/closetService';
+import { isSameUser, mockDatabase } from '../../services/supabaseClient';
 
 /**
  * ============================================================================
@@ -31,6 +32,7 @@ import { deduplicateAssessments } from '../../services/closetService';
  */
 
 interface RecoveryViewProps {
+  currentUser?: User | null;
   assessments: BSASAssessment[];
   garments: ClothingItem[];
   simulatedDaysOffset: number;
@@ -97,6 +99,7 @@ const BSAS_DIMENSIONS: BSASDimensionDef[] = [
 ];
 
 export const RecoveryView: React.FC<RecoveryViewProps> = ({
+  currentUser,
   assessments,
   garments,
   simulatedDaysOffset,
@@ -206,10 +209,18 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     }[];
   }, [garments]);
 
-  // Active accepted borrows
+  // Active accepted borrows: Only garments that the current user themselves borrowed
   const activeBorrows = useMemo(() => {
-    return borrows.filter(b => b.status === 'Accepted' || (b.status as string) === 'approved');
-  }, [borrows]);
+    const activeUser = currentUser || mockDatabase.getCurrentUser();
+    const currentUid = activeUser?.user_id;
+
+    return borrows.filter(b => {
+      const isAccepted = b.status?.toLowerCase() === 'accepted' || (b.status as string)?.toLowerCase() === 'approved';
+      if (!isAccepted) return false;
+      if (!currentUid) return false;
+      return isSameUser(b.borrower_id, currentUid) || isSameUser(b.borrower?.user_id, currentUid);
+    });
+  }, [borrows, currentUser]);
 
   // BSAS Progression modal state (TC_PROG_01, TC_PROG_02)
   const [showProgression, setShowProgression] = useState(false);
@@ -815,7 +826,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                 }}>
                   {activeBorrows.slice(0, 4).map(borrow => {
                     const item = borrow.item;
-                    const lender = borrow.lender;
+                    const lender = borrow.lender || (item?.user_id ? mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, item.user_id)) : undefined);
                     const isHex = item?.image_url?.startsWith('#');
                     const lenderInitial = lender?.first_name?.[0] || 'F';
 
