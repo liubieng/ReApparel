@@ -1,5 +1,6 @@
 import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, isSameUser, ensureUserSyncedToSupabase } from '../../shared/services/supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../../shared/types/database';
+import { CURATED_COLOR_FAMILIES } from '../../shared/data/seedData';
 
 export { deduplicateAssessments };
 
@@ -13,6 +14,51 @@ export interface BSASCooldownInfo {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 let dailyLogSyncChain: Promise<void> = Promise.resolve();
+
+async function syncItemTagsToSupabase(
+  supabase: any,
+  itemId: number,
+  category?: string,
+  color?: string,
+  customTags?: Tag[]
+): Promise<void> {
+  if (!supabase || !itemId) return;
+  try {
+    const { data: allTags } = await supabase.from('tag').select('*');
+    const tagsList: Tag[] = (allTags && allTags.length > 0) ? allTags : mockDatabase.getTags();
+
+    const tagIdsToLink = new Set<number>();
+
+    if (category) {
+      const catClean = category.trim().toLowerCase();
+      const matchedCat = tagsList.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === catClean);
+      if (matchedCat) tagIdsToLink.add(matchedCat.tag_id);
+    }
+
+    if (color) {
+      const colClean = color.trim().toLowerCase();
+      const matchedCol = tagsList.find(t => t.tag_type === 'Color' && t.tag_name.toLowerCase() === colClean);
+      if (matchedCol) tagIdsToLink.add(matchedCol.tag_id);
+    }
+
+    if (customTags && Array.isArray(customTags)) {
+      customTags.forEach(t => {
+        if (t.tag_id) tagIdsToLink.add(t.tag_id);
+      });
+    }
+
+    if (tagIdsToLink.size > 0) {
+      await supabase.from('item_tag').delete().eq('item_id', itemId);
+      const payload = Array.from(tagIdsToLink).map(tid => ({
+        item_id: itemId,
+        tag_id: tid
+      }));
+      await supabase.from('item_tag').insert(payload);
+    }
+  } catch (err) {
+    console.warn('Could not sync item_tag to Supabase:', err);
+  }
+}
 
 async function pushDateToRemote(userId: string, logDate: string): Promise<void> {
   const supabase = getSupabase();
@@ -112,10 +158,53 @@ export const closetService = {
                 if (it.tag?.tag_type === 'Color' && !col) col = it.tag.tag_name;
               });
             }
+
+            const loc = localItems.find(l => l.item_id === r.item_id);
+
+            // If category was not in Supabase item_tag, check local item or infer from garment name
+            if (!cat && loc?.category) {
+              cat = loc.category;
+            }
+            if (!cat && r.name) {
+              const nameLower = r.name.toLowerCase();
+              if (nameLower.includes('bottom') || nameLower.includes('pants') || nameLower.includes('skirt') || nameLower.includes('shorts')) cat = 'Bottoms';
+              else if (nameLower.includes('shoe') || nameLower.includes('sneaker') || nameLower.includes('boot') || nameLower.includes('loafer')) cat = 'Shoes';
+              else if (nameLower.includes('dress')) cat = 'Dresses';
+              else if (nameLower.includes('coat') || nameLower.includes('jacket') || nameLower.includes('blazer') || nameLower.includes('outerwear')) cat = 'Outerwear';
+              else if (nameLower.includes('knit') || nameLower.includes('cardigan') || nameLower.includes('sweater') || nameLower.includes('turtleneck')) cat = 'Knitwear';
+              else if (nameLower.includes('top') || nameLower.includes('shirt') || nameLower.includes('blouse') || nameLower.includes('tee')) cat = 'Tops';
+            }
+
+            // If color was not in Supabase item_tag, check local item or infer from garment name
+            if (!col && loc?.color) {
+              col = loc.color;
+            }
+            if (!col && r.name) {
+              const nameLower = r.name.toLowerCase();
+              for (const family of CURATED_COLOR_FAMILIES) {
+                if (nameLower.includes(family.name.toLowerCase())) {
+                  col = family.name;
+                  break;
+                }
+              }
+            }
+
+            const finalCat = cat || 'Tops';
+            const finalCol = col || 'Neutral';
+            const matchedFamily = CURATED_COLOR_FAMILIES.find(f => f.name.toLowerCase() === finalCol.toLowerCase());
+            const finalColorHex = matchedFamily?.hex || loc?.color_tag || '#64748b';
+
+            // Background heal if Supabase had no tag records for this item
+            if ((!r.item_tag || r.item_tag.length === 0) && (finalCat || finalCol)) {
+              syncItemTagsToSupabase(supabase, r.item_id, finalCat, finalCol).catch(() => {});
+            }
+
             return {
               ...r,
-              category: cat || r.category || 'Tops',
-              color: col || r.color || 'Neutral'
+              category: finalCat,
+              type_tag: finalCat,
+              color: finalCol,
+              color_tag: finalColorHex
             } as ClothingItem;
           });
 
@@ -125,7 +214,7 @@ export const closetService = {
             const loc = localItems.find(l => l.item_id === rem.item_id);
             if (loc) {
               const maxWear = Math.max(rem.wear_count || 0, loc.wear_count || 0, loc.worn_count || 0);
-              return { ...rem, ...loc, wear_count: maxWear, worn_count: maxWear };
+              return { ...loc, ...rem, wear_count: maxWear, worn_count: maxWear };
             }
             return rem;
           });
@@ -182,17 +271,7 @@ export const closetService = {
           }
 
           if (!error && data) {
-
-            if (item.tags && item.tags.length > 0) {
-              const tagsPayload = item.tags.map(t => ({
-                item_id: data.item_id,
-                tag_id: t.tag_id
-              }));
-              try {
-                await supabase.from('item_tag').insert(tagsPayload);
-              } catch {}
-            }
-
+            await syncItemTagsToSupabase(supabase, data.item_id, item.category, item.color, item.tags);
             mockDatabase.updateClothingItemId(localItem.item_id, data.item_id);
             return { ...localItem, item_id: data.item_id, ...data };
           }
@@ -217,6 +296,13 @@ export const closetService = {
             ...(updates.wear_count !== undefined && { wear_count: updates.wear_count })
           })
           .eq('item_id', itemId);
+
+        if (updates.category !== undefined || updates.color !== undefined || updates.tags !== undefined) {
+          const current = localUpdated || mockDatabase.getItemById(itemId);
+          const cat = updates.category !== undefined ? updates.category : current?.category;
+          const col = updates.color !== undefined ? updates.color : current?.color;
+          await syncItemTagsToSupabase(supabase, itemId, cat, col, updates.tags || current?.tags);
+        }
       } catch {
 
       }

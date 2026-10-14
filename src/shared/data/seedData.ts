@@ -270,7 +270,8 @@ export const NORMAL_CLOTHING_COLORS: CuratedColorFamily[] = [
   { name: 'Brown', hex: '#78350f' },
   { name: 'Beige', hex: '#d6c7a1' },
   { name: 'Green', hex: '#16a34a' },
-  { name: 'Red', hex: '#dc2626' }
+  { name: 'Red', hex: '#dc2626' },
+  { name: 'Neutral', hex: '#a8a29e' }
 ];
 
 export const CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear'] as const;

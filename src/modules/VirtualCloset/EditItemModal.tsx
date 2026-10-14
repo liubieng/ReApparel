@@ -92,7 +92,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
     try {
       await onUpdateItem(garment.item_id, {
         category,
-        type_tag: garment.type_tag,
+        type_tag: category,
         color,
         color_tag: colorHex,
         image_url: primaryImage,

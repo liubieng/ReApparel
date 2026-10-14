@@ -768,15 +768,25 @@ class MockDatabaseEngine {
     };
     this.state.clothing_items.unshift(newItem);
 
-    if (newItem.tags && newItem.tags.length > 0) {
+    const tagsToAdd: Tag[] = [...(newItem.tags || [])];
+    if (newItem.category && !tagsToAdd.some(t => t.tag_type === 'Category')) {
+      const match = this.state.tags.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === newItem.category?.toLowerCase());
+      if (match) tagsToAdd.push(match);
+    }
+    if (newItem.color && !tagsToAdd.some(t => t.tag_type === 'Color')) {
+      const match = this.state.tags.find(t => t.tag_type === 'Color' && t.tag_name.toLowerCase() === newItem.color?.toLowerCase());
+      if (match) tagsToAdd.push(match);
+    }
+    if (tagsToAdd.length > 0) {
       if (!this.state.item_tags) this.state.item_tags = [];
-      newItem.tags.forEach(tag => {
+      tagsToAdd.forEach(tag => {
         this.state.item_tags.push({
           item_tag_id: Date.now() + Math.floor(Math.random() * 10000),
           item_id: newItem.item_id,
           tag_id: tag.tag_id
         });
       });
+      newItem.tags = tagsToAdd;
     }
 
     this.notify();
@@ -788,16 +798,32 @@ class MockDatabaseEngine {
     if (idx === -1) return null;
     this.state.clothing_items[idx] = { ...this.state.clothing_items[idx], ...updates };
 
-    if (updates.tags) {
+    const currentItem = this.state.clothing_items[idx];
+    const category = updates.category !== undefined ? updates.category : currentItem.category;
+    const color = updates.color !== undefined ? updates.color : currentItem.color;
+
+    if (updates.tags || updates.category !== undefined || updates.color !== undefined) {
       if (!this.state.item_tags) this.state.item_tags = [];
       this.state.item_tags = this.state.item_tags.filter(it => it.item_id !== itemId);
-      updates.tags.forEach(tag => {
+
+      const tagsToAdd: Tag[] = [...(updates.tags || [])];
+      if (category && !tagsToAdd.some(t => t.tag_type === 'Category')) {
+        const match = this.state.tags.find(t => t.tag_type === 'Category' && t.tag_name.toLowerCase() === category.toLowerCase());
+        if (match) tagsToAdd.push(match);
+      }
+      if (color && !tagsToAdd.some(t => t.tag_type === 'Color')) {
+        const match = this.state.tags.find(t => t.tag_type === 'Color' && t.tag_name.toLowerCase() === color.toLowerCase());
+        if (match) tagsToAdd.push(match);
+      }
+
+      tagsToAdd.forEach(tag => {
         this.state.item_tags.push({
           item_tag_id: Date.now() + Math.floor(Math.random() * 10000),
           item_id: itemId,
           tag_id: tag.tag_id
         });
       });
+      this.state.clothing_items[idx].tags = tagsToAdd;
     }
 
     this.notify();
