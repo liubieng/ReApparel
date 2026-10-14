@@ -36,19 +36,47 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
   const pendingBorrows = borrows.filter(b =>
     (isSameUser(b.lender?.user_id, currentUser.user_id) ||
-     isSameUser(b.item?.user_id, currentUser.user_id) ||
-     b.lender?.user_id === currentUser.user_id ||
-     b.item?.user_id === currentUser.user_id) &&
-    b.status === 'Pending'
+     isSameUser(b.item?.user_id, currentUser.user_id)) &&
+    (b.status === 'Pending' || b.status?.toLowerCase() === 'pending')
   );
 
   const pendingFriends = friendRequests.filter(r =>
-    r.receiver_id === currentUser.user_id && r.status === 'pending'
+    isSameUser(r.receiver_id, currentUser.user_id) && r.status === 'pending'
   );
 
-  const inboxItems: AppNotification[] = notifications !== undefined
+  const rawInboxItems: AppNotification[] = notifications !== undefined
     ? notifications
     : friendsService.getNotifications(currentUser.user_id);
+
+  const inboxItems = React.useMemo(() => {
+    const items = [...rawInboxItems];
+    pendingFriends.forEach(req => {
+      const alreadyHas = items.some(
+        n => n.type === 'friend_request' &&
+             (n.request_id === req.request_id ||
+              (isSameUser(n.sender_id, req.sender_id) && isSameUser(n.receiver_id, req.receiver_id)))
+      );
+      if (!alreadyHas) {
+        const sender = req.sender || friendsService.getAllUsers().find(u => isSameUser(u.user_id, req.sender_id));
+        const senderName = sender ? `${sender.first_name} ${sender.last_name}` : 'A member';
+        const senderCode = sender?.friend_code ? ` (${sender.friend_code})` : '';
+        items.unshift({
+          id: `synth-fr-${req.request_id}`,
+          user_id: currentUser.user_id,
+          title: `${sender ? sender.first_name : 'A member'} sent you a friend request!`,
+          message: `${senderName}${senderCode} wants to connect and share wardrobes with you.`,
+          time: 'Recently',
+          type: 'friend_request',
+          read: false,
+          sender_name: senderName,
+          sender_id: req.sender_id,
+          receiver_id: req.receiver_id,
+          request_id: req.request_id
+        });
+      }
+    });
+    return items;
+  }, [rawInboxItems, pendingFriends, currentUser.user_id]);
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -133,7 +161,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                     {item.type === 'friend_request' && (() => {
                       const pendingReq = friendRequests.find(r =>
                         (r.request_id === item.request_id ||
-                         (r.sender_id === item.sender_id && r.receiver_id === currentUser.user_id)) &&
+                         (isSameUser(r.sender_id, item.sender_id) && isSameUser(r.receiver_id, currentUser.user_id))) &&
                         r.status === 'pending'
                       );
                       if (pendingReq) {
@@ -349,7 +377,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
               ))}
 
               {pendingFriends.map(req => {
-                const sender = req.sender || friendsService.getAllUsers().find(u => u.user_id === req.sender_id);
+                const sender = req.sender || friendsService.getAllUsers().find(u => isSameUser(u.user_id, req.sender_id));
                 const senderDisplayName = sender ? `${sender.first_name} ${sender.last_name}` : 'Peer';
                 return (
                   <div

@@ -1725,16 +1725,21 @@ class MockDatabaseEngine {
 
 export const mockDatabase = new MockDatabaseEngine();
 
+const syncedUserSessionCache = new Set<string>();
+
 export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
   const supabase = getSupabase();
   if (!supabase || !user) return user;
 
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  try {
+  if (UUID_PATTERN.test(user.user_id) && syncedUserSessionCache.has(user.user_id)) {
+    return user;
+  }
 
+  try {
     try {
-      const { data: authData } = await supabase.auth.getUser();
+      const { data: authData } = await withTimeout(supabase.auth.getUser(), 2000);
       if (authData?.user?.id && authData.user.email?.toLowerCase() === user.email?.toLowerCase()) {
         if (user.user_id !== authData.user.id) {
           mockDatabase.realignUserId(user.user_id, authData.user.id);
@@ -1744,31 +1749,38 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
     } catch {}
 
     if (UUID_PATTERN.test(user.user_id)) {
-      const { data: byId } = await supabase
-        .from('users')
-        .select('*')
-        .eq('user_id', user.user_id)
-        .limit(1);
+      const { data: byId } = await withTimeout(
+        supabase
+          .from('users')
+          .select('*')
+          .eq('user_id', user.user_id)
+          .limit(1),
+        2000
+      );
 
       if (byId && byId.length > 0) {
+        syncedUserSessionCache.add(user.user_id);
         return byId[0] as User;
       }
     }
 
     if (user.email) {
-      const { data: byEmail } = await supabase
-        .from('users')
-        .select('*')
-        .ilike('email', user.email.trim())
-        .limit(1);
+      const { data: byEmail } = await withTimeout(
+        supabase
+          .from('users')
+          .select('*')
+          .ilike('email', user.email.trim())
+          .limit(1),
+        2000
+      );
 
       if (byEmail && byEmail.length > 0) {
         const remoteUser = byEmail[0] as User;
-
         const oldUid = user.user_id;
         const newUid = remoteUser.user_id;
         mockDatabase.realignUserId(oldUid, newUid);
         mockDatabase.upsertUser(remoteUser);
+        syncedUserSessionCache.add(newUid);
         return remoteUser;
       }
     }
@@ -1776,7 +1788,7 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
     let canonicalUid = user.user_id;
     if (!UUID_PATTERN.test(canonicalUid)) {
       try {
-        const { data: authData } = await supabase.auth.getUser();
+        const { data: authData } = await withTimeout(supabase.auth.getUser(), 2000);
         if (authData?.user?.id && authData.user.email?.toLowerCase() === user.email?.toLowerCase()) {
           canonicalUid = authData.user.id;
         } else {
@@ -1799,10 +1811,16 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
       created_at: user.created_at || new Date().toISOString()
     };
 
-    let { error } = await supabase.from('users').upsert(insertPayload, { onConflict: 'user_id' });
+    let { error } = await withTimeout(
+      supabase.from('users').upsert(insertPayload, { onConflict: 'user_id' }),
+      2500
+    );
     if (error && (error.code === '42703' || error.message?.includes('password'))) {
       delete insertPayload.password;
-      const retry = await supabase.from('users').upsert(insertPayload, { onConflict: 'user_id' });
+      const retry = await withTimeout(
+        supabase.from('users').upsert(insertPayload, { onConflict: 'user_id' }),
+        2500
+      );
       error = retry.error;
     }
 
@@ -1810,6 +1828,7 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
       console.warn('[ensureUserSyncedToSupabase] error upserting user:', error.message);
     } else {
       mockDatabase.upsertUser(user);
+      syncedUserSessionCache.add(user.user_id);
     }
   } catch (err) {
     console.warn('[ensureUserSyncedToSupabase] exception:', err);

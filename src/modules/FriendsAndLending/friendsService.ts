@@ -19,102 +19,152 @@ export const friendsService = {
   },
 
   async sendFriendRequest(friendCode: string): Promise<{ success: boolean; message: string }> {
-    const cleanCode = friendCode.trim().toUpperCase();
+    const rawClean = friendCode.trim().toUpperCase();
     const currentUser = mockDatabase.getCurrentUser();
     if (!currentUser) {
       return { success: false, message: 'Please log in or register first.' };
     }
 
-    let targetUser = mockDatabase.getAllUsers().find(u => u.friend_code.toUpperCase() === cleanCode);
+    if (currentUser.friend_code && currentUser.friend_code.toUpperCase() === rawClean) {
+      return { success: false, message: 'You cannot add yourself as a friend.' };
+    }
 
+    // 1. Direct match in local cache
+    let targetUser = mockDatabase.getAllUsers().find(u => u.friend_code.toUpperCase() === rawClean);
+
+    // 2. Direct match in Supabase
     if (!targetUser) {
       const supabase = getSupabase();
       if (supabase) {
         try {
-          const { data, error } = await supabase
-            .from('users')
-            .select('*')
-            .ilike('friend_code', cleanCode)
-            .limit(1);
+          const { data, error } = await withTimeout(
+            supabase
+              .from('users')
+              .select('*')
+              .ilike('friend_code', rawClean)
+              .limit(1),
+            2500
+          );
 
           if (!error && data && data.length > 0) {
             targetUser = data[0] as User;
             mockDatabase.upsertUser(targetUser);
           }
-        } catch {
+        } catch {}
+      }
+    }
 
+    // 3. Typo-tolerance / Visual confusion resolution (e.g., 'B' vs '8', 'O' vs '0', 'I' vs '1')
+    if (!targetUser) {
+      const candidates = new Set<string>();
+      if (rawClean.includes('B')) candidates.add(rawClean.replace(/B/g, '8'));
+      if (rawClean.includes('8')) candidates.add(rawClean.replace(/8/g, 'B'));
+      if (rawClean.includes('O')) candidates.add(rawClean.replace(/O/g, '0'));
+      if (rawClean.includes('0')) candidates.add(rawClean.replace(/0/g, 'O'));
+      if (rawClean.includes('I')) candidates.add(rawClean.replace(/I/g, '1'));
+      if (rawClean.includes('1')) candidates.add(rawClean.replace(/1/g, 'I'));
+
+      for (const alt of candidates) {
+        targetUser = mockDatabase.getAllUsers().find(u => u.friend_code.toUpperCase() === alt);
+        if (targetUser) break;
+
+        const supabase = getSupabase();
+        if (supabase) {
+          try {
+            const { data } = await withTimeout(
+              supabase.from('users').select('*').ilike('friend_code', alt).limit(1),
+              2000
+            );
+            if (data && data.length > 0) {
+              targetUser = data[0] as User;
+              mockDatabase.upsertUser(targetUser);
+              break;
+            }
+          } catch {}
         }
       }
     }
 
-    if (targetUser) {
-      const tu = targetUser;
-      const betweenUs = (r: { sender_id: string; receiver_id: string }) =>
-        (isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id)) ||
-        (isSameUser(r.sender_id, tu.user_id) && isSameUser(r.receiver_id, currentUser.user_id));
-      const dropLocalNonAccepted = () => {
-        mockDatabase.getFriendRequests()
-          .filter(r => betweenUs(r) && r.status !== 'accepted')
-          .forEach(r => mockDatabase.deleteFriendRequest(r.request_id));
+    if (!targetUser) {
+      return {
+        success: false,
+        message: `Friend code "${rawClean}" not found. Please verify the code (e.g. check for 8 vs B or 0 vs O).`
       };
+    }
 
-      const supabase = getSupabase();
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
+    const effectiveCode = targetUser.friend_code;
+
+    const tu = targetUser;
+    const betweenUs = (r: { sender_id: string; receiver_id: string }) =>
+      (isSameUser(r.sender_id, currentUser.user_id) && isSameUser(r.receiver_id, tu.user_id)) ||
+      (isSameUser(r.sender_id, tu.user_id) && isSameUser(r.receiver_id, currentUser.user_id));
+    const dropLocalNonAccepted = () => {
+      mockDatabase.getFriendRequests()
+        .filter(r => betweenUs(r) && r.status !== 'accepted')
+        .forEach(r => mockDatabase.deleteFriendRequest(r.request_id));
+    };
+
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
             .from('friend_request')
             .select('request_id, status')
-            .or(`and(sender_id.eq.${currentUser.user_id},receiver_id.eq.${tu.user_id}),and(sender_id.eq.${tu.user_id},receiver_id.eq.${currentUser.user_id})`);
+            .or(`and(sender_id.eq.${currentUser.user_id},receiver_id.eq.${tu.user_id}),and(sender_id.eq.${tu.user_id},receiver_id.eq.${currentUser.user_id})`),
+          2500
+        );
 
-          if (!error && data) {
-            if (data.some((r: any) => r.status === 'accepted')) {
-              return { success: false, message: 'You are already friends with this person!' };
-            }
-
-            const rejectedIds = data.filter((r: any) => r.status === 'rejected').map((r: any) => r.request_id);
-            if (rejectedIds.length > 0) {
-              await supabase.from('friend_request').delete().in('request_id', rejectedIds);
-            }
-
-            if (!data.some((r: any) => r.status === 'pending')) {
-              dropLocalNonAccepted();
-            }
+        if (!error && data) {
+          if (data.some((r: any) => r.status === 'accepted')) {
+            return { success: false, message: `You are already friends with ${tu.first_name} ${tu.last_name}!` };
           }
-        } catch {
 
+          const rejectedIds = data.filter((r: any) => r.status === 'rejected').map((r: any) => r.request_id);
+          if (rejectedIds.length > 0) {
+            await withTimeout(
+              supabase.from('friend_request').delete().in('request_id', rejectedIds),
+              2000
+            );
+          }
+
+          if (!data.some((r: any) => r.status === 'pending')) {
+            dropLocalNonAccepted();
+          }
         }
-      } else {
-        mockDatabase.getFriendRequests()
-          .filter(r => betweenUs(r) && r.status === 'rejected')
-          .forEach(r => mockDatabase.deleteFriendRequest(r.request_id));
-      }
+      } catch {}
+    } else {
+      mockDatabase.getFriendRequests()
+        .filter(r => betweenUs(r) && r.status === 'rejected')
+        .forEach(r => mockDatabase.deleteFriendRequest(r.request_id));
     }
 
-    const res = mockDatabase.sendFriendRequest(friendCode);
+    const res = mockDatabase.sendFriendRequest(effectiveCode);
 
     if (res.success && targetUser) {
       const supabase = getSupabase();
       if (supabase) {
         try {
-
           const syncedSender = await ensureUserSyncedToSupabase(currentUser);
           const syncedTarget = await ensureUserSyncedToSupabase(targetUser);
 
-          const { data, error } = await supabase
-            .from('friend_request')
-            .upsert([
-              {
-                sender_id: syncedSender.user_id,
-                receiver_id: syncedTarget.user_id,
-                status: 'pending',
-                updated_at: new Date().toISOString()
-              }
-            ], { onConflict: 'sender_id,receiver_id' })
-            .select();
+          const { data, error } = await withTimeout(
+            supabase
+              .from('friend_request')
+              .upsert([
+                {
+                  sender_id: syncedSender.user_id,
+                  receiver_id: syncedTarget.user_id,
+                  status: 'pending',
+                  updated_at: new Date().toISOString()
+                }
+              ], { onConflict: 'sender_id,receiver_id' })
+              .select(),
+            3000
+          );
 
           if (error) {
             console.warn('[friendsService] Supabase friend_request error:', error.message);
-
             const localOnly = mockDatabase.getFriendRequests().find(
               r => isSameUser(r.sender_id, syncedSender.user_id) && isSameUser(r.receiver_id, syncedTarget.user_id) && r.status === 'pending'
             );
@@ -197,6 +247,24 @@ export const friendsService = {
               });
             } else if (insErr) {
               console.warn('[friendsService] Could not push unsynced friend_request:', insErr.message);
+            }
+          } catch {}
+        }
+
+        // Ensure any foreign senders/receivers are known in local user store
+        const missingUserIds = Array.from(new Set(
+          remote.flatMap(r => [r.sender_id, r.receiver_id])
+            .filter(id => id && !mockDatabase.getAllUsers().some(u => isSameUser(u.user_id, id)))
+        ));
+
+        if (missingUserIds.length > 0) {
+          try {
+            const { data: usersData } = await withTimeout(
+              supabase.from('users').select('*').in('user_id', missingUserIds),
+              2500
+            );
+            if (usersData && Array.isArray(usersData)) {
+              usersData.forEach((u: any) => mockDatabase.upsertUser(u));
             }
           } catch {}
         }

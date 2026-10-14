@@ -168,28 +168,33 @@ export const closetService = {
             wear_count: 0
           };
 
-          let { data, error } = await supabase
-            .from('clothing_item')
-            .insert([itemPayload])
-            .select()
-            .single();
+          let { data, error } = await withTimeout(
+            supabase
+              .from('clothing_item')
+              .insert([itemPayload])
+              .select()
+              .single(),
+            2500
+          );
 
           if (error && (error.code === '23502' || error.message?.includes('addition_type'))) {
             itemPayload.addition_type = 'Old';
-            const retry = await supabase.from('clothing_item').insert([itemPayload]).select().single();
+            const retry = await withTimeout(
+              supabase.from('clothing_item').insert([itemPayload]).select().single(),
+              2500
+            );
             data = retry.data;
             error = retry.error;
           }
 
           if (!error && data) {
-
             if (item.tags && item.tags.length > 0) {
               const tagsPayload = item.tags.map(t => ({
                 item_id: data.item_id,
                 tag_id: t.tag_id
               }));
               try {
-                await supabase.from('item_tag').insert(tagsPayload);
+                await withTimeout(supabase.from('item_tag').insert(tagsPayload), 2000);
               } catch {}
             }
 

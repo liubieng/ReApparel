@@ -582,22 +582,29 @@ export default function App() {
 
   const handleAddGarment = async (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => {
     const activeUid = item.user_id || currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
-    await closetService.addItem({
+    const addedItem = await closetService.addItem({
       ...item,
       user_id: activeUid
     });
-    await loadData();
+    setGarments(prev => {
+      const exists = prev.some(g => g.item_id === addedItem.item_id);
+      return exists ? prev.map(g => g.item_id === addedItem.item_id ? addedItem : g) : [addedItem, ...prev];
+    });
+    toast(`Added "${addedItem.name}" to your closet!`);
   };
 
   const handleUpdateGarment = async (itemId: number, updates: Partial<ClothingItem>) => {
-    await closetService.updateItem(itemId, updates);
-    await loadData();
+    const updated = await closetService.updateItem(itemId, updates);
+    if (updated) {
+      setGarments(prev => prev.map(g => g.item_id === itemId ? { ...g, ...updated } : g));
+    }
+    toast('Clothing item updated!');
   };
 
   const handleConfirmDeleteGarment = async (itemId: number) => {
     await closetService.deleteItem(itemId);
+    setGarments(prev => prev.filter(g => g.item_id !== itemId));
     setDeletingGarment(null);
-    await loadData();
     toast('Clothing item deleted from your closet.');
   };
 

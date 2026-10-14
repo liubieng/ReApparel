@@ -13,7 +13,8 @@ import {
   UserCheck,
   Inbox,
   RotateCcw,
-  UserMinus
+  UserMinus,
+  AlertCircle
 } from 'lucide-react';
 import { User, FriendRequest, ClothingItem } from '../../shared/types/database';
 import { friendsService } from './friendsService';
@@ -56,6 +57,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
   const [friendCodeInput, setFriendCodeInput] = useState('');
   const [isSendingRequest, setIsSendingRequest] = useState(false);
+  const [requestFeedback, setRequestFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
   const [friendGarments, setFriendGarments] = useState<ClothingItem[]>([]);
@@ -106,24 +108,36 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRequestFeedback(null);
     const code = friendCodeInput.trim();
     if (!code) {
-      toast('Please enter a friend code.');
+      setRequestFeedback({ type: 'error', message: 'Please enter a friend code.' });
       return;
     }
-    if (code === currentUser.friend_code) {
-      toast('You cannot add yourself as a friend.');
+    if (code.toUpperCase() === (currentUser.friend_code || '').toUpperCase()) {
+      setRequestFeedback({ type: 'error', message: 'You cannot add yourself as a friend.' });
       return;
     }
     setIsSendingRequest(true);
     try {
       const res = await friendsService.sendFriendRequest(code);
-      toast(res.message);
       if (res.success) {
-        setFriendCodeInput('');
-        setIsAddFriendModalOpen(false);
-        await onRefreshData();
+        setRequestFeedback({ type: 'success', message: res.message });
+        toast(res.message);
+        setTimeout(() => {
+          setFriendCodeInput('');
+          setRequestFeedback(null);
+          setIsAddFriendModalOpen(false);
+          onRefreshData();
+        }, 1200);
+      } else {
+        setRequestFeedback({ type: 'error', message: res.message });
+        toast(res.message);
       }
+    } catch (err: any) {
+      const errTxt = err?.message || 'An error occurred while connecting. Please try again.';
+      setRequestFeedback({ type: 'error', message: errTxt });
+      toast(errTxt);
     } finally {
       setIsSendingRequest(false);
     }
@@ -1179,6 +1193,25 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               </div>
             </div>
 
+            {requestFeedback && (
+              <div style={{
+                padding: '9px 12px',
+                borderRadius: 8,
+                marginBottom: 14,
+                fontSize: 12.5,
+                lineHeight: 1.4,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: requestFeedback.type === 'error' ? 'var(--danger-soft, #fee2e2)' : 'var(--primary-soft, #d1fae5)',
+                color: requestFeedback.type === 'error' ? 'var(--danger, #dc2626)' : 'var(--primary, #059669)',
+                border: `1px solid ${requestFeedback.type === 'error' ? 'var(--danger, #dc2626)' : 'var(--primary, #059669)'}`
+              }}>
+                <AlertCircle style={{ width: 15, height: 15, flexShrink: 0 }} />
+                <span>{requestFeedback.message}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSendRequest}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                 Enter Friend's Code
@@ -1186,19 +1219,39 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 16 }}>
                 <input
                   type="text"
-                  placeholder="e.g. lee101"
+                  placeholder="e.g. RP-MARI-8464"
                   value={friendCodeInput}
-                  onChange={(e) => setFriendCodeInput(e.target.value)}
+                  onChange={(e) => {
+                    setFriendCodeInput(e.target.value);
+                    if (requestFeedback) setRequestFeedback(null);
+                  }}
                   style={{ fontSize: 13 }}
+                  disabled={isSendingRequest}
                 />
                 <button
                   type="submit"
                   className="btn btn-p"
                   disabled={isSendingRequest}
-                  style={{ fontSize: 12, padding: '7px 14px', whiteSpace: 'nowrap' }}
+                  style={{ fontSize: 12, padding: '7px 14px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  <UserPlus className="ico" />
-                  <span>Connect</span>
+                  {isSendingRequest ? (
+                    <>
+                      <div style={{
+                        width: 12,
+                        height: 12,
+                        border: '2px solid #ffffff',
+                        borderTopColor: 'transparent',
+                        borderRadius: '50%',
+                        animation: 'spin 0.6s linear infinite'
+                      }} />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="ico" />
+                      <span>Connect</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -1207,7 +1260,10 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
               type="button"
               className="btn btn-g"
               style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}
-              onClick={() => setIsAddFriendModalOpen(false)}
+              onClick={() => {
+                setIsAddFriendModalOpen(false);
+                setRequestFeedback(null);
+              }}
             >
               Close
             </button>
