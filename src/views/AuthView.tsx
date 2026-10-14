@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Shirt, 
-  Sparkles, 
-  ArrowRight, 
-  ShieldCheck, 
-  KeyRound, 
-  UserPlus, 
-  LogIn, 
-  AlertCircle, 
-  Mail, 
-  MailCheck, 
-  CheckCircle2, 
-  RefreshCw, 
+import {
+  Shirt,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  KeyRound,
+  UserPlus,
+  LogIn,
+  AlertCircle,
+  Mail,
+  MailCheck,
+  CheckCircle2,
+  RefreshCw,
   ArrowLeft,
   Eye,
   EyeOff
@@ -121,8 +121,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
 
           // Check if Supabase rejected because email is not confirmed
           if (authError) {
-            const isUnconfirmed = 
-              authError.code === 'email_not_confirmed' || 
+            const isUnconfirmed =
+              authError.code === 'email_not_confirmed' ||
               authError.message?.toLowerCase().includes('email not confirmed');
 
             if (isUnconfirmed) {
@@ -162,7 +162,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                 onLoginSuccess(remoteUser, false);
                 return;
               }
-            } catch {}
+            } catch { }
 
             setErrorMsg('The login credentials are invalid. Please check your password.');
             return;
@@ -192,7 +192,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                     appUser = byEmail[0] as User;
                   }
                 }
-              } catch {}
+              } catch { }
             }
 
             if (!appUser) {
@@ -216,7 +216,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                   password: pwd,
                   created_at: appUser.created_at
                 });
-              } catch {}
+              } catch { }
             } else {
               if (pwd && !appUser.password) appUser.password = pwd;
               mockDatabase.upsertUser(appUser);
@@ -257,7 +257,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               mockDatabase.setCurrentUserId(remoteUser.user_id);
               user = remoteUser;
             }
-          } catch {}
+          } catch { }
         }
 
         if (user) {
@@ -493,7 +493,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             friend_code: appUser.friend_code,
             created_at: appUser.created_at
           });
-        } catch {}
+        } catch { }
 
         toast(`Email confirmed! Welcome to ReApparel, ${appUser.first_name}.`);
         onLoginSuccess(appUser, true);
@@ -526,7 +526,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               friend_code: appUser.friend_code,
               created_at: appUser.created_at
             });
-          } catch {}
+          } catch { }
 
           toast(`Email confirmed! Welcome to ReApparel, ${appUser.first_name}.`);
           onLoginSuccess(appUser, true);
@@ -595,7 +595,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     return (
       <div className="center-shell">
         <div className="card" style={{ maxWidth: 460, width: '100%', padding: '32px 26px', boxShadow: 'var(--shadow)' }}>
-          
+
           {/* Header Badge */}
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <div style={{
@@ -824,7 +824,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   return (
     <div className="center-shell">
       <div className="card" style={{ maxWidth: 440, width: '100%', padding: '28px 24px', boxShadow: 'var(--shadow)' }}>
-        
+
         {/* Branding & Identity */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
@@ -1007,14 +1007,14 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             type="submit"
             disabled={isSubmitting}
             className="btn btn-p"
-            style={{ 
-              width: '100%', 
-              justifyContent: 'center', 
-              padding: '10px 14px', 
-              fontSize: 14, 
+            style={{
+              width: '100%',
+              justifyContent: 'center',
+              padding: '10px 14px',
+              fontSize: 14,
               fontWeight: 600,
               borderRadius: 20,
-              marginTop: 10 
+              marginTop: 10
             }}
           >
             {isSubmitting ? (
