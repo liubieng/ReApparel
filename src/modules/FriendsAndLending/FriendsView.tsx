@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { User, FriendRequest, ClothingItem } from '../../shared/types/database';
 import { friendsService } from './friendsService';
+import { mockDatabase } from '../../shared/services/supabaseClient';
 import { closetService, inferCategoryFromName, inferColorFromName, resolveGarmentCategory, resolveGarmentColor } from '../VirtualCloset';
 import { NORMAL_CLOTHING_COLORS } from '../../shared/data/seedData';
 
@@ -147,7 +148,13 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     setViewingFriend(friend);
     setSubView('single-closet');
     clearAllFilters();
-    setIsLoadingSingleCloset(true);
+    // Instant cache pre-population: Show cached garments immediately so screen is never blank
+    const cachedItems = mockDatabase.getClothingItems(friend.user_id).filter((i: ClothingItem) => i.is_public !== false);
+    if (cachedItems.length > 0) {
+      setFriendGarments(cachedItems);
+    } else {
+      setIsLoadingSingleCloset(true);
+    }
     try {
       const items = await closetService.getItems(friend.user_id);
       const publicItems = items.filter(i => i.is_public !== false);
@@ -162,18 +169,22 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     clearAllFilters();
     setIsLoadingAllClosets(true);
     try {
-      const combined: ItemWithFriend[] = [];
-      for (const friend of friends) {
-        const items = await closetService.getItems(friend.user_id);
-        const publicItems = items.filter(i => i.is_public !== false);
-        for (const item of publicItems) {
-          combined.push({
-            ...item,
-            ownerFriend: friend
-          });
-        }
-      }
-      setAllFriendsGarments(combined);
+      // Parallel fetch across all friends simultaneously instead of slow sequential loop
+      const allResults = await Promise.all(
+        friends.map(async friend => {
+          try {
+            const items = await closetService.getItems(friend.user_id);
+            const publicItems = items.filter(i => i.is_public !== false);
+            return publicItems.map(item => ({
+              ...item,
+              ownerFriend: friend
+            }));
+          } catch {
+            return [];
+          }
+        })
+      );
+      setAllFriendsGarments(allResults.flat());
     } finally {
       setIsLoadingAllClosets(false);
     }

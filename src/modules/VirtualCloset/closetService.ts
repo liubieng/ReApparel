@@ -221,7 +221,25 @@ export const closetService = {
           .eq('user_id', targetUid)
           .order('date_added', { ascending: false });
 
-        const { data, error } = await withTimeout(query, 3000);
+        let { data, error } = await withTimeout(query, 2500);
+
+        // Fallback to direct select('*') if 3-way join failed or timed out
+        if (error || !data || data.length === 0) {
+          try {
+            const directRes = await withTimeout(
+              supabase
+                .from('clothing_item')
+                .select('*')
+                .eq('user_id', targetUid)
+                .order('date_added', { ascending: false }),
+              2000
+            );
+            if (directRes.data && directRes.data.length > 0) {
+              data = directRes.data;
+              error = null;
+            }
+          } catch {}
+        }
 
         if (!error && data && data.length > 0) {
           const remoteItems = (data as any[]).map(r => {
