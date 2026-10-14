@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, isSameUser } from './supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../types/database';
 
 export { deduplicateAssessments };
@@ -269,14 +269,25 @@ export const closetService = {
 
         if (!error && data && data.length > 0) {
           const remoteAssessments = deduplicateAssessments(data as BSASAssessment[]);
+          // Merge local breakdown into remote assessments so remote records do not erase breakdown
+          const merged = remoteAssessments.map(rem => {
+            const matchingLocal = localAssessments.find(loc =>
+              loc.assessment_id === rem.assessment_id ||
+              (isSameUser(loc.user_id, rem.user_id) &&
+               Math.abs(new Date(loc.taken_at).getTime() - new Date(rem.taken_at).getTime()) < 60000)
+            );
+            const breakdown = matchingLocal?.breakdown || getStoredAssessmentBreakdown(rem.user_id, rem.assessment_id);
+            return breakdown ? { ...rem, breakdown } : rem;
+          });
+
           // Cache into the local store so local re-hydration (on navigation) keeps them
-          mockDatabase.mergeRemoteAssessments(remoteAssessments);
-          const merged = [...remoteAssessments];
+          mockDatabase.mergeRemoteAssessments(merged);
 
           localAssessments.forEach(loc => {
             const isDuplicate = merged.some(m =>
               m.assessment_id === loc.assessment_id ||
-              Math.abs(new Date(m.taken_at).getTime() - new Date(loc.taken_at).getTime()) < 60000
+              (isSameUser(m.user_id, loc.user_id) &&
+               Math.abs(new Date(m.taken_at).getTime() - new Date(loc.taken_at).getTime()) < 60000)
             );
             if (!isDuplicate) {
               merged.push(loc);

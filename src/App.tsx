@@ -282,8 +282,8 @@ export default function App() {
         // submitted a BSAS, so a stale response must never overwrite a newer local assessment.
         if (userAssessments) {
           setAssessments(deduplicateAssessments([
-            ...userAssessments,
-            ...mockDatabase.getAssessments(user.user_id)
+            ...mockDatabase.getAssessments(user.user_id),
+            ...userAssessments
           ]));
         }
         if (userLogs) setDailyLogs(userLogs);

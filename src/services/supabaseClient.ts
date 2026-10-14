@@ -355,6 +355,34 @@ export function getLocalDateString(d: Date = new Date()): string {
 
 export const SPAM_ASSESSMENT_IDS = new Set<number>([72, 73, 74, 75, 76, 77]);
 
+export const STORAGE_KEY_BSAS_BREAKDOWNS = 'reapparel_bsas_breakdowns_v2';
+
+export function saveAssessmentBreakdown(userId: string, assessmentId: string | number, breakdown?: BSASAssessment['breakdown']) {
+  if (!breakdown || !userId) return;
+  try {
+    const raw = safeStorage.getItem(STORAGE_KEY_BSAS_BREAKDOWNS);
+    const map = raw ? JSON.parse(raw) : {};
+    map[`${userId}_${assessmentId}`] = breakdown;
+    map[`${userId}_latest`] = breakdown;
+    safeStorage.setItem(STORAGE_KEY_BSAS_BREAKDOWNS, JSON.stringify(map));
+  } catch {}
+}
+
+export function getStoredAssessmentBreakdown(userId: string, assessmentId?: string | number): BSASAssessment['breakdown'] | undefined {
+  if (!userId) return undefined;
+  try {
+    const raw = safeStorage.getItem(STORAGE_KEY_BSAS_BREAKDOWNS);
+    if (!raw) return undefined;
+    const map = JSON.parse(raw);
+    if (assessmentId !== undefined && map[`${userId}_${assessmentId}`]) {
+      return map[`${userId}_${assessmentId}`];
+    }
+    return map[`${userId}_latest`];
+  } catch {
+    return undefined;
+  }
+}
+
 export function deduplicateAssessments(assessments: BSASAssessment[]): BSASAssessment[] {
   if (!assessments || !Array.isArray(assessments)) return [];
 
@@ -369,16 +397,32 @@ export function deduplicateAssessments(assessments: BSASAssessment[]): BSASAsses
   const seenIds = new Set<string | number>();
 
   for (const item of sorted) {
-    if (seenIds.has(item.assessment_id)) continue;
+    let itemBreakdown = item.breakdown;
+    if (!itemBreakdown && item.user_id) {
+      itemBreakdown = getStoredAssessmentBreakdown(item.user_id, item.assessment_id);
+    }
+    const itemWithBreakdown = itemBreakdown ? { ...item, breakdown: itemBreakdown } : item;
 
-    const isRapidDuplicate = result.some(r =>
+    if (seenIds.has(item.assessment_id)) {
+      const existingIdx = result.findIndex(r => r.assessment_id === item.assessment_id);
+      if (existingIdx !== -1 && !result[existingIdx].breakdown && itemWithBreakdown.breakdown) {
+        result[existingIdx] = { ...result[existingIdx], breakdown: itemWithBreakdown.breakdown };
+      }
+      continue;
+    }
+
+    const duplicateIndex = result.findIndex(r =>
       isSameUser(r.user_id, item.user_id) &&
       Math.abs(new Date(r.taken_at).getTime() - new Date(item.taken_at).getTime()) < 60000
     );
 
-    if (!isRapidDuplicate) {
+    if (duplicateIndex !== -1) {
+      if (!result[duplicateIndex].breakdown && itemWithBreakdown.breakdown) {
+        result[duplicateIndex] = { ...result[duplicateIndex], breakdown: itemWithBreakdown.breakdown };
+      }
+    } else {
       seenIds.add(item.assessment_id);
-      result.push(item);
+      result.push(itemWithBreakdown);
     }
   }
 
@@ -770,6 +814,9 @@ class MockDatabaseEngine {
       breakdown
     };
     this.state.bsas_assessments.unshift(newAssessment);
+    if (breakdown) {
+      saveAssessmentBreakdown(targetUid, newAssessment.assessment_id, breakdown);
+    }
     
     // Add real notification for BSAS assessment
     if (!this.state.notifications) this.state.notifications = [];
@@ -1595,12 +1642,28 @@ class MockDatabaseEngine {
   public mergeRemoteAssessments(remote: BSASAssessment[]): void {
     let changed = false;
     for (const r of remote) {
-      const exists = this.state.bsas_assessments.some(l =>
+      const existing = this.state.bsas_assessments.find(l =>
         l.assessment_id === r.assessment_id ||
         (isSameUser(l.user_id, r.user_id) &&
           Math.abs(new Date(l.taken_at).getTime() - new Date(r.taken_at).getTime()) < 60000)
       );
-      if (!exists) {
+      if (existing) {
+        if (existing.breakdown && !r.breakdown) {
+          r.breakdown = existing.breakdown;
+        }
+        if (!existing.breakdown && r.breakdown) {
+          existing.breakdown = r.breakdown;
+          changed = true;
+        }
+        if (r.assessment_id && existing.assessment_id !== r.assessment_id) {
+          existing.assessment_id = r.assessment_id;
+          changed = true;
+        }
+      } else {
+        if (!r.breakdown && r.user_id) {
+          const stored = getStoredAssessmentBreakdown(r.user_id, r.assessment_id);
+          if (stored) r.breakdown = stored;
+        }
         this.state.bsas_assessments.push(r);
         changed = true;
       }
@@ -1618,6 +1681,9 @@ class MockDatabaseEngine {
     const assessment = this.state.bsas_assessments.find(a => a.assessment_id === oldId);
     if (assessment) {
       assessment.assessment_id = newId;
+      if (assessment.breakdown) {
+        saveAssessmentBreakdown(assessment.user_id, newId, assessment.breakdown);
+      }
     }
     this.notify();
   }

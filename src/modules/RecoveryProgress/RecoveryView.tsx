@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { BSASAssessment, ClothingItem, Borrow, User } from '../../types/database';
 import { deduplicateAssessments } from '../../services/closetService';
-import { isSameUser, mockDatabase } from '../../services/supabaseClient';
+import { isSameUser, mockDatabase, getStoredAssessmentBreakdown } from '../../services/supabaseClient';
 
 /**
  * ============================================================================
@@ -113,8 +113,11 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
 
   // Deduplicate assessments to filter test spam & rapid duplicates
   const deduplicatedAssessments = useMemo(() => {
-    return deduplicateAssessments(assessments);
-  }, [assessments]);
+    const activeUser = currentUser || mockDatabase.getCurrentUser();
+    const currentUid = activeUser?.user_id;
+    const scoped = currentUid ? assessments.filter(a => isSameUser(a.user_id, currentUid)) : assessments;
+    return deduplicateAssessments(scoped);
+  }, [assessments, currentUser]);
 
   // Assessments sorted chronologically (oldest to newest for bar chart)
   const sortedAsc = useMemo(() => {
@@ -228,6 +231,38 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   // Current and previous assessments for comparison
   const currentAssessment = sortedDesc[0] || null;
   const previousAssessment = sortedDesc[1] || null;
+
+  // Resolve breakdown with local/storage fallback so endorsed badges never disappear after remote sync
+  const currentBreakdown = useMemo(() => {
+    if (currentAssessment?.breakdown) return currentAssessment.breakdown;
+    if (!currentAssessment) return undefined;
+    const activeUser = currentUser || mockDatabase.getCurrentUser();
+    const uid = currentAssessment.user_id || activeUser?.user_id;
+    if (!uid) return undefined;
+    const stored = getStoredAssessmentBreakdown(uid, currentAssessment.assessment_id) ||
+                   getStoredAssessmentBreakdown(uid, 'latest');
+    if (stored) return stored;
+    const local = mockDatabase.getAssessments(uid).find(a =>
+      a.assessment_id === currentAssessment.assessment_id ||
+      Math.abs(new Date(a.taken_at).getTime() - new Date(currentAssessment.taken_at).getTime()) < 60000
+    );
+    return local?.breakdown;
+  }, [currentAssessment, currentUser]);
+
+  const previousBreakdown = useMemo(() => {
+    if (previousAssessment?.breakdown) return previousAssessment.breakdown;
+    if (!previousAssessment) return undefined;
+    const activeUser = currentUser || mockDatabase.getCurrentUser();
+    const uid = previousAssessment.user_id || activeUser?.user_id;
+    if (!uid) return undefined;
+    const stored = getStoredAssessmentBreakdown(uid, previousAssessment.assessment_id);
+    if (stored) return stored;
+    const local = mockDatabase.getAssessments(uid).find(a =>
+      a.assessment_id === previousAssessment.assessment_id ||
+      Math.abs(new Date(a.taken_at).getTime() - new Date(previousAssessment.taken_at).getTime()) < 60000
+    );
+    return local?.breakdown;
+  }, [previousAssessment, currentUser]);
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
@@ -411,7 +446,8 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {BSAS_DIMENSIONS.map((dim) => {
                 const isExpanded = expandedDimension === dim.key;
-                const isEndorsed = latestAssessment?.breakdown && (latestAssessment.breakdown as any)[dim.key] === 1;
+                const activeBreakdown = currentBreakdown || latestAssessment?.breakdown;
+                const isEndorsed = Boolean(activeBreakdown && (activeBreakdown as any)[dim.key] === 1);
 
                 return (
                   <div
@@ -947,13 +983,13 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                     </div>
 
                     <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                      <div>Salience: {currentAssessment.breakdown?.salience ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Mood Modification: {currentAssessment.breakdown?.mood_modification ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Conflict: {currentAssessment.breakdown?.conflict ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Tolerance: {currentAssessment.breakdown?.tolerance ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Relapse: {currentAssessment.breakdown?.relapse ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Withdrawal: {currentAssessment.breakdown?.withdrawal ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Problems: {currentAssessment.breakdown?.problems ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Salience: {(currentBreakdown?.salience ?? currentAssessment.breakdown?.salience) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Mood Modification: {(currentBreakdown?.mood_modification ?? currentAssessment.breakdown?.mood_modification) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Conflict: {(currentBreakdown?.conflict ?? currentAssessment.breakdown?.conflict) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Tolerance: {(currentBreakdown?.tolerance ?? currentAssessment.breakdown?.tolerance) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Relapse: {(currentBreakdown?.relapse ?? currentAssessment.breakdown?.relapse) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Withdrawal: {(currentBreakdown?.withdrawal ?? currentAssessment.breakdown?.withdrawal) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Problems: {(currentBreakdown?.problems ?? currentAssessment.breakdown?.problems) ? 'Endorsed' : 'Not Endorsed'}</div>
                     </div>
                   </>
                 ) : (
@@ -993,13 +1029,13 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                     </div>
 
                     <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                      <div>Salience: {previousAssessment.breakdown?.salience ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Mood Modification: {previousAssessment.breakdown?.mood_modification ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Conflict: {previousAssessment.breakdown?.conflict ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Tolerance: {previousAssessment.breakdown?.tolerance ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Relapse: {previousAssessment.breakdown?.relapse ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Withdrawal: {previousAssessment.breakdown?.withdrawal ? 'Endorsed' : 'Not Endorsed'}</div>
-                      <div>Problems: {previousAssessment.breakdown?.problems ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Salience: {(previousBreakdown?.salience ?? previousAssessment.breakdown?.salience) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Mood Modification: {(previousBreakdown?.mood_modification ?? previousAssessment.breakdown?.mood_modification) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Conflict: {(previousBreakdown?.conflict ?? previousAssessment.breakdown?.conflict) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Tolerance: {(previousBreakdown?.tolerance ?? previousAssessment.breakdown?.tolerance) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Relapse: {(previousBreakdown?.relapse ?? previousAssessment.breakdown?.relapse) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Withdrawal: {(previousBreakdown?.withdrawal ?? previousAssessment.breakdown?.withdrawal) ? 'Endorsed' : 'Not Endorsed'}</div>
+                      <div>Problems: {(previousBreakdown?.problems ?? previousAssessment.breakdown?.problems) ? 'Endorsed' : 'Not Endorsed'}</div>
                     </div>
                   </>
                 ) : (
