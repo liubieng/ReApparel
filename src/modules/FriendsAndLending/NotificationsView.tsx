@@ -46,9 +46,27 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     r.receiver_id === currentUser.user_id && r.status === 'pending'
   );
 
-  const inboxItems: AppNotification[] = notifications !== undefined
+  const rawNotifications: AppNotification[] = notifications !== undefined
     ? notifications
     : friendsService.getNotifications(currentUser.user_id);
+
+  const inboxItems: AppNotification[] = rawNotifications.filter(item => {
+    // Actionable requests belong exclusively in the Requests column, not Inbox
+    if (item.type === 'borrow_request') return false;
+    if (item.type === 'borrow' && (
+      item.title?.toLowerCase().includes('new borrow') ||
+      item.message?.toLowerCase().includes('requested to borrow')
+    )) {
+      return false;
+    }
+    if (item.type === 'friend_request' && (
+      item.title?.toLowerCase().includes('sent you a friend request') ||
+      item.message?.toLowerCase().includes('wants to connect')
+    )) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -129,90 +147,6 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                         {item.message}
                       </p>
                     )}
-
-                    {item.type === 'friend_request' && (() => {
-                      const pendingReq = friendRequests.find(r =>
-                        (r.request_id === item.request_id ||
-                         (r.sender_id === item.sender_id && r.receiver_id === currentUser.user_id)) &&
-                        r.status === 'pending'
-                      );
-                      if (pendingReq) {
-                        return (
-                          <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 6 }}>
-                            {onAcceptFriend && (
-                              <button
-                                type="button"
-                                className="btn btn-p"
-                                style={{ fontSize: 11, padding: '3px 10px' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onAcceptFriend(pendingReq.request_id);
-                                }}
-                              >
-                                <Check className="ico" style={{ width: 11, height: 11 }} /> Accept
-                              </button>
-                            )}
-                            {onDenyFriend && (
-                              <button
-                                type="button"
-                                className="btn btn-g"
-                                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--danger)' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDenyFriend(pendingReq.request_id);
-                                }}
-                              >
-                                <X className="ico" style={{ width: 11, height: 11 }} /> Decline
-                              </button>
-                            )}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {(item.type === 'borrow' || item.type === 'borrow_request') && (() => {
-                      const pendingBorrow = borrows.find(b =>
-                        (b.borrow_id === item.request_id ||
-                         (isSameUser(b.borrower_id, item.sender_id) &&
-                          (isSameUser(b.lender?.user_id, currentUser.user_id) || isSameUser(b.item?.user_id, currentUser.user_id)))) &&
-                        b.status === 'Pending'
-                      );
-                      if (pendingBorrow) {
-                        return (
-                          <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 6 }}>
-                            {onAcceptBorrow && (
-                              <button
-                                type="button"
-                                className="btn btn-p"
-                                style={{ fontSize: 11, padding: '3px 10px' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onAcceptBorrow(pendingBorrow.borrow_id);
-                                }}
-                              >
-                                <Check className="ico" style={{ width: 11, height: 11 }} /> Accept Loan
-                              </button>
-                            )}
-                            {onDenyBorrow && (
-                              <button
-                                type="button"
-                                className="btn btn-g"
-                                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--danger)' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDenyBorrow(pendingBorrow.borrow_id);
-                                }}
-                              >
-                                <X className="ico" style={{ width: 11, height: 11 }} /> Decline
-                              </button>
-                            )}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
                     <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                       {item.time}
                     </span>

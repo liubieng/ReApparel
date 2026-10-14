@@ -172,7 +172,9 @@ function loadInitialMockState(): MockDatabaseState {
           const txt = `${n.title || ''} ${n.message || ''}`.toLowerCase();
           return !txt.includes('circular fashion partner') &&
                  !txt.includes('carbon footprint') &&
-                 !txt.includes('start exploring and adding');
+                 !txt.includes('start exploring and adding') &&
+                 !txt.includes('new borrow request') &&
+                 !txt.includes('requested to borrow');
         });
       }
       if (!parsed.item_tags) parsed.item_tags = [];
@@ -1352,30 +1354,6 @@ class MockDatabaseEngine {
 
     const lenderId = clothingItem?.user_id || b.lender?.user_id;
 
-    if (b.status === 'Pending' && lenderId) {
-      if (!this.state.notifications) this.state.notifications = [];
-      const alreadyNotified = this.state.notifications.some(
-        n => (n.type === 'borrow' || n.type === 'borrow_request') &&
-             (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId))
-      );
-      if (!alreadyNotified) {
-        const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
-        this.state.notifications.unshift({
-          id: `notif-borrow-${b.borrow_id || Date.now()}`,
-          user_id: lenderId,
-          title: `New borrow request!`,
-          message: `${borrower ? `${borrower.first_name} ${borrower.last_name}` : 'A friend'} requested to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
-          time: 'Recently',
-          type: 'borrow',
-          read: false,
-          sender_name: borrower ? `${borrower.first_name} ${borrower.last_name}` : undefined,
-          sender_id: b.borrower_id,
-          receiver_id: lenderId,
-          request_id: b.borrow_id
-        });
-      }
-    }
-
     if (b.borrower_id && b.status !== 'Pending') {
       if (!this.state.notifications) this.state.notifications = [];
 
@@ -1430,25 +1408,6 @@ class MockDatabaseEngine {
       created_at: new Date().toISOString()
     };
     this.state.borrows.unshift(newBorrow);
-
-    const item = this.state.clothing_items.find(i => i.item_id === itemId);
-    const borrower = this.getCurrentUser();
-    if (item && item.user_id) {
-      if (!this.state.notifications) this.state.notifications = [];
-      this.state.notifications.unshift({
-        id: `notif-req-${newBorrow.borrow_id}`,
-        user_id: item.user_id,
-        title: `New borrow request!`,
-        message: `${borrower?.first_name || 'A friend'} requested to borrow "${item.name}" from ${startDate} to ${endDate}.`,
-        time: 'Just now',
-        type: 'borrow',
-        read: false,
-        sender_name: borrower ? `${borrower.first_name} ${borrower.last_name}` : undefined,
-        sender_id: borrower?.user_id,
-        receiver_id: item.user_id,
-        request_id: newBorrow.borrow_id
-      });
-    }
 
     this.notify();
     return newBorrow;
