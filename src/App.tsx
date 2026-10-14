@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  mockDatabase, 
+import {
+  mockDatabase,
   getSupabase,
-  getStoredSupabaseConfig, 
-  safeStorage, 
-  STORAGE_KEY_ACTIVE_USER, 
+  getStoredSupabaseConfig,
+  safeStorage,
+  STORAGE_KEY_ACTIVE_USER,
   STORAGE_KEY_ACTIVE_VIEW,
   deduplicateAssessments,
   getLocalDateString
@@ -14,15 +14,15 @@ import { friendsService } from './services/friendsService';
 import { mapsService } from './services/mapsService';
 
 // Data models
-import { 
-  User, 
-  ClothingItem, 
-  BSASAssessment, 
-  DailyClothingLog, 
-  FriendRequest, 
-  Borrow, 
+import {
+  User,
+  ClothingItem,
+  BSASAssessment,
+  DailyClothingLog,
+  FriendRequest,
+  Borrow,
   DonationOpportunity,
-  AppNotification 
+  AppNotification
 } from './types/database';
 
 // User Identity, Auth, & Settings
@@ -34,11 +34,11 @@ import { SettingsView } from './views/SettingsView';
 import { BSASIntroView, BSASAssessmentModal } from './modules/BSAS';
 
 // Module 2.0: Virtual Closet
-import { 
-  VirtualClosetView, 
-  AddItemModal, 
-  EditItemModal, 
-  DeleteCascadeModal 
+import {
+  VirtualClosetView,
+  AddItemModal,
+  EditItemModal,
+  DeleteCascadeModal
 } from './modules/VirtualCloset';
 
 // Module 3.0: Daily Clothing Log
@@ -48,11 +48,11 @@ import { DailyLogView } from './modules/DailyClothingLog';
 import { RecoveryView, ClosetStatisticsView } from './modules/RecoveryProgress';
 
 // Module 5.0: Friends and Request Board
-import { 
-  FriendsView, 
-  LendingDashboardView, 
-  NotificationsView, 
-  BorrowModal 
+import {
+  FriendsView,
+  LendingDashboardView,
+  NotificationsView,
+  BorrowModal
 } from './modules/FriendsAndRequestBoard';
 
 // Module 6.0: Donation Map
@@ -84,15 +84,15 @@ import { BrainCircuit } from 'lucide-react';
 
 // Valid authenticated view routes
 const VALID_VIEWS = new Set([
-  'closet', 
-  'daily-log', 
-  'recovery', 
-  'closet-statistics', 
-  'notifications', 
-  'requests', 
-  'friends', 
-  'donations', 
-  'profile', 
+  'closet',
+  'daily-log',
+  'recovery',
+  'closet-statistics',
+  'notifications',
+  'requests',
+  'friends',
+  'donations',
+  'profile',
   'settings',
   'bsasIntro',
   'bsas'
@@ -175,7 +175,7 @@ export default function App() {
     message: '',
     confirmLabel: 'Proceed',
     requiredConfirmText: undefined,
-    onConfirm: () => {}
+    onConfirm: () => { }
   });
 
   // Lightweight Toast Notification System
@@ -263,7 +263,7 @@ export default function App() {
           closetService.getItems(user.user_id).catch(() => mockDatabase.getClothingItems(user.user_id)),
           closetService.getAssessments(user.user_id).catch(() => mockDatabase.getAssessments(user.user_id)),
           closetService.getDailyLogs(user.user_id).catch(() => mockDatabase.getDailyLogs(user.user_id)),
-          friendsService.fetchAndMergeUsersFromSupabase().catch(() => {}),
+          friendsService.fetchAndMergeUsersFromSupabase().catch(() => { }),
           friendsService.fetchFriendRequestsFromSupabase(user.user_id).catch(() => []),
           friendsService.fetchBorrowsFromSupabase(user.user_id).catch(() => [])
         ];
@@ -272,7 +272,7 @@ export default function App() {
         // Only fetch donation drives from Supabase when explicitly requested,
         // or on initial boot / when on donations view to save ~80% of unnecessary map queries
         if (options?.forceDonations || view === 'donations') {
-          fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => {}));
+          fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => { }));
         }
 
         const [items, userAssessments, userLogs] = await Promise.all(fetchPromises);
@@ -330,7 +330,7 @@ export default function App() {
     const refresh = () => {
       mapsService.fetchAndMergeFromSupabase().then(() => {
         setOpportunities(mapsService.getDonationOpportunities());
-      }).catch(() => {});
+      }).catch(() => { });
     };
     refresh();
 
@@ -348,7 +348,7 @@ export default function App() {
     if (!uid) return;
     closetService.getDailyLogs(uid).then(logs => {
       if (logs) setDailyLogs(logs);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [view, currentUser]);
 
   // Fetch/refresh friend requests and borrows whenever user navigates to Friends, Requests, or Notifications tab.
@@ -368,7 +368,7 @@ export default function App() {
         setFriends(friendsService.getConnectedFriends());
         setBorrows(friendsService.getBorrows());
         setNotifications(friendsService.getNotifications(uid));
-      }).catch(() => {});
+      }).catch(() => { });
     };
 
     refresh();
@@ -405,7 +405,7 @@ export default function App() {
                 setFriendRequests(friendsService.getFriendRequests());
                 setFriends(friendsService.getConnectedFriends());
                 setNotifications(friendsService.getNotifications(uid));
-              }).catch(() => {});
+              }).catch(() => { });
             } else if (payload?.new) {
               const r = payload.new;
               if (r.sender_id === uid || r.receiver_id === uid) {
@@ -428,7 +428,7 @@ export default function App() {
       return () => {
         supabase.removeChannel(channel);
       };
-    } catch {}
+    } catch { }
   }, []);
 
   // Supabase Realtime Listener for borrows across devices
@@ -454,7 +454,7 @@ export default function App() {
       return () => {
         supabase.removeChannel(channel);
       };
-    } catch {}
+    } catch { }
   }, []);
 
   // Supabase Realtime Listener for community donation opportunities
@@ -481,7 +481,7 @@ export default function App() {
       return () => {
         supabase.removeChannel(channel);
       };
-    } catch {}
+    } catch { }
   }, []);
 
   // Listen for Supabase Auth state transitions (e.g. user clicked confirmation link in verification email)
@@ -493,8 +493,8 @@ export default function App() {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         // STRICT GUARD: Only auto-process auth state transitions if this is an explicit incoming email verification link
         const isAuthCallback = typeof window !== 'undefined' && (
-          window.location.hash.includes('access_token') || 
-          window.location.hash.includes('type=') || 
+          window.location.hash.includes('access_token') ||
+          window.location.hash.includes('type=') ||
           window.location.search.includes('code=')
         );
 
@@ -521,7 +521,7 @@ export default function App() {
                     appUser = byEmail[0] as User;
                   }
                 }
-              } catch {}
+              } catch { }
             }
 
             if (!appUser && authUser.email) {
@@ -542,7 +542,7 @@ export default function App() {
                   friend_code: appUser.friend_code,
                   created_at: appUser.created_at
                 });
-              } catch {}
+              } catch { }
             }
 
             if (appUser) {
@@ -562,7 +562,7 @@ export default function App() {
       return () => {
         subscription.unsubscribe();
       };
-    } catch {}
+    } catch { }
   }, [loadData, toast]);
 
   // --------------------------------------------------------------------------
@@ -596,9 +596,9 @@ export default function App() {
     try {
       const supabase = getSupabase();
       if (supabase) {
-        await supabase.auth.signOut().catch(() => {});
+        await supabase.auth.signOut().catch(() => { });
       }
-    } catch {}
+    } catch { }
     mockDatabase.setCurrentUserId(null);
     safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
     safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
@@ -617,7 +617,7 @@ export default function App() {
   // BSAS Check-In Completed
   const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>, targetView: 'closet' | 'recovery' = 'closet') => {
     const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
-    
+
     // 1. Immediately transition the view so user NEVER gets stuck on BSAS page
     safeStorage.setItem(STORAGE_KEY_ACTIVE_VIEW, targetView);
     setView(targetView);
@@ -632,7 +632,7 @@ export default function App() {
     toast(score >= 4 ? 'Check-in saved: Indicative risk identified' : 'Check-in saved: Non-Indicative risk level');
 
     // 4. Background refresh of any other collections without blocking
-    loadData().catch(() => {});
+    loadData().catch(() => { });
   };
 
   // Garment Management: Add, Edit, Delete, Quick Wear Increment
@@ -681,7 +681,7 @@ export default function App() {
     }
     const current = targetLog.items || [];
     const exists = current.some(i => i.item_id === garment.item_id);
-    const updated = exists 
+    const updated = exists
       ? current.filter(i => i.item_id !== garment.item_id)
       : [...current, garment];
 
@@ -822,7 +822,7 @@ export default function App() {
           // 1. Immediately sign out of Supabase auth so no lingering session exists
           const supabase = getSupabase();
           if (supabase) {
-            await supabase.auth.signOut().catch(() => {});
+            await supabase.auth.signOut().catch(() => { });
           }
 
           // 2. Clear all local storage session markers
@@ -882,8 +882,8 @@ export default function App() {
   ).length;
 
   const pendingBorrowsCount = borrows.filter(
-    b => currentUser && 
-      (b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id) && 
+    b => currentUser &&
+      (b.lender?.user_id === currentUser.user_id || b.item?.user_id === currentUser.user_id) &&
       b.status === 'Pending'
   ).length;
 
@@ -1085,9 +1085,9 @@ export default function App() {
               onRejectFriendRequest={handleRejectFriendRequest}
               onRemoveFriend={handleRemoveFriend}
               onInitiateBorrow={(friend, item) => {
-                const isBorrowed = item.status === 'Borrowed' || 
-                                   item.is_active === false || 
-                                   item.tags?.some(t => (typeof t === 'string' ? t : t.tag_name) === 'Borrowed');
+                const isBorrowed = item.status === 'Borrowed' ||
+                  item.is_active === false ||
+                  item.tags?.some(t => (typeof t === 'string' ? t : t.tag_name) === 'Borrowed');
                 if (isBorrowed) {
                   toast('This garment is currently borrowed or inactive and cannot be requested.');
                   return;
@@ -1234,7 +1234,7 @@ export default function App() {
             <h3 style={{ margin: '0 0 8px', fontSize: 20, fontFamily: 'var(--font-display)' }}>
               Mandatory Monthly BSAS Retake Due
             </h3>
-            
+
             <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>
               Your previous BSAS assessment was completed over <strong>30 days ago</strong>. A mandatory monthly retake is required to assess your current shopping habits before normal access is granted.
             </p>

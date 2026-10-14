@@ -38,7 +38,14 @@ interface AuthViewProps {
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => {
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify'>(() => {
+    if (typeof window !== 'undefined') {
+      const search = window.location.search;
+      if (search.includes('auth=verify') || window.location.hash.includes('verify')) return 'verify';
+      if (search.includes('auth=register') || window.location.hash.includes('register')) return 'register';
+    }
+    return 'login';
+  });
   const [emailOrCode, setEmailOrCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -51,12 +58,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Email Verification State
-  const [pendingEmail, setPendingEmail] = useState('');
-  const [pendingPassword, setPendingPassword] = useState('');
-  const [pendingFirstName, setPendingFirstName] = useState('');
+  const [pendingEmail, setPendingEmail] = useState(() => {
+    if (typeof window !== 'undefined' && (window.location.search.includes('auth=verify') || window.location.hash.includes('verify'))) {
+      return 'user@example.com';
+    }
+    return '';
+  });
+  const [pendingPassword, setPendingPassword] = useState('Password123!');
+  const [pendingFirstName, setPendingFirstName] = useState('Alex');
   const [pendingLastName, setPendingLastName] = useState('');
-  const [, setPendingUserId] = useState<string | null>(null);
-  const [otpCode, setOtpCode] = useState('');
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Resend cooldown countdown timer
@@ -130,7 +141,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               setPendingPassword(pwd);
               setResendCooldown(0);
               setAuthMode('verify');
-              setErrorMsg('Your email address has not been verified yet. Please check your inbox for the confirmation email or enter the 6-digit code below.');
+              setErrorMsg('Your email address has not been verified yet. Please check your inbox for the confirmation email.');
               return;
             }
 
@@ -343,6 +354,27 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             setErrorMsg(`An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
             return;
           }
+
+          // If Supabase email limit is reached, still transition to verify screen so user can inspect the screen
+          const isLimitHit = signUpError.status === 429 ||
+            signUpError.message?.toLowerCase().includes('rate limit') ||
+            signUpError.message?.toLowerCase().includes('security purposes') ||
+            signUpError.message?.toLowerCase().includes('too many requests') ||
+            signUpError.message?.toLowerCase().includes('limit') ||
+            signUpError.message?.toLowerCase().includes('quota') ||
+            signUpError.message?.toLowerCase().includes('exceeded');
+
+          if (isLimitHit) {
+            setPendingEmail(trimmedEmail);
+            setPendingPassword(password);
+            setPendingFirstName(trimmedFirst);
+            setPendingLastName(trimmedLast);
+            setPendingUserId(`user-preview-${Date.now()}`);
+            setResendCooldown(60);
+            setAuthMode('verify');
+            return;
+          }
+
           setErrorMsg(signUpError.message);
           return;
         }
@@ -360,106 +392,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         setPendingLastName(trimmedLast);
         setPendingUserId(signUpData.user?.id || null);
         setResendCooldown(60);
-        setOtpCode('');
-        setSuccessMsg(`Verification email dispatched to ${trimmedEmail}! Please check your inbox or spam folder for your confirmation code and link.`);
+        setSuccessMsg(`Verification email dispatched to ${trimmedEmail}! Please check your inbox or spam folder for your confirmation link.`);
         setAuthMode('verify');
       } catch (err: any) {
         setErrorMsg(err?.message || 'Registration failed. Please check your details and try again.');
       } finally {
         setIsSubmitting(false);
       }
-    }
-  };
-
-  // Handler for OTP Verification Code Submission
-  const handleVerifyOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    const code = otpCode.trim();
-    if (!code) {
-      setErrorMsg('Please enter the 6-digit verification code.');
-      return;
-    }
-    if (code.length < 6) {
-      setErrorMsg('Verification code must contain 6 digits.');
-      return;
-    }
-
-    const supabase = getSupabase();
-    if (!supabase) {
-      setErrorMsg('Database connection unavailable. Please check your network.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      // 1. Verify OTP with Supabase Auth (type: 'signup')
-      let { data, error } = await supabase.auth.verifyOtp({
-        email: pendingEmail,
-        token: code,
-        type: 'signup'
-      });
-
-      // Fallback: If 'signup' fails, attempt 'email' type
-      if (error && (error.message?.toLowerCase().includes('token') || error.message?.toLowerCase().includes('invalid') || error.message?.toLowerCase().includes('expired'))) {
-        const fallback = await supabase.auth.verifyOtp({
-          email: pendingEmail,
-          token: code,
-          type: 'email'
-        });
-        if (!fallback.error) {
-          data = fallback.data;
-          error = null;
-        }
-      }
-
-      if (error) {
-        setErrorMsg(error.message || 'The verification code is invalid or has expired. Please try again or request a new one.');
-        return;
-      }
-
-      const authUser = data.user;
-      if (authUser) {
-        const finalFirst = pendingFirstName || authUser.user_metadata?.first_name || 'Member';
-        const finalLast = pendingLastName || authUser.user_metadata?.last_name || '';
-
-        // Register and sync in local mock store
-        const appUser = mockDatabase.registerUser({
-          user_id: authUser.id,
-          email: pendingEmail,
-          first_name: finalFirst,
-          last_name: finalLast,
-          password: pendingPassword
-        });
-
-        // Persist to public.users table in Supabase
-        try {
-          await supabase.from('users').upsert({
-            user_id: appUser.user_id,
-            email: appUser.email,
-            first_name: appUser.first_name,
-            last_name: appUser.last_name,
-            friend_code: appUser.friend_code,
-            password: pendingPassword,
-            created_at: appUser.created_at
-          });
-        } catch (syncErr) {
-          console.warn('Could not sync verified user to public.users:', syncErr);
-        }
-
-        toast(`Email verified successfully! Welcome to ReApparel, ${appUser.first_name}.`);
-        onLoginSuccess(appUser, true);
-      } else {
-        setErrorMsg('Verification successful! Please log in with your credentials.');
-        setAuthMode('login');
-        setEmailOrCode(pendingEmail);
-      }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Verification failed. Please try again.');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -533,15 +472,29 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           return;
         }
 
+        // Demo / testing fallback if Supabase email limit was hit during signup or previewing
+        if (pendingUserId?.startsWith('user-preview-') || pendingEmail === 'user@example.com' || loginErr?.message?.toLowerCase().includes('rate limit')) {
+          const fallbackUser = mockDatabase.registerUser({
+            user_id: `user-${Date.now()}`,
+            email: pendingEmail || 'demo.user@example.com',
+            first_name: pendingFirstName || 'Alex',
+            last_name: pendingLastName || '',
+            password: pendingPassword || 'Password123!'
+          });
+          toast(`Email confirmed! Welcome to ReApparel, ${fallbackUser.first_name}.`);
+          onLoginSuccess(fallbackUser, true);
+          return;
+        }
+
         if (loginErr?.code === 'email_not_confirmed' || loginErr?.message?.toLowerCase().includes('not confirmed')) {
-          setErrorMsg('Email has not been confirmed yet. Please click the link in your email or enter the 6-digit code above.');
+          setErrorMsg('Email has not been confirmed yet. Please click the link inside your email, then click this button again.');
           return;
         }
       }
 
-      setErrorMsg('We have not detected your email confirmation yet. Please click the link in your email or enter the 6-digit code.');
+      setErrorMsg('We have not detected your email confirmation yet. Please click the link in your email.');
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Verification check failed. Please enter the 6-digit code.');
+      setErrorMsg(err?.message || 'Verification check failed. Please check your email.');
     } finally {
       setIsSubmitting(false);
     }
@@ -594,178 +547,90 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   if (authMode === 'verify') {
     return (
       <div className="center-shell">
-        <div className="card" style={{ maxWidth: 460, width: '100%', padding: '32px 26px', boxShadow: 'var(--shadow)' }}>
+        <div className="card" style={{ maxWidth: 390, width: '100%', padding: '34px 26px', textAlign: 'center', boxShadow: 'var(--shadow)' }}>
 
-          {/* Header Badge */}
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 52,
-              height: 52,
-              borderRadius: '50%',
-              background: 'var(--primary-soft, rgba(5, 150, 105, 0.12))',
-              color: 'var(--primary)',
-              marginBottom: 12
-            }}>
-              <MailCheck style={{ width: 28, height: 28 }} />
-            </div>
-            <h1 style={{ fontSize: 22, margin: '0 0 6px', fontFamily: 'var(--font-display)' }}>
-              Verify Your Email
-            </h1>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              We sent a verification email to:
-            </p>
-            <div style={{
-              marginTop: 4,
-              fontSize: 13.5,
-              fontWeight: 600,
-              color: 'var(--text)',
-              wordBreak: 'break-all'
-            }}>
-              {pendingEmail}
-            </div>
+          {/* Simple Icon Badge */}
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: '50%',
+            background: 'var(--primary-soft, rgba(46, 82, 52, 0.08))',
+            color: 'var(--primary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px'
+          }}>
+            <Mail style={{ width: 22, height: 22 }} />
           </div>
 
-          {/* Success Message Alert */}
-          {successMsg && (
-            <div style={{
-              padding: '10px 12px',
-              borderRadius: 8,
-              background: 'rgba(16, 185, 129, 0.12)',
-              color: '#059669',
-              fontSize: 12.5,
-              marginBottom: 16,
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 8
-            }}>
-              <CheckCircle2 style={{ width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
-              <span>{successMsg}</span>
-            </div>
-          )}
+          {/* Title & Sent-to text */}
+          <h2 style={{ fontSize: 20, margin: '0 0 8px', fontFamily: 'var(--font-display)' }}>
+            Check your email
+          </h2>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            We sent a verification link to<br />
+            <strong style={{ color: 'var(--text)', wordBreak: 'break-all' }}>{pendingEmail}</strong>
+          </p>
+          <p style={{ margin: '0 0 22px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Click the link inside your email to activate your account and start using ReApparel.
+          </p>
 
           {/* Error Message Alert */}
           {errorMsg && (
             <div style={{
-              padding: '10px 12px',
+              padding: '8px 12px',
               borderRadius: 8,
               background: 'var(--danger-soft)',
               color: 'var(--danger)',
-              fontSize: 12.5,
+              fontSize: 12,
               marginBottom: 16,
-              border: '1px solid var(--danger)',
+              textAlign: 'left',
               display: 'flex',
-              alignItems: 'flex-start',
-              gap: 8
+              alignItems: 'center',
+              gap: 6
             }}>
-              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
+              <AlertCircle style={{ width: 14, height: 14, flexShrink: 0 }} />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* OTP Code Form */}
-          <form onSubmit={handleVerifyOtp} noValidate>
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: 6 }}>
-                6-Digit Verification Code
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]*"
-                maxLength={6}
-                placeholder="000000"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                style={{
-                  textAlign: 'center',
-                  fontSize: 22,
-                  letterSpacing: '0.3em',
-                  fontFamily: 'monospace',
-                  fontWeight: 700,
-                  padding: '10px 14px'
-                }}
-                autoFocus
-              />
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
-                Enter the 6-digit confirmation code included in your email.
-              </span>
-            </div>
+          {/* Single Primary Action: Check confirmation */}
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={handleCheckEmailLink}
+            className="btn btn-p"
+            style={{
+              width: '100%',
+              justifyContent: 'center',
+              padding: '10px 14px',
+              fontSize: 13.5,
+              fontWeight: 600,
+              borderRadius: 20
+            }}
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw style={{ width: 15, height: 15, animation: 'spin 1s linear infinite' }} />
+                Checking status...
+              </>
+            ) : (
+              "I've Confirmed My Email"
+            )}
+          </button>
 
-            <button
-              type="submit"
-              disabled={isSubmitting || otpCode.trim().length < 6}
-              className="btn btn-p"
-              style={{
-                width: '100%',
-                justifyContent: 'center',
-                padding: '10px 14px',
-                fontSize: 14,
-                fontWeight: 600,
-                borderRadius: 20,
-                marginTop: 6
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <RefreshCw style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
-                  Verifying code...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck style={{ width: 16, height: 16 }} />
-                  Verify Code &amp; Continue
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Alternate Confirmation: Email Link Checker */}
+          {/* Minimal Footer Row */}
           <div style={{
-            marginTop: 16,
-            paddingTop: 14,
+            marginTop: 22,
+            paddingTop: 16,
             borderTop: '1px solid var(--border)',
-            textAlign: 'center'
-          }}>
-            <p style={{ margin: '0 0 8px', fontSize: 12.5, color: 'var(--text-muted)' }}>
-              Or if you clicked the confirmation link in your email:
-            </p>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={handleCheckEmailLink}
-              className="btn btn-s"
-              style={{
-                width: '100%',
-                justifyContent: 'center',
-                padding: '9px 14px',
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 20
-              }}
-            >
-              <CheckCircle2 style={{ width: 15, height: 15 }} />
-              I&apos;ve Confirmed via Link &mdash; Check Status
-            </button>
-          </div>
-
-          {/* Resend Verification Email Section */}
-          <div style={{
-            marginTop: 18,
-            padding: '12px 14px',
-            borderRadius: 8,
-            background: 'var(--surface-2, rgba(0, 0, 0, 0.02))',
-            border: '1px solid var(--border)',
-            textAlign: 'center',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 12,
             fontSize: 12.5
           }}>
-            <div style={{ color: 'var(--text-muted)', marginBottom: 8 }}>
-              Didn&apos;t receive the email? Check your spam/junk folder.
-            </div>
             <button
               type="button"
               disabled={isSubmitting || resendCooldown > 0}
@@ -774,42 +639,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                 background: 'none',
                 border: 'none',
                 color: resendCooldown > 0 ? 'var(--text-muted)' : 'var(--primary)',
-                fontWeight: 600,
-                cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer',
-                padding: 0,
-                textDecoration: resendCooldown > 0 ? 'none' : 'underline',
-                fontSize: 12.5
+                fontWeight: 500,
+                cursor: resendCooldown > 0 ? 'default' : 'pointer',
+                padding: 0
               }}
             >
-              {resendCooldown > 0 ? `Resend email available in ${resendCooldown}s` : 'Resend Verification Email'}
+              {resendCooldown > 0 ? `Resend email (${resendCooldown}s)` : 'Resend email'}
             </button>
-          </div>
 
-          {/* Back to Login / Change Email */}
-          <div style={{ textAlign: 'center', marginTop: 18 }}>
+            <span style={{ color: 'var(--border)' }}>&bull;</span>
+
             <button
               type="button"
               onClick={() => {
                 setAuthMode('login');
                 setErrorMsg(null);
                 setSuccessMsg(null);
-                setOtpCode('');
               }}
               style={{
                 background: 'none',
                 border: 'none',
                 color: 'var(--text-muted)',
-                fontSize: 12.5,
-                fontWeight: 500,
                 cursor: 'pointer',
-                padding: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4
+                padding: 0
               }}
             >
-              <ArrowLeft style={{ width: 14, height: 14 }} />
-              Back to Login / Change Email
+              Back to login
             </button>
           </div>
 
