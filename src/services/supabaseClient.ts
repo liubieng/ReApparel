@@ -1,36 +1,34 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { 
-  INITIAL_USERS, 
-  INITIAL_TAGS, 
-  INITIAL_CLOTHING_ITEMS, 
-  INITIAL_ASSESSMENTS, 
-  INITIAL_DAILY_LOGS, 
-  INITIAL_FRIEND_REQUESTS, 
-  INITIAL_BORROWS, 
-  INITIAL_DONATION_OPPORTUNITIES 
+import {
+  INITIAL_USERS,
+  INITIAL_TAGS,
+  INITIAL_CLOTHING_ITEMS,
+  INITIAL_ASSESSMENTS,
+  INITIAL_DAILY_LOGS,
+  INITIAL_FRIEND_REQUESTS,
+  INITIAL_BORROWS,
+  INITIAL_DONATION_OPPORTUNITIES
 } from '../data/seedData';
-import { 
-  User, 
-  ClothingItem, 
-  Tag, 
-  BSASAssessment, 
-  DailyClothingLog, 
-  FriendRequest, 
-  Borrow, 
-  DonationOpportunity, 
+import {
+  User,
+  ClothingItem,
+  Tag,
+  BSASAssessment,
+  DailyClothingLog,
+  FriendRequest,
+  Borrow,
+  DonationOpportunity,
   DonationFlag,
   ItemTag,
   AppNotification
 } from '../types/database';
 
-// Configuration keys
 export const STORAGE_KEY_SUPABASE_URL = 'reapparel_supabase_url';
 export const STORAGE_KEY_SUPABASE_KEY = 'reapparel_supabase_key';
 export const STORAGE_KEY_ACTIVE_USER = 'reapparel_active_user_id';
 export const STORAGE_KEY_ACTIVE_VIEW = 'reapparel_active_view';
 export const STORAGE_KEY_MOCK_DATA = 'reapparel_prod_database_v2';
 
-// Safe storage helper for SSR and headless execution
 export const safeStorage = {
   getItem: (key: string): string | null => {
     try {
@@ -56,7 +54,6 @@ export const safeStorage = {
   }
 };
 
-// Clean up legacy test database states from previous development sessions
 try {
   safeStorage.removeItem('reapparel_mock_database_v1');
   safeStorage.removeItem('reapparel_mock_database_v2');
@@ -67,7 +64,7 @@ try {
   safeStorage.removeItem('reapparel_clean_database_v7');
   safeStorage.removeItem('reapparel_prod_database_v1');
 } catch (e) {
-  // ignore
+
 }
 
 export interface SupabaseConfig {
@@ -80,7 +77,7 @@ const DEFAULT_FALLBACK_URL = 'https://rhxarhotbzyzgyjaeyiu.supabase.co';
 const DEFAULT_FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJoeGFyaG90Ynp5emd5amFleWl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzg3ODgsImV4cCI6MjEwNjc1NDc4OH0.W3_9SzfCIHCDBvmDDBLr1I2y_AdDvpo2IllX7vxxx54';
 
 export function getStoredSupabaseConfig(): SupabaseConfig {
-  // Purge legacy fallback project or corrupted triple-slash configs from localStorage
+
   const rawStoredUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL);
   if (rawStoredUrl && (rawStoredUrl.includes('mgkcnewvfdpjemiexptm') || rawStoredUrl.includes('https:///'))) {
     safeStorage.removeItem(STORAGE_KEY_SUPABASE_URL);
@@ -92,7 +89,6 @@ export function getStoredSupabaseConfig(): SupabaseConfig {
   let storedUrl = safeStorage.getItem(STORAGE_KEY_SUPABASE_URL) || envUrl;
   const storedKey = safeStorage.getItem(STORAGE_KEY_SUPABASE_KEY) || envKey;
 
-  // Sanitize any extra slashes in protocol (e.g., https:/// -> https://)
   if (storedUrl && storedUrl.startsWith('http')) {
     storedUrl = storedUrl.replace(/^https?:\/+/i, (match: string) => match.toLowerCase().startsWith('https') ? 'https://' : 'http://').trim();
   }
@@ -141,11 +137,6 @@ export function getSupabase(): SupabaseClient | null {
   return null;
 }
 
-/**
- * Wraps a promise in a timeout to guarantee the client application never stalls
- * indefinitely if the remote Supabase database has high latency, is cold-starting,
- * or experiences network issues.
- */
 export function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number = 3500): Promise<T> {
   return Promise.race([
     Promise.resolve(promise),
@@ -154,10 +145,6 @@ export function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number = 3500
     )
   ]);
 }
-
-// -----------------------------------------------------------------------------
-// IN-BROWSER PERSISTENT MOCK STORE FOR SEAMLESS DEMO & OFFLINE CAPABILITY
-// -----------------------------------------------------------------------------
 
 interface MockDatabaseState {
   users: User[];
@@ -179,7 +166,7 @@ function loadInitialMockState(): MockDatabaseState {
     try {
       const parsed = JSON.parse(stored);
       if (!parsed.notifications) parsed.notifications = [];
-      // Clean up any stale dummy notification items that might have been saved in localStorage
+
       if (Array.isArray(parsed.notifications)) {
         parsed.notifications = parsed.notifications.filter((n: AppNotification) => {
           const txt = `${n.title || ''} ${n.message || ''}`.toLowerCase();
@@ -189,7 +176,7 @@ function loadInitialMockState(): MockDatabaseState {
         });
       }
       if (!parsed.item_tags) parsed.item_tags = [];
-      // Ensure tags include all seeded categories & 14 curated color families
+
       if (parsed.tags) {
         INITIAL_TAGS.forEach(initTag => {
           if (!parsed.tags.some((t: Tag) => t.tag_name.toLowerCase() === initTag.tag_name.toLowerCase())) {
@@ -197,8 +184,7 @@ function loadInitialMockState(): MockDatabaseState {
           }
         });
       }
-      
-      // Clean slate donation pool: Purge all seed/mock donation opportunities from localStorage
+
       const cleanDonationPoolKey = 'reapparel_clean_donation_pool_v2';
       if (!safeStorage.getItem(cleanDonationPoolKey)) {
         parsed.donation_opportunities = [];
@@ -217,8 +203,6 @@ function loadInitialMockState(): MockDatabaseState {
       }
       parsed.donation_flags = parsed.donation_flags || [];
 
-      // CRITICAL RECOVERY: Ensure any garments registered in daily_clothing_logs are always
-      // present in clothing_items so they are never missing from the virtual closet!
       if (!parsed.clothing_items) parsed.clothing_items = [];
       if (!parsed.bsas_assessments) {
         parsed.bsas_assessments = [];
@@ -247,8 +231,6 @@ function loadInitialMockState(): MockDatabaseState {
         });
       }
 
-
-      // Clean up seed demo accounts mario@example.com and liu@example.com from localStorage cache
       if (parsed.users && Array.isArray(parsed.users)) {
         parsed.users = parsed.users.filter((u: User) => {
           const email = (u.email || '').toLowerCase();
@@ -275,14 +257,13 @@ function loadInitialMockState(): MockDatabaseState {
         }
       }
 
-      // If clothing_items has no items at all (e.g. wiped state), seed with initial items
       if (parsed.clothing_items.length === 0) {
         parsed.clothing_items = [...INITIAL_CLOTHING_ITEMS];
       }
 
       return parsed;
     } catch {
-      // fallback
+
     }
   }
 
@@ -325,7 +306,6 @@ function loadInitialMockState(): MockDatabaseState {
   return state;
 }
 
-// Canonical UUID & User Matching Helpers
 export function toCanonicalUserId(uid: string | null | undefined): string {
   if (!uid || uid === 'guest') return '';
   return uid;
@@ -347,7 +327,6 @@ export function generateUUID(): string {
   });
 }
 
-/** Today's date (YYYY-MM-DD) in the user's LOCAL timezone — toISOString() would use UTC and mis-date logs. */
 export function getLocalDateString(d: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -386,13 +365,10 @@ export function getStoredAssessmentBreakdown(userId: string, assessmentId?: stri
 export function deduplicateAssessments(assessments: BSASAssessment[]): BSASAssessment[] {
   if (!assessments || !Array.isArray(assessments)) return [];
 
-  // 1. Explicitly filter out test spam assessment IDs from debug/test runs
   const valid = assessments.filter(a => !SPAM_ASSESSMENT_IDS.has(Number(a.assessment_id)));
 
-  // 2. Sort reverse-chronologically (newest first)
   const sorted = [...valid].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
 
-  // 3. Deduplicate exact duplicate IDs and rapid multi-click submissions (< 60s)
   const result: BSASAssessment[] = [];
   const seenIds = new Set<string | number>();
 
@@ -499,6 +475,11 @@ class MockDatabaseEngine {
     return null;
   }
 
+  public getUser(userId: string): User | null {
+    if (!userId) return null;
+    return this.state.users.find(u => isSameUser(u.user_id, userId)) || null;
+  }
+
   public setCurrentUserId(userId: string | null) {
     this.currentUserId = userId;
     if (userId) {
@@ -519,7 +500,9 @@ class MockDatabaseEngine {
     const existing = this.state.users.find(u => u.email.toLowerCase() === emailClean);
     if (existing) {
       if (userData.password) existing.password = userData.password;
-      if (userData.user_id) existing.user_id = userData.user_id;
+      if (userData.user_id && userData.user_id !== existing.user_id) {
+        this.realignUserId(existing.user_id, userData.user_id);
+      }
       if (userData.first_name) existing.first_name = userData.first_name;
       if (userData.last_name) existing.last_name = userData.last_name;
       this.setCurrentUserId(existing.user_id);
@@ -549,10 +532,59 @@ class MockDatabaseEngine {
     return newUser;
   }
 
+  public realignUserId(oldId: string, newId: string): void {
+    if (!oldId || !newId || isSameUser(oldId, newId)) return;
+
+    const user = this.state.users.find(u => isSameUser(u.user_id, oldId));
+    if (user) {
+      user.user_id = newId;
+    }
+
+    if (isSameUser(this.currentUserId, oldId)) {
+      this.currentUserId = newId;
+      safeStorage.setItem(STORAGE_KEY_ACTIVE_USER, newId);
+    }
+
+    this.state.clothing_items.forEach(ci => {
+      if (isSameUser(ci.user_id, oldId)) {
+        ci.user_id = newId;
+      }
+    });
+
+    this.state.bsas_assessments.forEach(ba => {
+      if (isSameUser(ba.user_id, oldId)) {
+        ba.user_id = newId;
+      }
+    });
+
+    this.state.daily_clothing_logs.forEach(dcl => {
+      if (isSameUser(dcl.user_id, oldId)) {
+        dcl.user_id = newId;
+      }
+    });
+
+    this.state.friend_requests.forEach(fr => {
+      if (isSameUser(fr.sender_id, oldId)) fr.sender_id = newId;
+      if (isSameUser(fr.receiver_id, oldId)) fr.receiver_id = newId;
+    });
+
+    this.state.borrows.forEach(b => {
+      if (isSameUser(b.borrower_id, oldId)) b.borrower_id = newId;
+    });
+
+    if (this.state.notifications && Array.isArray(this.state.notifications)) {
+      this.state.notifications.forEach(n => {
+        if (isSameUser(n.user_id, oldId)) n.user_id = newId;
+      });
+    }
+
+    this.notify();
+  }
+
   public findUserByIdentifier(emailOrCode: string): User | null {
     const search = emailOrCode.trim().toLowerCase();
     return this.state.users.find(
-      u => u.email.toLowerCase() === search || 
+      u => u.email.toLowerCase() === search ||
            u.friend_code.toLowerCase() === search ||
            `${u.first_name} ${u.last_name}`.toLowerCase() === search
     ) || null;
@@ -591,10 +623,8 @@ class MockDatabaseEngine {
     const targetUser = this.state.users[userIndex];
     const targetUid = targetUser.user_id;
 
-    // 1. Remove user from users array
     this.state.users.splice(userIndex, 1);
 
-    // 2. Cascade delete clothing items belonging to this user
     const itemIdsToDelete = new Set(
       this.state.clothing_items
         .filter(i => i.user_id === targetUid || isSameUser(i.user_id, targetUid))
@@ -605,46 +635,39 @@ class MockDatabaseEngine {
       i => !itemIdsToDelete.has(i.item_id)
     );
 
-    // 3. Cascade delete item_tags for deleted items
     if (this.state.item_tags && Array.isArray(this.state.item_tags)) {
       this.state.item_tags = this.state.item_tags.filter(
         it => !itemIdsToDelete.has(it.item_id)
       );
     }
 
-    // 4. Cascade delete bsas assessments
     this.state.bsas_assessments = this.state.bsas_assessments.filter(
       a => a.user_id !== targetUid && !isSameUser(a.user_id, targetUid)
     );
 
-    // 5. Cascade delete daily clothing logs
     this.state.daily_clothing_logs = this.state.daily_clothing_logs.filter(
       l => l.user_id !== targetUid && !isSameUser(l.user_id, targetUid)
     );
 
-    // 6. Cascade delete friend requests involving this user
     this.state.friend_requests = this.state.friend_requests.filter(
-      r => r.sender_id !== targetUid && 
-           r.receiver_id !== targetUid && 
-           !isSameUser(r.sender_id, targetUid) && 
+      r => r.sender_id !== targetUid &&
+           r.receiver_id !== targetUid &&
+           !isSameUser(r.sender_id, targetUid) &&
            !isSameUser(r.receiver_id, targetUid)
     );
 
-    // 7. Cascade delete borrows involving this user or this user's garments
     this.state.borrows = this.state.borrows.filter(
-      b => b.borrower_id !== targetUid && 
-           !isSameUser(b.borrower_id, targetUid) && 
+      b => b.borrower_id !== targetUid &&
+           !isSameUser(b.borrower_id, targetUid) &&
            !itemIdsToDelete.has(b.item_id)
     );
 
-    // 8. Cascade delete notifications for this user
     if (this.state.notifications && Array.isArray(this.state.notifications)) {
       this.state.notifications = this.state.notifications.filter(
         n => n.user_id !== targetUid && !isSameUser(n.user_id, targetUid)
       );
     }
 
-    // 9. Reset session if active user was this user
     if (this.currentUserId === targetUid || isSameUser(this.currentUserId, targetUid)) {
       this.currentUserId = null;
       safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
@@ -665,12 +688,9 @@ class MockDatabaseEngine {
     return [...this.state.tags];
   }
 
-  // --- CLOTHING ITEMS ---
   public getClothingItems(userId?: string): ClothingItem[] {
     const targetUid = userId || this.currentUserId;
 
-    // Cross-sync: Ensure any garments in today's outfit log or past daily logs
-    // are registered in clothing_items so they are NEVER missing from the virtual closet!
     if (this.state.daily_clothing_logs && Array.isArray(this.state.daily_clothing_logs)) {
       let recovered = false;
       this.state.daily_clothing_logs.forEach(log => {
@@ -732,7 +752,6 @@ class MockDatabaseEngine {
     const newItem: ClothingItem = {
       ...item,
       user_id: targetUid,
-      addition_type: item.addition_type || 'Old',
       item_id: Date.now() + Math.floor(Math.random() * 1000),
       wear_count: 0,
       worn_count: 0,
@@ -740,7 +759,6 @@ class MockDatabaseEngine {
     };
     this.state.clothing_items.unshift(newItem);
 
-    // Save item_tags
     if (newItem.tags && newItem.tags.length > 0) {
       if (!this.state.item_tags) this.state.item_tags = [];
       newItem.tags.forEach(tag => {
@@ -761,7 +779,6 @@ class MockDatabaseEngine {
     if (idx === -1) return null;
     this.state.clothing_items[idx] = { ...this.state.clothing_items[idx], ...updates };
 
-    // Update item_tags if tags were modified
     if (updates.tags) {
       if (!this.state.item_tags) this.state.item_tags = [];
       this.state.item_tags = this.state.item_tags.filter(it => it.item_id !== itemId);
@@ -780,11 +797,11 @@ class MockDatabaseEngine {
 
   public deleteClothingItem(itemId: number): boolean {
     this.state.clothing_items = this.state.clothing_items.filter(i => i.item_id !== itemId);
-    // Cascade remove from item_tags (ItemTag.item_id ON DELETE CASCADE)
+
     if (this.state.item_tags) {
       this.state.item_tags = this.state.item_tags.filter(it => it.item_id !== itemId);
     }
-    // Cascade remove from daily logs and borrows
+
     this.state.daily_clothing_logs.forEach(log => {
       if (log.items) {
         log.items = log.items.filter(item => item.item_id !== itemId);
@@ -795,7 +812,6 @@ class MockDatabaseEngine {
     return true;
   }
 
-  // --- BSAS ASSESSMENTS ---
   public getAssessments(userId?: string): BSASAssessment[] {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) {
@@ -823,8 +839,7 @@ class MockDatabaseEngine {
     if (breakdown) {
       saveAssessmentBreakdown(targetUid, newAssessment.assessment_id, breakdown);
     }
-    
-    // Add real notification for BSAS assessment
+
     if (!this.state.notifications) this.state.notifications = [];
     this.state.notifications.unshift({
       id: `notif-bsas-${Date.now()}`,
@@ -840,7 +855,6 @@ class MockDatabaseEngine {
     return newAssessment;
   }
 
-  // --- DAILY CLOTHING LOGS ---
   public getDailyLogs(userId?: string): DailyClothingLog[] {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) {
@@ -855,7 +869,6 @@ class MockDatabaseEngine {
     return this.state.daily_clothing_logs.find(l => l.log_id === logId);
   }
 
-  // Automated locking (scheduled Supabase pg_cron job / edge trigger at 00:00 midnight)
   public autoFinalizePastLogs(currentDateString: string) {
     let changed = false;
     this.state.daily_clothing_logs.forEach(log => {
@@ -884,7 +897,7 @@ class MockDatabaseEngine {
     this.autoFinalizePastLogs(dateString);
 
     const targetUid = this.currentUserId || 'a0000000-0000-0000-0000-000000000001';
-    // Several outfits can share one date; always resolve to the earliest-created one (stable)
+
     let log = this.state.daily_clothing_logs
       .filter(l => isSameUser(l.user_id, targetUid) && l.log_date === dateString)
       .sort((a, b) => a.log_id - b.log_id)[0];
@@ -919,11 +932,6 @@ class MockDatabaseEngine {
     return newLog;
   }
 
-  /**
-   * Adds remote logs only for dates/ids that do not exist locally. Local outfits are authoritative:
-   * Supabase stores a single row per (user, date) while the app supports several outfits per day,
-   * so blindly overwriting local outfits with remote rows swaps/duplicates/erases them.
-   */
   public mergeRemoteDailyLogs(remote: DailyClothingLog[]): void {
     let changed = false;
     for (const r of remote) {
@@ -958,7 +966,6 @@ class MockDatabaseEngine {
     return log;
   }
 
-  // Unlock daily wear log for user editing
   public unlockDailyLogForEditing(logId: number): boolean {
     const log = this.state.daily_clothing_logs.find(l => l.log_id === logId);
     if (!log) return false;
@@ -982,13 +989,12 @@ class MockDatabaseEngine {
     return true;
   }
 
-  // Delete daily wear log (3.2 Update & Delete Daily Wear Log)
   public deleteDailyLog(logId: number): boolean {
     const idx = this.state.daily_clothing_logs.findIndex(l => l.log_id === logId);
     if (idx === -1) return false;
     const log = this.state.daily_clothing_logs[idx];
     if (log.is_finalized) {
-      // Re-open/unlock: revert the wear counts added during finalization
+
       if (log.items && log.items.length > 0) {
         log.items.forEach(logItem => {
           const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
@@ -1010,7 +1016,6 @@ class MockDatabaseEngine {
     return true;
   }
 
-  // Simulate automated midnight finalization (3.3 Midnight Finalization)
   public simulateMidnightFinalization(dateString?: string): DailyClothingLog | null {
     const todayStr = dateString || getLocalDateString();
     const log = this.getTodayLog(todayStr);
@@ -1028,7 +1033,6 @@ class MockDatabaseEngine {
       log.is_finalized = true;
       log.finalized_at = new Date().toISOString();
 
-      // Increment wear counts for all logged items
       if (log.items) {
         log.items.forEach(logItem => {
           const closetItem = this.state.clothing_items.find(i => i.item_id === logItem.item_id);
@@ -1044,7 +1048,6 @@ class MockDatabaseEngine {
     return log;
   }
 
-  // --- FRIENDS & BORROW REQUESTS ---
   public getFriendRequests(): FriendRequest[] {
     return this.state.friend_requests.map(req => {
       const sender = this.state.users.find(u => u.user_id === req.sender_id);
@@ -1069,7 +1072,6 @@ class MockDatabaseEngine {
       return { success: false, message: 'Friend code not found. Please verify the code.' };
     }
 
-    // Check existing request
     const existing = this.state.friend_requests.find(
       r => (r.sender_id === currentUser.user_id && r.receiver_id === targetUser.user_id) ||
            (r.sender_id === targetUser.user_id && r.receiver_id === currentUser.user_id)
@@ -1080,7 +1082,7 @@ class MockDatabaseEngine {
         return { success: false, message: 'You are already friends with this person!' };
       }
       if (existing.status === 'rejected') {
-        // A denied request must not block the sender from trying again
+
         this.state.friend_requests = this.state.friend_requests.filter(r => r !== existing);
       } else {
         return { success: false, message: 'A pending request already exists between you.' };
@@ -1097,7 +1099,6 @@ class MockDatabaseEngine {
 
     this.state.friend_requests.unshift(newReq);
 
-    // Create notification for recipient
     if (!this.state.notifications) this.state.notifications = [];
     this.state.notifications.unshift({
       id: `notif-fr-${newReq.request_id}`,
@@ -1132,8 +1133,6 @@ class MockDatabaseEngine {
       this.state.friend_requests.unshift(req);
     }
 
-    // Auto-create notification for recipient if request is pending
-    // (always keyed to receiver_id so it shows whenever the receiver opens their account)
     if (req.status === 'pending' && req.receiver_id) {
       if (!this.state.notifications) this.state.notifications = [];
       const alreadyNotified = this.state.notifications.some(
@@ -1162,18 +1161,12 @@ class MockDatabaseEngine {
     this.notify();
   }
 
-  /**
-   * Replaces all local friend requests involving `userId` with the authoritative remote list
-   * from Supabase. Removes stale local copies (e.g. a request still "pending" locally after the
-   * other user accepted it on another device) and keeps notifications in sync.
-   */
   public replaceFriendRequestsForUser(userId: string, remote: FriendRequest[]) {
     if (!this.state.friend_requests) this.state.friend_requests = [];
     if (!this.state.notifications) this.state.notifications = [];
 
     const involves = (r: FriendRequest) => isSameUser(r.sender_id, userId) || isSameUser(r.receiver_id, userId);
 
-    // Detect outgoing requests that were pending locally but have since been accepted remotely
     const previouslyPendingOutgoing = this.state.friend_requests.filter(
       r => r.status === 'pending' && isSameUser(r.sender_id, userId)
     );
@@ -1197,17 +1190,15 @@ class MockDatabaseEngine {
       });
     });
 
-    // Drop every local request involving this user, then insert the remote ones
     this.state.friend_requests = this.state.friend_requests.filter(r => !involves(r));
     remote.forEach(r => {
       const { sender, receiver, ...plain } = r as any;
       this.state.friend_requests.unshift(plain);
     });
 
-    // Remove friend_request notifications that no longer correspond to a pending request
     this.state.notifications = this.state.notifications.filter(n => {
       if (n.type !== 'friend_request' || !n.user_id || !isSameUser(n.user_id, userId)) return true;
-      // "accepted" notifications (sent to the original sender) are kept
+
       if (n.id?.startsWith('notif-acc-')) return true;
       return remote.some(r =>
         r.status === 'pending' &&
@@ -1215,7 +1206,6 @@ class MockDatabaseEngine {
       );
     });
 
-    // Ensure pending incoming requests have a notification
     remote.forEach(r => {
       if (r.status !== 'pending' || !isSameUser(r.receiver_id, userId)) return;
       const alreadyNotified = this.state.notifications.some(
@@ -1253,7 +1243,6 @@ class MockDatabaseEngine {
       const sender = this.state.users.find(u => u.user_id === req.sender_id);
       const receiver = this.state.users.find(u => u.user_id === req.receiver_id);
 
-      // Clean up incoming friend request notification for receiver
       if (this.state.notifications) {
         this.state.notifications = this.state.notifications.filter(
           n => !(n.type === 'friend_request' && (n.request_id === requestId || (n.sender_id === req.sender_id && n.receiver_id === req.receiver_id)))
@@ -1296,7 +1285,6 @@ class MockDatabaseEngine {
     this.notify();
   }
 
-  // --- NOTIFICATIONS SYSTEM ---
   public getNotifications(userId?: string): AppNotification[] {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) return [];
@@ -1333,8 +1321,8 @@ class MockDatabaseEngine {
     return this.state.borrows.map(b => {
       const item = this.state.clothing_items.find(i => i.item_id === b.item_id) || b.item;
       const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
-      const lender = item 
-        ? (this.state.users.find(u => u.user_id === item.user_id || isSameUser(u.user_id, item.user_id)) || b.lender) 
+      const lender = item
+        ? (this.state.users.find(u => u.user_id === item.user_id || isSameUser(u.user_id, item.user_id)) || b.lender)
         : b.lender;
       return { ...b, item, borrower, lender };
     });
@@ -1353,7 +1341,6 @@ class MockDatabaseEngine {
       this.state.borrows.unshift(b);
     }
 
-    // Update item status if accepted or returned
     const clothingItem = this.state.clothing_items.find(i => i.item_id === b.item_id) || b.item;
     if (clothingItem) {
       if (b.status === 'Accepted') {
@@ -1365,11 +1352,10 @@ class MockDatabaseEngine {
 
     const lenderId = clothingItem?.user_id || b.lender?.user_id;
 
-    // Auto-generate notification for the lender if incoming borrow is Pending
     if (b.status === 'Pending' && lenderId) {
       if (!this.state.notifications) this.state.notifications = [];
       const alreadyNotified = this.state.notifications.some(
-        n => (n.type === 'borrow' || n.type === 'borrow_request') && 
+        n => (n.type === 'borrow' || n.type === 'borrow_request') &&
              (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId))
       );
       if (!alreadyNotified) {
@@ -1390,10 +1376,9 @@ class MockDatabaseEngine {
       }
     }
 
-    // Auto-generate notification for the borrower if borrow was updated by lender (Accepted / Rejected / Returned)
     if (b.borrower_id && b.status !== 'Pending') {
       if (!this.state.notifications) this.state.notifications = [];
-      // Clean up previous pending request notification for the lender
+
       if (lenderId) {
         this.state.notifications = this.state.notifications.filter(
           n => !(n.type === 'borrow' && (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId)))
@@ -1446,7 +1431,6 @@ class MockDatabaseEngine {
     };
     this.state.borrows.unshift(newBorrow);
 
-    // Notify lender of incoming borrow request
     const item = this.state.clothing_items.find(i => i.item_id === itemId);
     const borrower = this.getCurrentUser();
     if (item && item.user_id) {
@@ -1484,7 +1468,7 @@ class MockDatabaseEngine {
       }
       const lender = this.getCurrentUser();
       if (this.state.notifications) {
-        // Clear pending request notification for the lender
+
         this.state.notifications = this.state.notifications.filter(
           n => !(n.type === 'borrow' && n.request_id === borrowId && isSameUser(n.user_id, lender?.user_id || ''))
         );
@@ -1539,7 +1523,6 @@ class MockDatabaseEngine {
     }
   }
 
-  // --- DONATIONS & COMMUNITY FLAGS ---
   public getDonationOpportunities(): DonationOpportunity[] {
     return this.state.donation_opportunities.map(opp => {
       const flags = this.state.donation_flags.filter(f => f.donation_id === opp.donation_id);
@@ -1616,7 +1599,7 @@ class MockDatabaseEngine {
               Math.abs(o.longitude - opp.longitude) < 0.001)
       );
       if (matchIndex >= 0) {
-        // Merge so we preserve rich local metadata while updating ID
+
         this.state.donation_opportunities[matchIndex] = {
           ...opp,
           ...this.state.donation_opportunities[matchIndex],
@@ -1651,10 +1634,6 @@ class MockDatabaseEngine {
     this.notify();
   }
 
-  /**
-   * Cache assessments fetched from Supabase into the local store (silently — no listener
-   * notification, to avoid re-render loops) so local re-hydration never drops them.
-   */
   public mergeRemoteAssessments(remote: BSASAssessment[]): void {
     let changed = false;
     for (const r of remote) {
@@ -1746,33 +1725,36 @@ class MockDatabaseEngine {
 
 export const mockDatabase = new MockDatabaseEngine();
 
-/**
- * Guarantees that a user exists in the remote Supabase `users` table so foreign key
- * constraints (like `friend_request_sender_id_fkey` or `borrow_borrower_id_fkey`)
- * are never violated.
- *
- * 1. Checks if user exists remotely by user_id.
- * 2. If not, checks if user exists remotely by email. If found, realigns the local
- *    user's user_id with the canonical remote UUID.
- * 3. If neither exists, inserts the user row into Supabase.
- */
 export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
   const supabase = getSupabase();
   if (!supabase || !user) return user;
 
-  try {
-    // 1. Check if user already exists in remote database by user_id
-    const { data: byId } = await supabase
-      .from('users')
-      .select('*')
-      .eq('user_id', user.user_id)
-      .limit(1);
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    if (byId && byId.length > 0) {
-      return byId[0] as User;
+  try {
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData?.user?.id && authData.user.email?.toLowerCase() === user.email?.toLowerCase()) {
+        if (user.user_id !== authData.user.id) {
+          mockDatabase.realignUserId(user.user_id, authData.user.id);
+          user.user_id = authData.user.id;
+        }
+      }
+    } catch {}
+
+    if (UUID_PATTERN.test(user.user_id)) {
+      const { data: byId } = await supabase
+        .from('users')
+        .select('*')
+        .eq('user_id', user.user_id)
+        .limit(1);
+
+      if (byId && byId.length > 0) {
+        return byId[0] as User;
+      }
     }
 
-    // 2. Check if user exists in remote database by email
     if (user.email) {
       const { data: byEmail } = await supabase
         .from('users')
@@ -1782,20 +1764,33 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
 
       if (byEmail && byEmail.length > 0) {
         const remoteUser = byEmail[0] as User;
-        // Realign local user_id with the canonical remote UUID
+
         const oldUid = user.user_id;
         const newUid = remoteUser.user_id;
+        mockDatabase.realignUserId(oldUid, newUid);
         mockDatabase.upsertUser(remoteUser);
-        if (isSameUser(mockDatabase.getCurrentUser()?.user_id, oldUid)) {
-          mockDatabase.setCurrentUserId(newUid);
-        }
         return remoteUser;
       }
     }
 
-    // 3. User does not exist remotely: insert them into Supabase users table
+    let canonicalUid = user.user_id;
+    if (!UUID_PATTERN.test(canonicalUid)) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id && authData.user.email?.toLowerCase() === user.email?.toLowerCase()) {
+          canonicalUid = authData.user.id;
+        } else {
+          canonicalUid = generateUUID();
+        }
+      } catch {
+        canonicalUid = generateUUID();
+      }
+      mockDatabase.realignUserId(user.user_id, canonicalUid);
+      user.user_id = canonicalUid;
+    }
+
     const insertPayload: Record<string, any> = {
-      user_id: user.user_id,
+      user_id: canonicalUid,
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
@@ -1804,15 +1799,17 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
       created_at: user.created_at || new Date().toISOString()
     };
 
-    let { error } = await supabase.from('users').insert([insertPayload]);
+    let { error } = await supabase.from('users').upsert(insertPayload, { onConflict: 'user_id' });
     if (error && (error.code === '42703' || error.message?.includes('password'))) {
       delete insertPayload.password;
-      const retry = await supabase.from('users').insert([insertPayload]);
+      const retry = await supabase.from('users').upsert(insertPayload, { onConflict: 'user_id' });
       error = retry.error;
     }
 
     if (error && error.code !== '23505') {
-      console.warn('[ensureUserSyncedToSupabase] error inserting user:', error.message);
+      console.warn('[ensureUserSyncedToSupabase] error upserting user:', error.message);
+    } else {
+      mockDatabase.upsertUser(user);
     }
   } catch (err) {
     console.warn('[ensureUserSyncedToSupabase] exception:', err);
@@ -1908,7 +1905,7 @@ export async function runDatabaseDiagnostic(): Promise<DatabaseDiagnosticResult>
 
   for (const meta of TABLE_METADATA) {
     try {
-      // Use head: true to perform a zero-payload HTTP HEAD request, retrieving count without egress bandwidth
+
       const { error, count } = await supabase.from(meta.name).select('*', { count: 'exact', head: true });
       if (error) {
         tableResults.push({
@@ -1945,7 +1942,6 @@ export async function runDatabaseDiagnostic(): Promise<DatabaseDiagnosticResult>
     }
   }
 
-  // Probe write permission on clothing_item
   let writePerm: DatabaseDiagnosticResult['writePermission'] = 'allowed';
   let writeMsg = 'Cloud writes permitted.';
   try {
@@ -2001,7 +1997,14 @@ export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; 
 
   let count = 0;
   try {
-    // 1. Sync clothing items
+
+    const allUsers = mockDatabase.getAllUsers();
+    for (const u of allUsers) {
+      try {
+        await ensureUserSyncedToSupabase(u);
+      } catch {}
+    }
+
     for (const item of localItems) {
       const canonicalUid = toCanonicalUserId(item.user_id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid);
@@ -2010,7 +2013,7 @@ export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; 
           user_id: canonicalUid,
           name: item.name,
           image_url: item.image_url,
-          addition_type: item.addition_type || 'Old',
+          addition_type: (item as any).addition_type || 'Old',
           wear_count: item.wear_count || item.worn_count || 0
         }]).select().single();
 
@@ -2037,7 +2040,6 @@ export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; 
       }
     }
 
-    // 2. Sync BSAS assessments
     for (const a of localAssessments) {
       const canonicalUid = toCanonicalUserId(a.user_id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid);
@@ -2064,4 +2066,3 @@ export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; 
     };
   }
 }
-

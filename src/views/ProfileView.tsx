@@ -1,42 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { User, ClothingItem, Borrow, BSASAssessment } from '../types/database';
-import { 
-  UserCircle, 
-  Trash2, 
-  LogOut, 
-  ChevronRight, 
-  Copy, 
-  Check, 
-  Edit3, 
-  BarChart2, 
-  Clock, 
-  Shirt, 
-  Users 
+import {
+  UserCircle,
+  Trash2,
+  LogOut,
+  ChevronRight,
+  Copy,
+  Check,
+  Edit3,
+  BarChart2,
+  Clock,
+  Shirt,
+  Users
 } from 'lucide-react';
-import { mockDatabase, deduplicateAssessments } from '../services/supabaseClient';
-
-/**
- * ============================================================================
- * PROFILE VIEW (ProfileView.tsx)
- * ============================================================================
- * 
- * Implements wireframe layout from Figure .14.1 (SDD Pages 60 & 61):
- * - Left Column:
- *   1. Avatar Circle
- *   2. User Name (e.g. M. Cruz)
- *   3. 3-item stat strip: [X items] [X friends] [Xd streak]
- *   4. BSAS Questionnaire Results (mini bar chart)
- *   5. Action buttons: 'How to interpret' & 'Retake BSAS Test'
- * - Right Column:
- *   Stacked action menu card:
- *   - Edit Profile
- *   - Change Password
- *   - Closet Statistics
- *   - Create friend code
- *   - Requests
- *   - Log Out
- *   - Delete Account
- */
+import { mockDatabase, deduplicateAssessments, ensureUserSyncedToSupabase } from '../services/supabaseClient';
 
 interface ProfileViewProps {
   currentUser: User;
@@ -65,22 +42,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onStartRetakeAssessment,
   toast
 }) => {
-  // Initials for avatar
+
   const initials = `${currentUser.first_name[0] || ''}${currentUser.last_name[0] || ''}`.toUpperCase();
   const displayName = `${currentUser.first_name[0] ? currentUser.first_name[0] + '.' : ''} ${currentUser.last_name || currentUser.first_name}`;
 
-  // Modals for menu actions
   const [modalAction, setModalAction] = useState<'edit-profile' | 'friend-code' | null>(null);
   const [editFirstName, setEditFirstName] = useState(currentUser.first_name);
   const [editLastName, setEditLastName] = useState(currentUser.last_name);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  // Streak calculation (days logged)
   const streakDays = useMemo(() => {
     return Math.max(1, garments.reduce((acc, g) => acc + (g.worn_count ? 1 : 0), 0) % 15);
   }, [garments]);
 
-  // Assessments sorted chronologically (oldest to newest for bar chart)
   const sortedAsc = useMemo(() => {
     return deduplicateAssessments(assessments).sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
   }, [assessments]);
@@ -106,27 +80,28 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       last_name: editLastName.trim()
     };
     mockDatabase.upsertUser(updatedUser);
+    ensureUserSyncedToSupabase(updatedUser).catch(() => {});
     toast('Profile updated successfully!');
     setModalAction(null);
   };
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', width: '100%' }}>
-      {/* 2-Column Grid on Desktop, 1 Column on Mobile */}
+
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
         gap: 32,
         alignItems: 'start'
       }}>
-        {/* ================= LEFT COLUMN ================= */}
+
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           textAlign: 'center'
         }}>
-          {/* 1. Avatar in Circle */}
+
           <div style={{
             width: 80,
             height: 80,
@@ -144,7 +119,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {initials || <UserCircle style={{ width: 44, height: 44 }} />}
           </div>
 
-          {/* 2. User Name */}
           <h2 style={{
             margin: '0 0 10px',
             fontSize: 22,
@@ -155,7 +129,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {displayName}
           </h2>
 
-          {/* 3. Stats Strip: [X items] [X friends] [Xd streak] */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -187,7 +160,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           </div>
 
-          {/* 4. BSAS Questionnaire Results (Mini Bar Chart) */}
           <div className="card" style={{ width: '100%', padding: '16px 14px', borderRadius: 14, marginBottom: 14 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: 10 }}>
               BSAS Questionnaire Results
@@ -212,7 +184,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   const isIndicative = item.score >= 4;
 
                   return (
-                    <div 
+                    <div
                       key={item.assessment_id || idx}
                       style={{
                         display: 'flex',
@@ -231,8 +203,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         width: 14,
                         height: `${barHeightPct}%`,
                         borderRadius: '4px 4px 0 0',
-                        background: isIndicative 
-                          ? 'linear-gradient(180deg, #f87171, #dc2626)' 
+                        background: isIndicative
+                          ? 'linear-gradient(180deg, #f87171, #dc2626)'
                           : 'linear-gradient(180deg, var(--primary-soft), var(--primary))'
                       }} />
                       <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
@@ -244,7 +216,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
             )}
 
-            {/* Buttons: 'How to interpret' & 'Retake BSAS Test' */}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12 }}>
               <button
                 type="button"
@@ -268,10 +239,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
         </div>
 
-        {/* ================= RIGHT COLUMN: ACTION MENU LIST ================= */}
         <div className="card" style={{ padding: '8px 0', borderRadius: 14, overflow: 'hidden' }}>
-          
-          {/* 1. Edit Profile */}
+
           <button
             type="button"
             onClick={() => setModalAction('edit-profile')}
@@ -292,7 +261,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
-          {/* 3. Closet Statistics */}
           <button
             type="button"
             onClick={() => onNavigateToView?.('closet-statistics')}
@@ -313,7 +281,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
-          {/* 4. Create friend code */}
           <button
             type="button"
             onClick={() => setModalAction('friend-code')}
@@ -334,7 +301,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
-          {/* 5. Requests */}
           <button
             type="button"
             onClick={() => onNavigateToView?.('requests')}
@@ -355,7 +321,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
-          {/* 6. Log Out */}
           <button
             type="button"
             onClick={onLogout}
@@ -376,7 +341,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
-          {/* 7. Delete Account */}
           <button
             type="button"
             onClick={onDeleteAccount}
@@ -399,7 +363,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       </div>
 
-      {/* Modal: Edit Profile */}
       {modalAction === 'edit-profile' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
           <div className="card" style={{ maxWidth: 400, width: '100%', padding: 24, borderRadius: 16 }}>
@@ -422,7 +385,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       )}
 
-      {/* Modal: Friend Code */}
       {modalAction === 'friend-code' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
           <div className="card" style={{ maxWidth: 400, width: '100%', padding: 24, borderRadius: 16 }}>

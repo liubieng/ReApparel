@@ -1,13 +1,13 @@
 import React from 'react';
-import { 
-  Shirt, 
-  Calendar, 
-  Leaf, 
-  Users, 
-  HeartHandshake, 
-  UserCircle, 
-  Settings, 
-  LogOut, 
+import {
+  Shirt,
+  Calendar,
+  Leaf,
+  Users,
+  HeartHandshake,
+  UserCircle,
+  Settings,
+  LogOut,
   MapPin,
   Sparkles,
   Database,
@@ -65,7 +65,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const borrowsCount = pendingBorrowsCount !== undefined ? pendingBorrowsCount : pendingRequestsCount;
 
-  // Prevent background scrolling while mobile drawer is open
   React.useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -79,14 +78,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Mobile Backdrop */}
+
       {isOpen && (
-        <div 
+        <div
           className="mobile-backdrop"
-          style={{ 
-            position: 'fixed', 
-            inset: 0, 
-            background: 'rgba(0,0,0,0.45)', 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
             zIndex: 40,
             backdropFilter: 'blur(2px)',
             WebkitBackdropFilter: 'blur(2px)'
@@ -96,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <nav className={`side ${isOpen ? 'open' : ''}`} style={{ zIndex: 50 }}>
-        {/* Brand Header */}
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -119,7 +118,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Close button for mobile touch */}
           <button
             type="button"
             className="mobile-close-btn"
@@ -141,7 +139,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Navigation Items */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -180,7 +177,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Icon style={{ width: 16, height: 16 }} />
                 <span style={{ flex: 1 }}>{item.label}</span>
 
-                {/* Badge for pending requests & friend connections */}
                 {badgeCount > 0 && (
                   <span style={{
                     fontSize: 10,
@@ -194,9 +190,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 )}
 
-                {/* Notification when BSAS questionnaire is available to be retaken */}
                 {item.id === 'recovery' && isBSASDue && (
-                  <span 
+                  <span
                     title="BSAS Questionnaire is available to be retaken!"
                     style={{
                       fontSize: 9,
@@ -217,7 +212,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </div>
 
-        {/* Footer Actions */}
         <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button
             type="button"

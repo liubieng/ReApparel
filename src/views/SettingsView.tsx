@@ -2,25 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { safeStorage } from '../services/supabaseClient';
 
-/**
- * ============================================================================
- * SETTINGS VIEW (SettingsView.tsx)
- * ============================================================================
- * 
- * Implements wireframe layout from Figure .15.1 (SDD Pages 62 & 63):
- * - Header: 'Settings'
- * - Card 1: 'Appearance'
- *   - 'Dark Mode' row with subtitle 'Deeper greens, easier at night' and toggle switch
- * - Card 2: 'Notifications' (TC_NOTIF_01 - TC_NOTIF_05)
- *   - 'Borrow requests' (default ON)
- *   - 'Recovery milestones' (default ON)
- *   - 'Donation drives near me' (default ON)
- *   - 'Friend activity' (default OFF)
- *   - Persistence via safeStorage
- *   - Offline detection: if offline, display 'Notification preference could not be saved.' and revert
- * - Centered button at bottom: 'Delete account'
- */
-
 interface SettingsViewProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
@@ -52,7 +33,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onDeleteAccount,
   toast
 }) => {
-  // Load notification preferences from storage or use defaults
+
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => {
     try {
       const stored = safeStorage.getItem(STORAGE_KEY_NOTIF_PREFS);
@@ -65,17 +46,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Sync to safeStorage
   const handleTogglePref = (key: keyof NotificationPrefs, label: string) => {
     setErrorMessage(null);
 
-    // Check online status (TC_NOTIF_05)
     const isOffline = !navigator.onLine;
     if (isOffline) {
       const msg = 'Notification preference could not be saved.';
       setErrorMessage(msg);
       toast(msg);
-      // Revert/preserve current state (do not update prefs or safeStorage)
+
       return;
     }
 
@@ -90,7 +69,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     toast(`${label} notifications ${nextValue ? 'enabled' : 'disabled'}`);
   };
 
-  // Toggle switch helper component matching wireframe
   const renderToggle = (checked: boolean, onToggle: () => void, label: string) => (
     <button
       type="button"
@@ -128,14 +106,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', width: '100%', padding: '10px 0 40px' }}>
-      
-      {/* 1. Appearance Card (Figure .15.1) */}
+
       <div className="card" style={{ padding: 22, borderRadius: 14, marginBottom: 18 }}>
-        <h3 style={{ 
-          margin: '0 0 16px', 
-          fontSize: 15, 
+        <h3 style={{
+          margin: '0 0 16px',
+          fontSize: 15,
           fontFamily: 'var(--font-display)',
-          color: 'var(--text)' 
+          color: 'var(--text)'
         }}>
           Appearance
         </h3>
@@ -154,20 +131,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Notifications Card (TC_NOTIF_01 - TC_NOTIF_05) */}
       <div className="card" style={{ padding: 22, borderRadius: 14, marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ 
-            margin: 0, 
-            fontSize: 15, 
+          <h3 style={{
+            margin: 0,
+            fontSize: 15,
             fontFamily: 'var(--font-display)',
-            color: 'var(--text)' 
+            color: 'var(--text)'
           }}>
             Notification Preferences
           </h3>
         </div>
 
-        {/* Offline Error Banner (TC_NOTIF_05) */}
         {errorMessage && (
           <div style={{
             display: 'flex',
@@ -187,10 +162,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
-        {/* Row 1: Borrow requests (default ON) */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           paddingBottom: 14,
           borderBottom: '1px solid var(--border)'
@@ -205,16 +179,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {renderToggle(
-            prefs.borrowRequests, 
+            prefs.borrowRequests,
             () => handleTogglePref('borrowRequests', 'Borrow requests'),
             'Toggle borrow requests notifications'
           )}
         </div>
 
-        {/* Row 2: Recovery milestones (default ON) */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           paddingTop: 14,
           paddingBottom: 14,
@@ -230,16 +203,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {renderToggle(
-            prefs.recoveryMilestones, 
+            prefs.recoveryMilestones,
             () => handleTogglePref('recoveryMilestones', 'Recovery milestones'),
             'Toggle recovery milestones notifications'
           )}
         </div>
 
-        {/* Row 3: Donation drives near me (default ON) */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           paddingTop: 14,
           paddingBottom: 14,
@@ -255,16 +227,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {renderToggle(
-            prefs.donationDrives, 
+            prefs.donationDrives,
             () => handleTogglePref('donationDrives', 'Donation drives near me'),
             'Toggle donation drives notifications'
           )}
         </div>
 
-        {/* Row 4: Friend activity (default OFF) */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'space-between',
           paddingTop: 14
         }}>
@@ -278,14 +249,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
 
           {renderToggle(
-            prefs.friendActivity, 
+            prefs.friendActivity,
             () => handleTogglePref('friendActivity', 'Friend activity'),
             'Toggle friend activity notifications'
           )}
         </div>
       </div>
 
-      {/* 3. Centered 'Delete account' Button (Figure .15.1) */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
         <button
           type="button"

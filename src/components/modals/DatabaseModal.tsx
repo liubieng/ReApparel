@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Database, 
-  Copy, 
-  Check, 
-  ShieldCheck, 
-  RefreshCw, 
-  Save, 
-  Terminal, 
-  Activity, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Lock, 
-  Unlock, 
+import {
+  X,
+  Database,
+  Copy,
+  Check,
+  ShieldCheck,
+  RefreshCw,
+  Save,
+  Terminal,
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  Lock,
+  Unlock,
   Upload
 } from 'lucide-react';
-import { 
-  getStoredSupabaseConfig, 
-  saveStoredSupabaseConfig, 
-  mockDatabase, 
-  runDatabaseDiagnostic, 
+import {
+  getStoredSupabaseConfig,
+  saveStoredSupabaseConfig,
+  mockDatabase,
+  runDatabaseDiagnostic,
   syncAllLocalDataToSupabase,
-  DatabaseDiagnosticResult 
+  DatabaseDiagnosticResult
 } from '../../services/supabaseClient';
 
 interface DatabaseModalProps {
@@ -236,7 +236,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     }
   };
 
-  // Run diagnostics automatically when modal opens
   useEffect(() => {
     if (isOpen) {
       handleRunDiagnostics();
@@ -248,7 +247,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     try {
       const res = await syncAllLocalDataToSupabase();
       notify(res.message);
-      // Re-run diagnostic to show fresh row counts
+
       await handleRunDiagnostics();
       onConfigUpdated();
     } catch (err: any) {
@@ -300,8 +299,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   return (
     <div className="modalScrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={{ maxWidth: 740, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
-        
-        {/* Header */}
+
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-3)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -326,7 +324,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </button>
         </div>
 
-        {/* Tab switch */}
         <div style={{ padding: '10px 20px 0', display: 'flex', gap: 16, borderBottom: '1px solid var(--border)', fontSize: 13, background: 'var(--surface)' }}>
           <button
             type="button"
@@ -385,14 +382,11 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
-          
-          {/* TAB 1: DIAGNOSTICS & SYSTEM HEALTH */}
+
           {tab === 'diagnostics' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              
-              {/* Overall Status Banner */}
+
               <div style={{
                 padding: '14px 16px',
                 borderRadius: 10,
@@ -411,12 +405,12 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     )}
                     <div>
                       <strong style={{ fontSize: 13, color: 'var(--text)' }}>
-                        {diagnostic?.isConnected 
-                          ? 'Supabase Cloud PostgreSQL Connected (Dual-Engine Live)' 
+                        {diagnostic?.isConnected
+                          ? 'Supabase Cloud PostgreSQL Connected (Dual-Engine Live)'
                           : 'Supabase Offline &middot; Using Local Persistent Engine'}
                       </strong>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {diagnostic?.projectUrl || 'Client-side LocalStorage Active'} 
+                        {diagnostic?.projectUrl || 'Client-side LocalStorage Active'}
                         {diagnostic?.latencyMs ? ` &middot; Latency: ${diagnostic.latencyMs}ms` : ''}
                       </div>
                     </div>
@@ -447,7 +441,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                   </div>
                 </div>
 
-                {/* Explanation of RLS and Zero-Data-Loss architecture */}
                 {diagnostic?.writePermission === 'rls_blocked' && (
                   <div style={{
                     padding: 10,
@@ -463,7 +456,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                       <span>PostgreSQL Row-Level Security (RLS) Active on Supabase</span>
                     </div>
                     <p style={{ margin: '0 0 4px', color: 'var(--text-muted)' }}>
-                      Supabase protects tables by default when using the public anonymous key without user login sessions. 
+                      Supabase protects tables by default when using the public anonymous key without user login sessions.
                       <strong> Zero data was lost:</strong> ReApparel automatically stored your items, daily outfits, and BSAS check-ins in the local persistent store.
                     </p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
@@ -508,7 +501,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 )}
               </div>
 
-              {/* Table Status Grid */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
@@ -537,7 +529,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     </thead>
                     <tbody>
                       {(diagnostic?.tables || []).map((t, idx) => (
-                        <tr 
+                        <tr
                           key={t.name}
                           style={{
                             borderBottom: idx === (diagnostic?.tables.length || 0) - 1 ? 'none' : '1px solid var(--border)',
@@ -590,7 +582,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 </div>
               </div>
 
-              {/* Maintenance & Reset Toolbar */}
               <div style={{
                 paddingTop: 8,
                 borderTop: '1px solid var(--border)',
@@ -673,12 +664,11 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: SQL MIGRATIONS & RLS FIXES */}
           {tab === 'sql' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              
+
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                {/* Segmented Subtab Switch */}
+
                 <div style={{ display: 'flex', background: 'var(--surface-2)', padding: 3, borderRadius: 8, border: '1px solid var(--border)' }}>
                   <button
                     type="button"
@@ -778,7 +768,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: CONNECTION CREDENTIALS */}
           {tab === 'config' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ padding: 12, borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>

@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, isSameUser } from './supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, isSameUser, ensureUserSyncedToSupabase } from './supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../types/database';
 
 export { deduplicateAssessments };
@@ -12,26 +12,25 @@ export interface BSASCooldownInfo {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Remote daily-log writes run strictly one after another so rapid clicks can never interleave
-// a delete/insert pair and corrupt the stored rows.
 let dailyLogSyncChain: Promise<void> = Promise.resolve();
 
-/**
- * Pushes the CURRENT local state of one date to Supabase. Supabase keeps a single row per
- * (user, date), so all of the day's outfits are stored as one combined set of garments.
- */
 async function pushDateToRemote(userId: string, logDate: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
   const canonicalUid = toCanonicalUserId(userId);
   if (!UUID_RE.test(canonicalUid)) return;
 
+  const currentUser = mockDatabase.getCurrentUser();
+  if (currentUser && isSameUser(currentUser.user_id, canonicalUid)) {
+    await ensureUserSyncedToSupabase(currentUser);
+  }
+
   try {
-    // Read local state at execution time so queued rapid edits coalesce into the latest result
+
     const logs = mockDatabase.getDailyLogs(userId).filter(l => l.log_date === logDate);
 
     if (logs.length === 0) {
-      // Every outfit for this date was removed locally — remove the remote row too
+
       const { data: existing } = await supabase
         .from('daily_clothing_log')
         .select('log_id')
@@ -81,19 +80,18 @@ function queueDateSync(userId: string, logDate: string): Promise<void> {
 }
 
 export const closetService = {
-  // --- CLOTHING ITEMS ---
+
   async getItems(userId?: string): Promise<ClothingItem[]> {
-    // 1. Always retrieve local items from mockDatabase
+
     const localItems = mockDatabase.getClothingItems(userId);
 
-    // 2. Query Supabase if configured and merge any remote items for this user
     const supabase = getSupabase();
     if (supabase) {
       try {
         const currentUser = mockDatabase.getCurrentUser();
         const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
-        // Without a valid user ID the query would scan every user's closet — skip it
+
         if (!isUuid) return localItems;
 
         const query = supabase
@@ -121,10 +119,8 @@ export const closetService = {
             } as ClothingItem;
           });
 
-          // Register remote items in mockDatabase store for cross-device lookups and borrow actions
           remoteItems.forEach(rem => mockDatabase.upsertClothingItem(rem));
 
-          // Deduplicate and merge remote items with local items, preserving higher wear counts
           const merged = remoteItems.map(rem => {
             const loc = localItems.find(l => l.item_id === rem.item_id);
             if (loc) {
@@ -142,7 +138,7 @@ export const closetService = {
           return merged;
         }
       } catch (err) {
-        // Silently fall back to persistent local store
+
       }
     }
     return localItems;
@@ -152,12 +148,17 @@ export const closetService = {
     const canonicalUid = toCanonicalUserId(item.user_id);
     const itemWithCanonicalUser = { ...item, user_id: canonicalUid };
 
-    // Always persist to local mockDatabase first so the UI updates instantaneously
     const localItem = mockDatabase.addClothingItem(itemWithCanonicalUser);
 
     try {
       const supabase = getSupabase();
       if (supabase) {
+
+        const currentUser = mockDatabase.getCurrentUser();
+        if (currentUser && isSameUser(currentUser.user_id, canonicalUid)) {
+          await ensureUserSyncedToSupabase(currentUser);
+        }
+
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid || '');
         if (isUuid) {
           const { data, error } = await supabase
@@ -166,14 +167,14 @@ export const closetService = {
               user_id: canonicalUid,
               name: item.name,
               image_url: item.image_url,
-              addition_type: item.addition_type || 'Old',
+              addition_type: (item as any).addition_type || 'Old',
               wear_count: 0
             }])
             .select()
             .single();
 
           if (!error && data) {
-            // Also insert normalized tags in item_tag
+
             if (item.tags && item.tags.length > 0) {
               const tagsPayload = item.tags.map(t => ({
                 item_id: data.item_id,
@@ -183,14 +184,14 @@ export const closetService = {
                 await supabase.from('item_tag').insert(tagsPayload);
               } catch {}
             }
-            // Keep local ID in sync with PostgreSQL sequence
+
             mockDatabase.updateClothingItemId(localItem.item_id, data.item_id);
             return { ...localItem, item_id: data.item_id, ...data };
           }
         }
       }
     } catch {
-      // Local database is already updated
+
     }
     return localItem;
   },
@@ -205,12 +206,11 @@ export const closetService = {
           .update({
             ...(updates.name && { name: updates.name }),
             ...(updates.image_url && { image_url: updates.image_url }),
-            ...(updates.addition_type && { addition_type: updates.addition_type }),
             ...(updates.wear_count !== undefined && { wear_count: updates.wear_count })
           })
           .eq('item_id', itemId);
       } catch {
-        // Silently preserve local update
+
       }
     }
     return localUpdated;
@@ -226,13 +226,12 @@ export const closetService = {
           .delete()
           .eq('item_id', itemId);
       } catch {
-        // Silently preserve local deletion
+
       }
     }
     return localResult;
   },
 
-  // --- TAGS ---
   async getTags(): Promise<Tag[]> {
     const supabase = getSupabase();
     if (supabase) {
@@ -244,19 +243,17 @@ export const closetService = {
     return mockDatabase.getTags();
   },
 
-  // --- BSAS ASSESSMENTS ---
   async getAssessments(userId?: string): Promise<BSASAssessment[]> {
-    // 1. Always load local assessments from mockDatabase
+
     const localAssessments = deduplicateAssessments(mockDatabase.getAssessments(userId));
 
-    // 2. Query Supabase if configured and merge any remote assessments for this user
     const supabase = getSupabase();
     if (supabase) {
       try {
         const currentUser = mockDatabase.getCurrentUser();
         const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
-        // Without a valid user ID the query would scan every user's assessments — skip it
+
         if (!isUuid) return deduplicateAssessments(localAssessments);
 
         const query = supabase
@@ -269,7 +266,7 @@ export const closetService = {
 
         if (!error && data && data.length > 0) {
           const remoteAssessments = deduplicateAssessments(data as BSASAssessment[]);
-          // Merge local breakdown into remote assessments so remote records do not erase breakdown
+
           const merged = remoteAssessments.map(rem => {
             const matchingLocal = localAssessments.find(loc =>
               loc.assessment_id === rem.assessment_id ||
@@ -280,7 +277,6 @@ export const closetService = {
             return breakdown ? { ...rem, breakdown } : rem;
           });
 
-          // Cache into the local store so local re-hydration (on navigation) keeps them
           mockDatabase.mergeRemoteAssessments(merged);
 
           localAssessments.forEach(loc => {
@@ -296,7 +292,7 @@ export const closetService = {
           return deduplicateAssessments(merged);
         }
       } catch {
-        // Silently preserve local assessments
+
       }
     }
     return deduplicateAssessments(localAssessments);
@@ -305,15 +301,18 @@ export const closetService = {
   async submitAssessment(score: number, breakdown?: BSASAssessment['breakdown'], userId?: string): Promise<BSASAssessment> {
     const currentUser = mockDatabase.getCurrentUser();
     const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
-    // Always persist to local mockDatabase first so the UI updates instantaneously
+
     const localAssessment = mockDatabase.addAssessment(score, breakdown, targetUid);
 
     const supabase = getSupabase();
     if (supabase) {
+      if (currentUser && isSameUser(currentUser.user_id, targetUid)) {
+        await ensureUserSyncedToSupabase(currentUser);
+      }
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
       if (isUuid) {
         const risk_level = score >= 4 ? 'Indicative' : 'Non-Indicative';
-        // Run remote sync non-blockingly with a strict timeout so UI never hangs or stalls
+
         withTimeout(
           supabase
             .from('bsas_assessment')
@@ -350,7 +349,7 @@ export const closetService = {
     const latest = assessments[0];
     const takenTime = new Date(latest.taken_at).getTime();
     const now = Date.now();
-    const cooldownMs = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+    const cooldownMs = 30 * 24 * 60 * 60 * 1000;
     const timeSinceTaken = now - takenTime;
     const remainingMs = cooldownMs - timeSinceTaken;
 
@@ -372,7 +371,6 @@ export const closetService = {
     };
   },
 
-  // --- DAILY LOGS ---
   async getTodayLog(): Promise<DailyClothingLog> {
     const today = getLocalDateString();
     return mockDatabase.getTodayLog(today);
@@ -431,8 +429,6 @@ export const closetService = {
             };
           });
 
-          // Local outfits are authoritative; only add remote dates missing locally
-          // (a blind overwrite swapped/erased same-day outfits on every refresh).
           mockDatabase.mergeRemoteDailyLogs(remoteLogs);
 
           return mockDatabase.getDailyLogs(targetUid);
@@ -450,10 +446,9 @@ export const closetService = {
   },
 
   async updateTodayItems(logId: number, items: ClothingItem[]): Promise<DailyClothingLog | null> {
-    // Local update is synchronous and notifies the UI immediately.
+
     const localLog = mockDatabase.updateTodayLogItems(logId, items);
 
-    // Remote sync runs in the background (serialized) so the UI never waits on the network.
     if (localLog) {
       void queueDateSync(localLog.user_id, localLog.log_date);
     }
@@ -475,7 +470,6 @@ export const closetService = {
           })
           .match({ user_id: canonicalUid, log_date: localLog.log_date });
 
-        // Synchronize updated wear counts to clothing_item table in Supabase
         if (localLog.items && localLog.items.length > 0) {
           await Promise.allSettled(
             localLog.items.map(async (item) => {
@@ -540,7 +534,7 @@ export const closetService = {
         );
       } catch {}
     }
-    // Reflect the removal/unlock remotely so a deleted outfit can't be resurrected by the next fetch
+
     if (logBefore) {
       void queueDateSync(logBefore.user_id, logBefore.log_date);
     }
@@ -556,7 +550,6 @@ export const closetService = {
     return log;
   },
 
-  // --- WARDROBE ANALYTICS ---
   calculateClosetAnalytics(items: ClothingItem[]) {
     const totalItems = items.length;
     if (totalItems === 0) {
@@ -567,8 +560,6 @@ export const closetService = {
         utilizationRate: 0,
         totalWears: 0,
         averageWears: 0,
-        oldItemsCount: 0,
-        newItemsCount: 0,
         mostWorn: [],
         leastWorn: [],
         unwornList: [],
@@ -583,10 +574,6 @@ export const closetService = {
     const totalWears = items.reduce((acc, i) => acc + (i.wear_count || 0), 0);
     const averageWears = Math.round((totalWears / totalItems) * 10) / 10;
 
-    const oldItemsCount = items.filter(i => i.addition_type === 'Old').length;
-    const newItemsCount = items.filter(i => i.addition_type === 'New').length;
-
-    // Leaderboards
     const sortedByWearDesc = [...items]
       .filter(i => (i.wear_count || 0) > 0)
       .sort((a, b) => (b.wear_count || 0) - (a.wear_count || 0));
@@ -594,9 +581,6 @@ export const closetService = {
     const leastWorn = [...items].sort((a, b) => (a.wear_count || 0) - (b.wear_count || 0)).slice(0, 5);
     const unwornList = items.filter(i => (i.wear_count || 0) === 0);
 
-    // Environmental impact formulas:
-    // Extending the life of an existing garment by 9 months reduces carbon, waste and water footprints by ~20-30%
-    // Each reworn garment averted purchase saves ~6.5kg CO2 and ~2,700 liters of water
     const co2AvertedKg = Math.round(totalWears * 2.8);
     const waterAvertedLiters = Math.round(totalWears * 1250);
 
@@ -607,8 +591,6 @@ export const closetService = {
       utilizationRate,
       totalWears,
       averageWears,
-      oldItemsCount,
-      newItemsCount,
       mostWorn,
       leastWorn,
       unwornList,
@@ -617,21 +599,18 @@ export const closetService = {
     };
   },
 
-  // --- USER ACCOUNT DELETION ---
   async deleteUserAccount(userId: string, email?: string): Promise<boolean> {
-    // 1. Permanently delete from local storage mockDatabase
+
     let deleted = mockDatabase.deleteUser(userId);
     if (!deleted && email) {
       deleted = mockDatabase.deleteUserByEmail(email);
     }
 
-    // 2. Permanently delete from remote Supabase if connected
     const supabase = getSupabase();
     if (supabase) {
       try {
         const canonicalUid = toCanonicalUserId(userId);
-        
-        // Find user's items to delete relational dependent item_tags and daily_log_items
+
         const { data: userItems } = await supabase
           .from('clothing_item')
           .select('item_id')
@@ -646,7 +625,6 @@ export const closetService = {
           ]);
         }
 
-        // Cascade delete child records belonging to user
         await Promise.allSettled([
           supabase.from('daily_clothing_log').delete().eq('user_id', canonicalUid),
           supabase.from('bsas_assessment').delete().eq('user_id', canonicalUid),
@@ -656,7 +634,6 @@ export const closetService = {
           supabase.from('clothing_item').delete().eq('user_id', canonicalUid)
         ]);
 
-        // Delete user record from Supabase
         await supabase.from('users').delete().eq('user_id', canonicalUid);
         if (email) {
           await supabase.from('users').delete().ilike('email', email.trim().toLowerCase());
@@ -667,5 +644,98 @@ export const closetService = {
     }
 
     return true;
+  },
+
+  async syncLocalDataToSupabase(userId?: string): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const currentUser = mockDatabase.getCurrentUser();
+    const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
+    if (!UUID_RE.test(targetUid)) return;
+
+    try {
+      if (currentUser && isSameUser(currentUser.user_id, targetUid)) {
+        await ensureUserSyncedToSupabase(currentUser);
+      }
+
+      const localItems = mockDatabase.getClothingItems(targetUid);
+      if (localItems.length > 0) {
+        const { data: remoteItems } = await supabase
+          .from('clothing_item')
+          .select('item_id, name')
+          .eq('user_id', targetUid);
+
+        const existingNames = new Set((remoteItems || []).map((r: any) => (r.name || '').trim().toLowerCase()));
+        const missingItems = localItems.filter(l => !existingNames.has((l.name || '').trim().toLowerCase()));
+
+        for (const item of missingItems) {
+          try {
+            const { data: inserted, error: insErr } = await supabase
+              .from('clothing_item')
+              .insert([{
+                user_id: targetUid,
+                name: item.name,
+                image_url: item.image_url,
+                addition_type: (item as any).addition_type || 'Old',
+                wear_count: item.wear_count || item.worn_count || 0
+              }])
+              .select()
+              .single();
+
+            if (!insErr && inserted) {
+              if (item.tags && item.tags.length > 0) {
+                const tagsPayload = item.tags.map(t => ({
+                  item_id: inserted.item_id,
+                  tag_id: t.tag_id
+                }));
+                try {
+                  await supabase.from('item_tag').insert(tagsPayload);
+                } catch {}
+              }
+              mockDatabase.updateClothingItemId(item.item_id, inserted.item_id);
+            }
+          } catch (itemErr) {
+            console.warn('[syncLocalDataToSupabase] Clothing item sync error:', itemErr);
+          }
+        }
+      }
+
+      const localAssessments = mockDatabase.getAssessments(targetUid);
+      if (localAssessments.length > 0) {
+        const { data: remoteAssessments } = await supabase
+          .from('bsas_assessment')
+          .select('assessment_id, taken_at')
+          .eq('user_id', targetUid);
+
+        if (!remoteAssessments || remoteAssessments.length === 0) {
+          for (const a of localAssessments) {
+            try {
+              const { data: insertedA } = await supabase
+                .from('bsas_assessment')
+                .insert([{
+                  user_id: targetUid,
+                  score: a.score,
+                  risk_level: a.risk_level,
+                  taken_at: a.taken_at || new Date().toISOString()
+                }])
+                .select()
+                .single();
+              if (insertedA) {
+                mockDatabase.updateAssessmentId(a.assessment_id, insertedA.assessment_id);
+              }
+            } catch {}
+          }
+        }
+      }
+
+      const localLogs = mockDatabase.getDailyLogs(targetUid);
+      for (const log of localLogs) {
+        if (log.items && log.items.length > 0) {
+          await pushDateToRemote(targetUid, log.log_date);
+        }
+      }
+    } catch (err) {
+      console.warn('[syncLocalDataToSupabase] Sync error:', err);
+    }
   }
 };

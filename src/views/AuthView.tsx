@@ -17,20 +17,8 @@ import {
   EyeOff
 } from 'lucide-react';
 import { User } from '../types/database';
-import { mockDatabase, getSupabase } from '../services/supabaseClient';
-
-/**
- * ============================================================================
- * AUTHENTICATION VIEW (AuthView.tsx)
- * ============================================================================
- * 
- * CAPSTONE CONTEXT:
- * - Implements verified email authentication using Supabase Auth to guarantee
- *   that every registered email address is authentic and deliverable.
- * - Supports 6-digit OTP verification codes and one-click email confirmation links.
- * - Provides graceful fallback to presentation accounts (e.g. Elena Vance)
- *   and Friend Code logins for capstone defense demonstrations.
- */
+import { mockDatabase, getSupabase, generateUUID, ensureUserSyncedToSupabase } from '../services/supabaseClient';
+import { closetService } from '../services/closetService';
 
 interface AuthViewProps {
   onLoginSuccess: (user: User, isNewUser: boolean) => void;
@@ -57,7 +45,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Email Verification State
   const [pendingEmail, setPendingEmail] = useState(() => {
     if (typeof window !== 'undefined' && (window.location.search.includes('auth=verify') || window.location.hash.includes('verify'))) {
       return 'user@example.com';
@@ -70,7 +57,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Resend cooldown countdown timer
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => {
@@ -79,7 +65,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  // Primary Login & Registration Form Submission Handler
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -89,7 +74,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
       const identifier = emailOrCode.trim();
       const pwd = password.trim();
 
-      // TC_LOGIN_06: Logging in without required credentials
       if (!identifier && !pwd) {
         setErrorMsg('Email address and password are required.');
         return;
@@ -103,7 +87,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         return;
       }
 
-      // TC_LOGIN_04: Logging in with an invalid email address
       const isFriendCode = /^RP-[A-Z0-9]+-\d+$/i.test(identifier) || /^RA-[A-Z0-9]+/i.test(identifier);
       if (!isFriendCode) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -113,7 +96,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         }
       }
 
-      // TC_LOGIN_03: Password containing fewer than 8 characters
       if (pwd.length < 8) {
         setErrorMsg('Password is invalid. Password must contain at least 8 characters.');
         return;
@@ -123,14 +105,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
       try {
         const supabase = getSupabase();
 
-        // 1. If identifier is an email and Supabase is configured, authenticate via Supabase Auth
         if (!isFriendCode && supabase) {
           const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
             email: identifier.toLowerCase(),
             password: pwd
           });
 
-          // Check if Supabase rejected because email is not confirmed
           if (authError) {
             const isUnconfirmed =
               authError.code === 'email_not_confirmed' ||
@@ -145,7 +125,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               return;
             }
 
-            // If Supabase rejected for invalid credentials, check if this is an existing demo account (e.g. Elena Vance)
             const localResult = mockDatabase.authenticateUser(identifier, pwd);
             if (localResult.user) {
               toast(`Welcome back, ${localResult.user.first_name}!`);
@@ -153,7 +132,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               return;
             }
 
-            // Check if user exists in public.users table (legacy account created before Supabase Auth was enforced)
             try {
               const { data: remoteUsers } = await supabase
                 .from('users')
@@ -182,6 +160,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           if (authData.user) {
             const authUser = authData.user;
             let appUser = mockDatabase.findUserByIdentifier(authUser.email || authUser.id);
+            if (appUser && appUser.user_id !== authUser.id) {
+              mockDatabase.realignUserId(appUser.user_id, authUser.id);
+              appUser = mockDatabase.getUser(authUser.id);
+            }
 
             if (!appUser) {
               try {
@@ -216,23 +198,14 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
                 last_name: lName,
                 password: pwd
               });
-
-              try {
-                await supabase.from('users').upsert({
-                  user_id: appUser.user_id,
-                  email: appUser.email,
-                  first_name: appUser.first_name,
-                  last_name: appUser.last_name,
-                  friend_code: appUser.friend_code,
-                  password: pwd,
-                  created_at: appUser.created_at
-                });
-              } catch { }
             } else {
               if (pwd && !appUser.password) appUser.password = pwd;
-              mockDatabase.upsertUser(appUser);
-              mockDatabase.setCurrentUserId(appUser.user_id);
             }
+
+            appUser = await ensureUserSyncedToSupabase(appUser);
+            mockDatabase.upsertUser(appUser);
+            mockDatabase.setCurrentUserId(appUser.user_id);
+            closetService.syncLocalDataToSupabase(appUser.user_id).catch(() => {});
 
             toast(`Welcome back, ${appUser.first_name}!`);
             onLoginSuccess(appUser, false);
@@ -240,11 +213,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           }
         }
 
-        // 2. Friend Code or Local Demo Access Fallback
         const authResult = mockDatabase.authenticateUser(identifier, pwd);
         let user = authResult.user;
 
-        // TC_LOGIN_05: Incorrect password (local match, wrong password)
         if (authResult.wrongPassword) {
           setErrorMsg('The login credentials are invalid. Please check your password.');
           return;
@@ -281,30 +252,26 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         setIsSubmitting(false);
       }
     } else {
-      // Registration mode
+
       const trimmedEmail = emailOrCode.trim().toLowerCase();
       const trimmedFirst = firstName.trim();
       const trimmedLast = lastName.trim();
 
-      // TC_ACCOUNT_07: Creating an account without an email address
       if (!trimmedEmail) {
         setErrorMsg('Creating an account requires an email address.');
         return;
       }
 
-      // TC_ACCOUNT_08: Creating an account without a password
       if (!password) {
         setErrorMsg('A password is required to create an account.');
         return;
       }
 
-      // TC_ACCOUNT_04: Password fewer than 8 characters
       if (password.length < 8) {
         setErrorMsg('Password must be at least 8 characters.');
         return;
       }
 
-      // Validate password confirmation match
       if (password !== confirmPassword) {
         setErrorMsg('Passwords do not match. Please verify your confirmation password.');
         return;
@@ -315,14 +282,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
         return;
       }
 
-      // TC_ACCOUNT_06: Invalid email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(trimmedEmail)) {
         setErrorMsg('Please enter a valid email address.');
         return;
       }
 
-      // Check if email already registered locally
       if (mockDatabase.isEmailRegistered(trimmedEmail)) {
         setErrorMsg(`An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
         return;
@@ -336,7 +301,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           return;
         }
 
-        // Register user via Supabase Auth — Supabase dispatches a confirmation email to the address!
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: trimmedEmail,
           password: password,
@@ -355,7 +319,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             return;
           }
 
-          // If Supabase email limit is reached, still transition to verify screen so user can inspect the screen
           const isLimitHit = signUpError.status === 429 ||
             signUpError.message?.toLowerCase().includes('rate limit') ||
             signUpError.message?.toLowerCase().includes('security purposes') ||
@@ -369,7 +332,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             setPendingPassword(password);
             setPendingFirstName(trimmedFirst);
             setPendingLastName(trimmedLast);
-            setPendingUserId(`user-preview-${Date.now()}`);
+            setPendingUserId(generateUUID());
             setResendCooldown(60);
             setAuthMode('verify');
             return;
@@ -379,13 +342,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           return;
         }
 
-        // Supabase returns user with empty identities when the email is already in auth.users
         if (signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
           setErrorMsg(`An account with the email "${trimmedEmail}" already exists. Please sign in instead.`);
           return;
         }
 
-        // Account registered and confirmation email sent!
         setPendingEmail(trimmedEmail);
         setPendingPassword(password);
         setPendingFirstName(trimmedFirst);
@@ -402,7 +363,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     }
   };
 
-  // Handler for Checking Email Link Confirmation Status
   const handleCheckEmailLink = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -411,11 +371,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
       const supabase = getSupabase();
       if (!supabase) return;
 
-      // 1. Check if Supabase session is already hydrated
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData?.session?.user && sessionData.session.user.email?.toLowerCase() === pendingEmail.toLowerCase()) {
         const authUser = sessionData.session.user;
-        const appUser = mockDatabase.registerUser({
+        let appUser = mockDatabase.registerUser({
           user_id: authUser.id,
           email: pendingEmail,
           first_name: pendingFirstName || authUser.user_metadata?.first_name || 'Member',
@@ -423,23 +382,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           password: pendingPassword
         });
 
-        try {
-          await supabase.from('users').upsert({
-            user_id: appUser.user_id,
-            email: appUser.email,
-            first_name: appUser.first_name,
-            last_name: appUser.last_name,
-            friend_code: appUser.friend_code,
-            created_at: appUser.created_at
-          });
-        } catch { }
+        appUser = await ensureUserSyncedToSupabase(appUser);
+        mockDatabase.setCurrentUserId(appUser.user_id);
+        closetService.syncLocalDataToSupabase(appUser.user_id).catch(() => {});
 
         toast(`Email confirmed! Welcome to ReApparel, ${appUser.first_name}.`);
         onLoginSuccess(appUser, true);
         return;
       }
 
-      // 2. Try sign in with stored pending password
       if (pendingPassword) {
         const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({
           email: pendingEmail,
@@ -448,7 +399,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
 
         if (!loginErr && loginData?.user) {
           const authUser = loginData.user;
-          const appUser = mockDatabase.registerUser({
+          let appUser = mockDatabase.registerUser({
             user_id: authUser.id,
             email: pendingEmail,
             first_name: pendingFirstName || authUser.user_metadata?.first_name || 'Member',
@@ -456,31 +407,27 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             password: pendingPassword
           });
 
-          try {
-            await supabase.from('users').upsert({
-              user_id: appUser.user_id,
-              email: appUser.email,
-              first_name: appUser.first_name,
-              last_name: appUser.last_name,
-              friend_code: appUser.friend_code,
-              created_at: appUser.created_at
-            });
-          } catch { }
+          appUser = await ensureUserSyncedToSupabase(appUser);
+          mockDatabase.setCurrentUserId(appUser.user_id);
+          closetService.syncLocalDataToSupabase(appUser.user_id).catch(() => {});
 
           toast(`Email confirmed! Welcome to ReApparel, ${appUser.first_name}.`);
           onLoginSuccess(appUser, true);
           return;
         }
 
-        // Demo / testing fallback if Supabase email limit was hit during signup or previewing
         if (pendingUserId?.startsWith('user-preview-') || pendingEmail === 'user@example.com' || loginErr?.message?.toLowerCase().includes('rate limit')) {
-          const fallbackUser = mockDatabase.registerUser({
-            user_id: `user-${Date.now()}`,
+          const fallbackUid = (pendingUserId && !pendingUserId.startsWith('user-preview-')) ? pendingUserId : generateUUID();
+          let fallbackUser = mockDatabase.registerUser({
+            user_id: fallbackUid,
             email: pendingEmail || 'demo.user@example.com',
             first_name: pendingFirstName || 'Alex',
             last_name: pendingLastName || '',
             password: pendingPassword || 'Password123!'
           });
+          fallbackUser = await ensureUserSyncedToSupabase(fallbackUser);
+          mockDatabase.setCurrentUserId(fallbackUser.user_id);
+          closetService.syncLocalDataToSupabase(fallbackUser.user_id).catch(() => {});
           toast(`Email confirmed! Welcome to ReApparel, ${fallbackUser.first_name}.`);
           onLoginSuccess(fallbackUser, true);
           return;
@@ -500,7 +447,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     }
   };
 
-  // Handler for Resending Verification Email
   const handleResendVerification = async () => {
     if (resendCooldown > 0) return;
     setErrorMsg(null);
@@ -541,15 +487,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     }
   };
 
-  // --------------------------------------------------------------------------
-  // RENDER: EMAIL VERIFICATION VIEW (authMode === 'verify')
-  // --------------------------------------------------------------------------
   if (authMode === 'verify') {
     return (
       <div className="center-shell">
         <div className="card" style={{ maxWidth: 390, width: '100%', padding: '34px 26px', textAlign: 'center', boxShadow: 'var(--shadow)' }}>
 
-          {/* Simple Icon Badge */}
           <div style={{
             width: 48,
             height: 48,
@@ -564,7 +506,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             <Mail style={{ width: 22, height: 22 }} />
           </div>
 
-          {/* Title & Sent-to text */}
           <h2 style={{ fontSize: 20, margin: '0 0 8px', fontFamily: 'var(--font-display)' }}>
             Check your email
           </h2>
@@ -576,7 +517,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             Click the link inside your email to activate your account and start using ReApparel.
           </p>
 
-          {/* Error Message Alert */}
           {errorMsg && (
             <div style={{
               padding: '8px 12px',
@@ -595,7 +535,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             </div>
           )}
 
-          {/* Single Primary Action: Check confirmation */}
           <button
             type="button"
             disabled={isSubmitting}
@@ -620,7 +559,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             )}
           </button>
 
-          {/* Minimal Footer Row */}
           <div style={{
             marginTop: 22,
             paddingTop: 16,
@@ -673,14 +611,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     );
   }
 
-  // --------------------------------------------------------------------------
-  // RENDER: LOGIN & REGISTRATION VIEW (authMode === 'login' | 'register')
-  // --------------------------------------------------------------------------
   return (
     <div className="center-shell">
       <div className="card" style={{ maxWidth: 440, width: '100%', padding: '28px 24px', boxShadow: 'var(--shadow)' }}>
 
-        {/* Branding & Identity */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{
             display: 'inline-flex',
@@ -703,7 +637,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           </p>
         </div>
 
-        {/* Error message alert */}
         {errorMsg && (
           <div style={{
             padding: '10px 12px',
@@ -724,7 +657,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           </div>
         )}
 
-        {/* Authentication Form */}
         <form onSubmit={handleSubmit} noValidate>
           {authMode === 'register' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
@@ -857,7 +789,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             </div>
           )}
 
-          {/* Full-width submit button */}
           <button
             type="submit"
             disabled={isSubmitting}
@@ -895,7 +826,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
           </button>
         </form>
 
-        {/* Switch mode link */}
         <div style={{ textAlign: 'center', marginTop: 18, fontSize: 12.5, color: 'var(--text-muted)' }}>
           {authMode === 'login' ? (
             <>

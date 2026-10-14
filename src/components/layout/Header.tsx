@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateToProfile,
   customTitle
 }) => {
-  // Title mapping matching wireframes
+
   const getWireframeTitle = () => {
     if (customTitle) return customTitle;
     switch (currentView) {
@@ -69,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
       top: 0,
       zIndex: 15
     }}>
-      {/* Mobile Menu Icon (Mobile Only) */}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button
           type="button"
@@ -91,7 +91,6 @@ export const Header: React.FC<HeaderProps> = ({
         </h1>
       </div>
 
-      {/* Right: Theme Toggle & User Profile Chip */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button
           type="button"
@@ -103,7 +102,6 @@ export const Header: React.FC<HeaderProps> = ({
           {theme === 'dark' ? <Sun className="ico" style={{ width: 17, height: 17 }} /> : <Moon className="ico" style={{ width: 17, height: 17 }} />}
         </button>
 
-        {/* User Chip matching wireframe: [Name] [Avatar] */}
         <button
           type="button"
           onClick={onNavigateToProfile}

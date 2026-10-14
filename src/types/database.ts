@@ -1,10 +1,5 @@
-/**
- * ReApparel Database Types & Entity Models
- * Aligned with Normalized Supabase PostgreSQL Schema
- */
-
 export interface User {
-  user_id: string; // UUID
+  user_id: string;
   email: string;
   first_name: string;
   last_name: string;
@@ -19,11 +14,11 @@ export type RiskLevel = 'Indicative' | 'Non-Indicative';
 export interface BSASAssessment {
   assessment_id: number;
   user_id: string;
-  score: number; // 0 to 7
+  score: number;
   risk_level: RiskLevel;
   taken_at: string;
   breakdown?: {
-    salience: number; // 0 or 1
+    salience: number;
     mood_modification: number;
     conflict: number;
     tolerance: number;
@@ -33,14 +28,11 @@ export interface BSASAssessment {
   };
 }
 
-export type AdditionType = 'Old' | 'New';
-
 export interface ClothingItem {
   item_id: number;
   user_id: string;
   name: string;
   image_url: string;
-  addition_type?: AdditionType;
   wear_count: number;
   worn_count?: number;
   date_added: string;
@@ -63,7 +55,7 @@ export interface Tag {
   tag_id: number;
   tag_name: string;
   tag_type: TagType;
-  hex_color?: string; // Optional client display helper for color badges
+  hex_color?: string;
 }
 
 export interface ItemTag {
@@ -75,7 +67,7 @@ export interface ItemTag {
 export interface DailyClothingLog {
   log_id: number;
   user_id: string;
-  log_date: string; // YYYY-MM-DD
+  log_date: string;
   is_finalized: boolean;
   finalized_at: string | null;
   items?: ClothingItem[];
@@ -106,8 +98,8 @@ export interface Borrow {
   borrow_id: number;
   borrower_id: string;
   item_id: number;
-  start_date: string; // YYYY-MM-DD
-  end_date: string; // YYYY-MM-DD
+  start_date: string;
+  end_date: string;
   status: BorrowStatus;
   created_at: string;
   item?: ClothingItem;

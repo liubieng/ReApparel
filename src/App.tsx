@@ -7,13 +7,13 @@ import {
   STORAGE_KEY_ACTIVE_USER,
   STORAGE_KEY_ACTIVE_VIEW,
   deduplicateAssessments,
-  getLocalDateString
+  getLocalDateString,
+  ensureUserSyncedToSupabase
 } from './services/supabaseClient';
 import { closetService } from './services/closetService';
 import { friendsService } from './services/friendsService';
 import { mapsService } from './services/mapsService';
 
-// Data models
 import {
   User,
   ClothingItem,
@@ -25,64 +25,31 @@ import {
   AppNotification
 } from './types/database';
 
-// User Identity, Auth, & Settings
 import { AuthView } from './views/AuthView';
 import { ProfileView } from './views/ProfileView';
 import { SettingsView } from './views/SettingsView';
+import { BSASIntroView } from './views/BSASIntroView';
+import { VirtualClosetView } from './views/VirtualClosetView';
+import { DailyLogView } from './views/DailyLogView';
+import { RecoveryView } from './views/RecoveryView';
+import { ClosetStatisticsView } from './views/ClosetStatisticsView';
+import { FriendsView } from './views/FriendsView';
+import { LendingDashboardView } from './views/LendingDashboardView';
+import { NotificationsView } from './views/NotificationsView';
+import { DonationMapSection } from './views/DonationMapSection';
 
-// Module 1.0: Bergen Shopping Addiction Scale (BSAS)
-import { BSASIntroView, BSASAssessmentModal } from './modules/BSAS';
+import { BSASAssessmentModal } from './components/modals/BSASAssessmentModal';
+import { AddItemModal } from './components/modals/AddItemModal';
+import { EditItemModal } from './components/modals/EditItemModal';
+import { DeleteCascadeModal } from './components/modals/DeleteCascadeModal';
+import { BorrowModal } from './components/modals/BorrowModal';
 
-// Module 2.0: Virtual Closet
-import {
-  VirtualClosetView,
-  AddItemModal,
-  EditItemModal,
-  DeleteCascadeModal
-} from './modules/VirtualCloset';
-
-// Module 3.0: Daily Clothing Log
-import { DailyLogView } from './modules/DailyClothingLog';
-
-// Module 4.0: Recovery Progress
-import { RecoveryView, ClosetStatisticsView } from './modules/RecoveryProgress';
-
-// Module 5.0: Friends and Request Board
-import {
-  FriendsView,
-  LendingDashboardView,
-  NotificationsView,
-  BorrowModal
-} from './modules/FriendsAndRequestBoard';
-
-// Module 6.0: Donation Map
-import { DonationMapSection } from './modules/DonationMap';
-
-// Layout & Reusable Dialog Components
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { DatabaseModal } from './components/modals/DatabaseModal';
 import { BrainCircuit } from 'lucide-react';
 
-/**
- * ============================================================================
- * REAPPAREL ROOT APPLICATION CONTROLLER (App.tsx)
- * ============================================================================
- * 
- * CAPSTONE DEFENSE ARCHITECTURE:
- * - Implements a Modular Single Page Architecture (SPA) in React 19 + TypeScript.
- * - Coordinates global state, data synchronization, and view routing across:
- *   1. Auth & Onboarding (AuthView, BSASIntroView, BSASAssessmentModal)
- *   2. Virtual Wardrobe & Wear Maximization (VirtualClosetView, AddItemModal, EditItemModal)
- *   3. Daily Outfit Tracking & Midnight Cron Finalization (DailyLogView)
- *   4. Longitudinal BSAS Recovery Tracking & Analytics (RecoveryView)
- *   5. Peer-to-Peer Garment Lending with Conflict Guard (FriendsView, BorrowModal, LendingDashboardView)
- *   6. Community Clothing Donation Drives & Geolocation (DonationMapSection)
- *   7. Hybrid Storage Orchestration (mockDatabase <-> Supabase PostgreSQL)
- */
-
-// Valid authenticated view routes
 const VALID_VIEWS = new Set([
   'closet',
   'daily-log',
@@ -99,16 +66,15 @@ const VALID_VIEWS = new Set([
 ]);
 
 export default function App() {
-  // Theme State (Persisted in localStorage)
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (safeStorage.getItem('reapparel_theme') as 'light' | 'dark') || 'light';
   });
 
-  // Current Active Route / View (Persisted in localStorage across page reloads)
   const [view, setView] = useState<string>(() => {
     const user = mockDatabase.getCurrentUser();
     const hasActiveId = Boolean(safeStorage.getItem(STORAGE_KEY_ACTIVE_USER));
-    // If no user is logged in, start on login view
+
     if (!user && !hasActiveId) {
       return 'login';
     }
@@ -127,7 +93,6 @@ export default function App() {
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // Core Entity State
   const [currentUser, setCurrentUser] = useState<User | null>(mockDatabase.getCurrentUser());
   const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(() => {
     const activeId = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER);
@@ -152,10 +117,8 @@ export default function App() {
   });
   const [dailyLogs, setDailyLogs] = useState<DailyClothingLog[]>([]);
 
-  // Presentation Simulation State (Allows defense panel to advance 30 days instantly)
   const [simulatedDaysOffset, setSimulatedDaysOffset] = useState<number>(0);
 
-  // Modal Dialog States
   const [isAddGarmentOpen, setIsAddGarmentOpen] = useState(false);
   const [editingGarment, setEditingGarment] = useState<ClothingItem | null>(null);
   const [deletingGarment, setDeletingGarment] = useState<ClothingItem | null>(null);
@@ -178,7 +141,6 @@ export default function App() {
     onConfirm: () => { }
   });
 
-  // Lightweight Toast Notification System
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -190,13 +152,11 @@ export default function App() {
     }, 2800);
   }, []);
 
-  // Synchronize CSS Theme Variable
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     safeStorage.setItem('reapparel_theme', theme);
   }, [theme]);
 
-  // Synchronize Active View State in LocalStorage
   useEffect(() => {
     if (currentUser && view && view !== 'login') {
       safeStorage.setItem(STORAGE_KEY_ACTIVE_VIEW, view);
@@ -209,7 +169,6 @@ export default function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Synchronous Local State Hydration (0ms, 0 Supabase network queries)
   const syncLocalState = useCallback(() => {
     const user = mockDatabase.getCurrentUser();
     setCurrentUser(user);
@@ -233,21 +192,25 @@ export default function App() {
     }
   }, []);
 
-  // Master Data Refresh Callback (targeted remote sync to minimize Supabase API usage)
   const loadData = useCallback(async (options?: { forceDonations?: boolean }) => {
     let user = mockDatabase.getCurrentUser();
     if (!user && safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
       user = await mockDatabase.syncCurrentUserWithSupabase();
+    }
+    if (user) {
+      try {
+        user = await ensureUserSyncedToSupabase(user);
+        closetService.syncLocalDataToSupabase(user.user_id).catch(() => {});
+      } catch {}
     }
     setCurrentUser(user);
     setIsAuthInitializing(false);
     setAllUsers(mockDatabase.getAllUsers());
 
     if (user) {
-      // 1. Immediate synchronous local hydration (0ms UI latency)
+
       syncLocalState();
 
-      // Ensure authenticated users are transitioned away from the login screen
       setView(prev => {
         if (prev === 'login') {
           const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
@@ -257,7 +220,6 @@ export default function App() {
         return prev;
       });
 
-      // 2. Targeted background remote fetch with strict timeouts (does not freeze local UI)
       try {
         const fetchPromises: Promise<any>[] = [
           closetService.getItems(user.user_id).catch(() => mockDatabase.getClothingItems(user.user_id)),
@@ -268,9 +230,6 @@ export default function App() {
           friendsService.fetchBorrowsFromSupabase(user.user_id).catch(() => [])
         ];
 
-        // DEMO-SAFE DONATION FETCHING:
-        // Only fetch donation drives from Supabase when explicitly requested,
-        // or on initial boot / when on donations view to save ~80% of unnecessary map queries
         if (options?.forceDonations || view === 'donations') {
           fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => { }));
         }
@@ -278,8 +237,7 @@ export default function App() {
         const [items, userAssessments, userLogs] = await Promise.all(fetchPromises);
 
         if (items) setGarments(items);
-        // Merge with the CURRENT local store: the remote fetch may have started before the user
-        // submitted a BSAS, so a stale response must never overwrite a newer local assessment.
+
         if (userAssessments) {
           setAssessments(deduplicateAssessments([
             ...mockDatabase.getAssessments(user.user_id),
@@ -294,7 +252,7 @@ export default function App() {
         setNotifications(friendsService.getNotifications(user.user_id));
         setOpportunities(mapsService.getDonationOpportunities());
       } catch {
-        // Local data is already fully rendered
+
       }
     } else {
       if (safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
@@ -312,7 +270,6 @@ export default function App() {
     }
   }, [syncLocalState, view]);
 
-  // Subscribe to In-Memory state changes (updates UI with 0 network overhead)
   useEffect(() => {
     loadData();
     const unsubscribe = mockDatabase.subscribe(() => {
@@ -321,9 +278,6 @@ export default function App() {
     return () => unsubscribe();
   }, [loadData, syncLocalState]);
 
-  // Fetch donation drives once when opening the Donations view.
-  // Realtime (below) handles live updates; this slow fallback only runs while the tab is visible,
-  // to stay well within Supabase free-plan request limits.
   useEffect(() => {
     if (view !== 'donations') return;
 
@@ -341,7 +295,6 @@ export default function App() {
     return () => clearInterval(pollTimer);
   }, [view]);
 
-  // Fetch/refresh daily clothing logs whenever user navigates to the Daily Clothing Log tab
   useEffect(() => {
     if (view !== 'daily-log') return;
     const uid = currentUser?.user_id;
@@ -351,9 +304,6 @@ export default function App() {
     }).catch(() => { });
   }, [view, currentUser]);
 
-  // Fetch/refresh friend requests and borrows whenever user navigates to Friends, Requests, or Notifications tab.
-  // Also re-syncs periodically (while the tab is visible) and on window focus, as a fallback
-  // in case Supabase Realtime is not enabled for these tables.
   useEffect(() => {
     if (view !== 'friends' && view !== 'notifications' && view !== 'requests' && view !== 'recovery') return;
     const uid = currentUser?.user_id;
@@ -384,7 +334,6 @@ export default function App() {
     };
   }, [view, currentUser?.user_id]);
 
-  // Supabase Realtime Listener for friend requests across devices
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -431,7 +380,6 @@ export default function App() {
     } catch { }
   }, []);
 
-  // Supabase Realtime Listener for borrows across devices
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -457,7 +405,6 @@ export default function App() {
     } catch { }
   }, []);
 
-  // Supabase Realtime Listener for community donation opportunities
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -484,14 +431,13 @@ export default function App() {
     } catch { }
   }, []);
 
-  // Listen for Supabase Auth state transitions (e.g. user clicked confirmation link in verification email)
   useEffect(() => {
     try {
       const supabase = getSupabase();
       if (!supabase) return;
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        // STRICT GUARD: Only auto-process auth state transitions if this is an explicit incoming email verification link
+
         const isAuthCallback = typeof window !== 'undefined' && (
           window.location.hash.includes('access_token') ||
           window.location.hash.includes('type=') ||
@@ -506,9 +452,12 @@ export default function App() {
           const authUser = session.user;
           const currentActiveId = mockDatabase.getCurrentUser()?.user_id;
 
-          // If not currently logged in as this user, sync and log them in
           if (!currentActiveId || currentActiveId !== authUser.id) {
             let appUser = mockDatabase.findUserByIdentifier(authUser.email || authUser.id);
+            if (appUser && appUser.user_id !== authUser.id) {
+              mockDatabase.realignUserId(appUser.user_id, authUser.id);
+              appUser = mockDatabase.getUser(authUser.id);
+            }
 
             if (!appUser) {
               try {
@@ -533,22 +482,14 @@ export default function App() {
                 first_name: fName,
                 last_name: lName
               });
-              try {
-                await supabase.from('users').upsert({
-                  user_id: appUser.user_id,
-                  email: appUser.email,
-                  first_name: appUser.first_name,
-                  last_name: appUser.last_name,
-                  friend_code: appUser.friend_code,
-                  created_at: appUser.created_at
-                });
-              } catch { }
             }
 
             if (appUser) {
+              appUser = await ensureUserSyncedToSupabase(appUser);
               mockDatabase.upsertUser(appUser);
               mockDatabase.setCurrentUserId(appUser.user_id);
               setCurrentUser(appUser);
+              closetService.syncLocalDataToSupabase(appUser.user_id).catch(() => {});
               if (window.location.hash || window.location.search) {
                 window.history.replaceState({}, document.title, window.location.pathname);
               }
@@ -565,16 +506,11 @@ export default function App() {
     } catch { }
   }, [loadData, toast]);
 
-  // --------------------------------------------------------------------------
-  // USER ACTIONS & HANDLERS
-  // --------------------------------------------------------------------------
-
-  // Authentication Success
   const handleLoginSuccess = (user: User, isNewUser: boolean) => {
     setCurrentUser(user);
     loadData();
     if (isNewUser) {
-      setView('bsasIntro'); // New users complete baseline check-in
+      setView('bsasIntro');
     } else {
       const saved = safeStorage.getItem(STORAGE_KEY_ACTIVE_VIEW);
       const safeSaved = (saved === 'bsas' || saved === 'bsasIntro') ? 'closet' : saved;
@@ -583,7 +519,6 @@ export default function App() {
     }
   };
 
-  // Switch Active User (Fast toggle for panel demonstration)
   const handleSwitchUser = async (userId: string) => {
     mockDatabase.setCurrentUserId(userId);
     await loadData();
@@ -591,7 +526,6 @@ export default function App() {
     toast(`Active profile switched to ${user?.first_name} ${user?.last_name}`);
   };
 
-  // Logout Flow
   const handleLogout = async () => {
     try {
       const supabase = getSupabase();
@@ -614,28 +548,22 @@ export default function App() {
     toast('Logged out successfully.');
   };
 
-  // BSAS Check-In Completed
   const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>, targetView: 'closet' | 'recovery' = 'closet') => {
     const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
 
-    // 1. Immediately transition the view so user NEVER gets stuck on BSAS page
     safeStorage.setItem(STORAGE_KEY_ACTIVE_VIEW, targetView);
     setView(targetView);
 
-    // 2. Submit assessment to database (synchronous local update + non-blocking background sync)
     await closetService.submitAssessment(score, breakdown, activeUid);
 
-    // 3. Immediately update assessments in React state so latestAssessment & isBSASDue are fresh
     const freshAssessments = mockDatabase.getAssessments(activeUid);
     setAssessments(freshAssessments);
 
     toast(score >= 4 ? 'Check-in saved: Indicative risk identified' : 'Check-in saved: Non-Indicative risk level');
 
-    // 4. Background refresh of any other collections without blocking
     loadData().catch(() => { });
   };
 
-  // Garment Management: Add, Edit, Delete, Quick Wear Increment
   const handleAddGarment = async (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => {
     const activeUid = item.user_id || currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
     await closetService.addItem({
@@ -657,14 +585,9 @@ export default function App() {
     toast('Clothing item deleted from your closet.');
   };
 
-  // Daily Outfit Log Handlers
-  // NOTE: every mutation below updates the local store synchronously, and the mockDatabase
-  // subscription (syncLocalState) re-renders immediately. Remote sync happens in the background,
-  // so we deliberately do NOT await a full remote loadData() here (that made every tap slow and let
-  // stale server responses flicker/revert the outfit).
   const handleToggleGarmentInOutfit = async (garment: ClothingItem, targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
-    // Read the freshest local log for this targetId. Never fall back to todayLog if targeting another outfit!
+
     const targetLog = mockDatabase.getDailyLogById(targetId)
       || mockDatabase.getDailyLogs(currentUser?.user_id).find(l => l.log_id === targetId)
       || dailyLogs.find(l => l.log_id === targetId)
@@ -735,7 +658,6 @@ export default function App() {
     toast("🕛 00:00 Midnight Job Simulated: Outfit locked & wear counts incremented!");
   };
 
-  // Friend Request Actions
   const handleAcceptFriendRequest = async (requestId: number, senderName?: string) => {
     await friendsService.respondToRequest(requestId, 'accepted');
     toast(`Connected with ${senderName || 'friend'}!`);
@@ -763,7 +685,6 @@ export default function App() {
     });
   };
 
-  // Borrow Request & Lending Actions
   const handleSubmitBorrow = async (itemId: number, fromDate: string, toDate: string) => {
     if (borrowContext?.garment) {
       mockDatabase.upsertClothingItem(borrowContext.garment);
@@ -807,7 +728,6 @@ export default function App() {
     await loadData();
   };
 
-  // Account Deletion Safeguard with confirmation dialog (TC_ACCDEL_02, TC_ACCDEL_03, Figure 34.4)
   const handleDeleteAccount = () => {
     if (!currentUser) return;
     const targetUser = currentUser;
@@ -819,22 +739,19 @@ export default function App() {
       requiredConfirmText: 'DELETE',
       onConfirm: async () => {
         try {
-          // 1. Immediately sign out of Supabase auth so no lingering session exists
+
           const supabase = getSupabase();
           if (supabase) {
             await supabase.auth.signOut().catch(() => { });
           }
 
-          // 2. Clear all local storage session markers
           mockDatabase.setCurrentUserId(null);
           safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
           safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
           safeStorage.removeItem('reapparel_user_id');
 
-          // 3. Delete user account and cascade delete all closet data
           await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
 
-          // 4. Reset React state and navigate to login view
           setCurrentUser(null);
           setView('login');
           setGarments([]);
@@ -853,7 +770,6 @@ export default function App() {
     });
   };
 
-  // Notification Management Handlers
   const handleClearNotifications = () => {
     if (currentUser) {
       friendsService.clearNotifications(currentUser.user_id);
@@ -876,7 +792,6 @@ export default function App() {
     }
   };
 
-  // Pending Counts for Nav Badges
   const pendingFriendsCount = friendRequests.filter(
     r => currentUser && r.receiver_id === currentUser.user_id && r.status === 'pending'
   ).length;
@@ -889,11 +804,6 @@ export default function App() {
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
-  // --------------------------------------------------------------------------
-  // STANDALONE / ONBOARDING SCREENS
-  // --------------------------------------------------------------------------
-
-  // 0. Session Initializing Screen (prevents flicker of login view during active session hydration)
   if (isAuthInitializing) {
     return (
       <div className="center-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -913,7 +823,6 @@ export default function App() {
     );
   }
 
-  // 1. Auth View
   if (view === 'login' || !currentUser) {
     return (
       <>
@@ -923,7 +832,6 @@ export default function App() {
     );
   }
 
-  // 2. BSAS Onboarding Intro View
   if (view === 'bsasIntro') {
     return (
       <>
@@ -935,7 +843,6 @@ export default function App() {
     );
   }
 
-  // 3. BSAS 7-Item Diagnostic Stepper Modal
   if (view === 'bsas') {
     return (
       <>
@@ -948,8 +855,6 @@ export default function App() {
     );
   }
 
-  // 30-Day BSAS Assessment Cooldown & Notification Status
-  // Sort to get the most-recently taken assessment (highest taken_at date)
   const latestAssessment = assessments.length > 0
     ? [...assessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime())[0]
     : null;
@@ -957,15 +862,11 @@ export default function App() {
     Math.floor((Date.now() - new Date(latestAssessment.taken_at).getTime() + simulatedDaysOffset * 86400000) / 86400000) >= 30
   );
 
-  // --------------------------------------------------------------------------
-  // MAIN APPLICATION LAYOUT (SIDEBAR + ACTIVE VIEW ROUTER)
-  // --------------------------------------------------------------------------
   return (
     <div className="shell">
-      {/* Toast Notification */}
+
       {toastMessage && <div className="toast">{toastMessage}</div>}
 
-      {/* Desktop / Mobile Sidebar */}
       <Sidebar
         currentView={view}
         isOpen={isMobileSidebarOpen}
@@ -980,9 +881,8 @@ export default function App() {
         onOpenDatabase={() => setIsDatabaseModalOpen(true)}
       />
 
-      {/* Main Viewport */}
       <div className="main">
-        {/* Mobile & Desktop Top Header with User Chip */}
+
         <Header
           currentView={view}
           theme={theme}
@@ -992,7 +892,6 @@ export default function App() {
           onNavigateToProfile={() => setView('profile')}
         />
 
-        {/* View Router */}
         <div className="content">
           {view === 'closet' && (
             <VirtualClosetView
@@ -1141,7 +1040,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Global Footer */}
         <footer className="app-footer">
           <div>
             <strong style={{ fontFamily: 'var(--font-display)' }}>ReApparel</strong>
@@ -1155,9 +1053,6 @@ export default function App() {
         </footer>
       </div>
 
-      {/* ================= MODAL DIALOGS ================= */}
-
-      {/* 1. Add Clothing Item Modal */}
       <AddItemModal
         isOpen={isAddGarmentOpen}
         onClose={() => setIsAddGarmentOpen(false)}
@@ -1166,7 +1061,6 @@ export default function App() {
         toast={toast}
       />
 
-      {/* 2. Edit Clothing Item Modal */}
       <EditItemModal
         garment={editingGarment}
         isOpen={Boolean(editingGarment)}
@@ -1175,7 +1069,6 @@ export default function App() {
         toast={toast}
       />
 
-      {/* 3. Delete Cascade Confirmation Modal */}
       <DeleteCascadeModal
         garment={deletingGarment}
         isOpen={Boolean(deletingGarment)}
@@ -1183,7 +1076,6 @@ export default function App() {
         onConfirmDelete={handleConfirmDeleteGarment}
       />
 
-      {/* 4. Peer-to-Peer Borrow Modal */}
       <BorrowModal
         isOpen={Boolean(borrowContext)}
         onClose={() => setBorrowContext(null)}
@@ -1194,7 +1086,6 @@ export default function App() {
         toast={toast}
       />
 
-      {/* 5. General Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmDialog.isOpen}
         title={confirmDialog.title}
@@ -1205,7 +1096,6 @@ export default function App() {
         onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
       />
 
-      {/* 6. Database / Supabase Schema Modal */}
       <DatabaseModal
         isOpen={isDatabaseModalOpen}
         onClose={() => setIsDatabaseModalOpen(false)}
@@ -1213,7 +1103,6 @@ export default function App() {
         toast={toast}
       />
 
-      {/* Mandatory Monthly BSAS Retake Overlay / Restriction (TC_RET_01, TC_RET_02) */}
       {isBSASDue && assessments.length > 0 && view !== 'bsas' && (
         <div className="modalScrim" style={{ zIndex: 1100, background: 'rgba(0, 0, 0, 0.75)' }}>
           <div className="modal" style={{ maxWidth: 520, width: '100%', textAlign: 'center', padding: 28, borderRadius: 16 }}>

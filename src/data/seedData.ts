@@ -20,7 +20,7 @@ export interface BSASQuestionItem {
 }
 
 export const BSAS_28_ITEMS: BSASQuestionItem[] = [
-  // 1. Salience (Items 1-4)
+
   {
     id: 1,
     text: "Shopping/buying is the most important thing in my life.",
@@ -49,7 +49,7 @@ export const BSAS_28_ITEMS: BSASQuestionItem[] = [
     dimensionKey: "salience",
     itemNumberInDimension: 4
   },
-  // 2. Mood Modification (Items 5-8)
+
   {
     id: 5,
     text: "I shop in order to feel better.",
@@ -78,7 +78,7 @@ export const BSAS_28_ITEMS: BSASQuestionItem[] = [
     dimensionKey: "mood_modification",
     itemNumberInDimension: 4
   },
-  // 3. Conflict (Items 9-12)
+
   {
     id: 9,
     text: "I shop/buy so much that it negatively affects my daily obligations (e.g., school and work).",
@@ -107,7 +107,7 @@ export const BSAS_28_ITEMS: BSASQuestionItem[] = [
     dimensionKey: "conflict",
     itemNumberInDimension: 4
   },
-  // 4. Tolerance (Items 13-16)
+
   {
     id: 13,
     text: "I feel an increasing inclination to shop/buy things.",
@@ -136,7 +136,7 @@ export const BSAS_28_ITEMS: BSASQuestionItem[] = [
     dimensionKey: "tolerance",
     itemNumberInDimension: 4
   },
-  // 5. Relapse (Items 17-20)
+
   {
     id: 17,
     text: "I have tried to cut down on shopping/buying without success.",
@@ -165,7 +165,7 @@ export const BSAS_28_ITEMS: BSASQuestionItem[] = [
     dimensionKey: "relapse",
     itemNumberInDimension: 4
   },
-  // 6. Withdrawal (Items 21-24)
+
   {
     id: 21,
     text: "I become stressed if obstructed from shopping/buying things.",
@@ -194,7 +194,7 @@ export const BSAS_28_ITEMS: BSASQuestionItem[] = [
     dimensionKey: "withdrawal",
     itemNumberInDimension: 4
   },
-  // 7. Problems (Items 25-28)
+
   {
     id: 25,
     text: "I shop/buy so much that it has caused economic problems.",
@@ -233,12 +233,10 @@ export const BSAS_RESPONSE_OPTIONS = [
   { val: 4, label: 'Completely Agree', badge: '4' }
 ];
 
-// Alias for backwards-compatibility
 export const BSAS_QUESTIONS = BSAS_28_ITEMS;
 
 export const INITIAL_USERS: User[] = [];
 
-// Curated Core Color Families specification
 export interface CuratedColorFamily {
   name: string;
   hex: string;
@@ -263,7 +261,6 @@ export const CURATED_COLOR_FAMILIES: CuratedColorFamily[] = [
   { name: 'Neutral', hex: '#a8a29e' }
 ];
 
-// Standard core clothing colors for everyday wardrobes (normal colors for clothes)
 export const NORMAL_CLOTHING_COLORS: CuratedColorFamily[] = [
   { name: 'Black', hex: '#18181b' },
   { name: 'White', hex: '#f8fafc' },
@@ -279,23 +276,22 @@ export const NORMAL_CLOTHING_COLORS: CuratedColorFamily[] = [
 export const CATEGORIES = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Dresses', 'Knitwear'] as const;
 export const GARMENT_TYPES = ['Shirt', 'Pants', 'Skirt', 'Shorts', 'Dress', 'One-Piece', 'Shoes', 'Outerwear'] as const;
 
-// SVG Silhouette Helper for crisp vector garments
 export const createGarmentSilhouette = (color: string, label: string, type: 'top' | 'bottom' | 'outerwear' | 'dress' | 'shoes' = 'top') => {
-  let path = 'M50 60 L75 40 L100 55 L125 40 L150 60 L135 85 L125 80 L125 160 L75 160 L75 80 L65 85 Z'; // top/shirt
+  let path = 'M50 60 L75 40 L100 55 L125 40 L150 60 L135 85 L125 80 L125 160 L75 160 L75 80 L65 85 Z';
   if (type === 'bottom') {
-    path = 'M65 45 L135 45 L130 160 L105 160 L100 90 L95 160 L70 160 Z'; // pants
+    path = 'M65 45 L135 45 L130 160 L105 160 L100 90 L95 160 L70 160 Z';
   } else if (type === 'outerwear') {
-    path = 'M45 55 L75 35 L100 50 L125 35 L155 55 L140 90 L130 85 L130 165 L70 165 L70 85 L60 90 Z'; // jacket/coat
+    path = 'M45 55 L75 35 L100 50 L125 35 L155 55 L140 90 L130 85 L130 165 L70 165 L70 85 L60 90 Z';
   } else if (type === 'dress') {
-    path = 'M70 45 L100 55 L130 45 L120 85 L150 165 L50 165 L80 85 Z'; // dress
+    path = 'M70 45 L100 55 L130 45 L120 85 L150 165 L50 165 L80 85 Z';
   } else if (type === 'shoes') {
-    path = 'M40 120 L80 120 L95 90 L125 90 L135 120 L165 120 C165 145 150 155 125 155 L40 155 Z'; // shoes
+    path = 'M40 120 L80 120 L95 90 L125 90 L135 120 L165 120 C165 145 150 155 125 155 L40 155 Z';
   }
   return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><rect width="200" height="200" fill="%23f8fafc" rx="16"/><path d="${path}" fill="${encodeURIComponent(color)}" stroke="%23334155" stroke-width="2.5" stroke-linejoin="round"/><text x="100" y="188" font-family="sans-serif" font-size="10" font-weight="700" fill="%2364748b" text-anchor="middle">${label}</text></svg>`;
 };
 
 export const INITIAL_TAGS: Tag[] = [
-  // Core Categories (Prompt Specification)
+
   { tag_id: 1, tag_name: 'Tops', tag_type: 'Category' },
   { tag_id: 2, tag_name: 'Bottoms', tag_type: 'Category' },
   { tag_id: 3, tag_name: 'Outerwear', tag_type: 'Category' },
@@ -309,7 +305,6 @@ export const INITIAL_TAGS: Tag[] = [
   { tag_id: 11, tag_name: 'Shorts', tag_type: 'Category' },
   { tag_id: 12, tag_name: 'One-Piece', tag_type: 'Category' },
 
-  // Curated Core Color Families
   { tag_id: 101, tag_name: 'Black', tag_type: 'Color', hex_color: '#18181b' },
   { tag_id: 102, tag_name: 'White', tag_type: 'Color', hex_color: '#f8fafc' },
   { tag_id: 103, tag_name: 'Gray', tag_type: 'Color', hex_color: '#64748b' },
@@ -334,12 +329,8 @@ export const INITIAL_ASSESSMENTS: BSASAssessment[] = [];
 
 export const INITIAL_DAILY_LOGS: DailyClothingLog[] = [];
 
-// Empty friends and borrow requests
 export const INITIAL_FRIEND_REQUESTS: FriendRequest[] = [];
 
 export const INITIAL_BORROWS: Borrow[] = [];
 
 export const INITIAL_DONATION_OPPORTUNITIES: DonationOpportunity[] = [];
-
-
-

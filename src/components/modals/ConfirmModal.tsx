@@ -99,9 +99,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <button type="button" className="btn btn-g" onClick={handleCancel}>
             Cancel
           </button>
-          <button 
-            type="button" 
-            className="btn btn-p" 
+          <button
+            type="button"
+            className="btn btn-p"
             style={requiredConfirmText ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : undefined}
             onClick={handleConfirm}
           >
