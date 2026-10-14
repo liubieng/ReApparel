@@ -9,10 +9,7 @@ import {
   deduplicateAssessments,
   getLocalDateString,
   ensureUserSyncedToSupabase
-} from './services/supabaseClient';
-import { closetService } from './services/closetService';
-import { friendsService } from './services/friendsService';
-import { mapsService } from './services/mapsService';
+} from './shared/services/supabaseClient';
 
 import {
   User,
@@ -23,31 +20,50 @@ import {
   Borrow,
   DonationOpportunity,
   AppNotification
-} from './types/database';
+} from './shared/types/database';
 
-import { AuthView } from './views/AuthView';
-import { ProfileView } from './views/ProfileView';
-import { SettingsView } from './views/SettingsView';
-import { BSASIntroView } from './views/BSASIntroView';
-import { VirtualClosetView } from './views/VirtualClosetView';
-import { DailyLogView } from './views/DailyLogView';
-import { RecoveryView } from './views/RecoveryView';
-import { ClosetStatisticsView } from './views/ClosetStatisticsView';
-import { FriendsView } from './views/FriendsView';
-import { LendingDashboardView } from './views/LendingDashboardView';
-import { NotificationsView } from './views/NotificationsView';
-import { DonationMapSection } from './views/DonationMapSection';
+import { Sidebar } from './shared/layout/Sidebar';
+import { Header } from './shared/layout/Header';
+import { ConfirmModal } from './shared/modals/ConfirmModal';
+import { DatabaseModal } from './shared/modals/DatabaseModal';
+import { AuthView } from './shared/views/AuthView';
+import { ProfileView } from './shared/views/ProfileView';
+import { SettingsView } from './shared/views/SettingsView';
 
-import { BSASAssessmentModal } from './components/modals/BSASAssessmentModal';
-import { AddItemModal } from './components/modals/AddItemModal';
-import { EditItemModal } from './components/modals/EditItemModal';
-import { DeleteCascadeModal } from './components/modals/DeleteCascadeModal';
-import { BorrowModal } from './components/modals/BorrowModal';
+// Feature Modules (Clean & Modular)
+import {
+  VirtualClosetView,
+  AddItemModal,
+  EditItemModal,
+  DeleteCascadeModal,
+  closetService
+} from './modules/VirtualCloset';
 
-import { Sidebar } from './components/layout/Sidebar';
-import { Header } from './components/layout/Header';
-import { ConfirmModal } from './components/modals/ConfirmModal';
-import { DatabaseModal } from './components/modals/DatabaseModal';
+import { DailyLogView } from './modules/DailyClothingLog';
+
+import {
+  BSASIntroView,
+  BSASAssessmentModal
+} from './modules/BSAS';
+
+import {
+  RecoveryView,
+  ClosetStatisticsView
+} from './modules/RecoveryProgress';
+
+import {
+  FriendsView,
+  LendingDashboardView,
+  NotificationsView,
+  BorrowModal,
+  friendsService
+} from './modules/FriendsAndLending';
+
+import {
+  DonationMapSection,
+  mapsService
+} from './modules/DonationMap';
+
 import { BrainCircuit } from 'lucide-react';
 
 const VALID_VIEWS = new Set([
