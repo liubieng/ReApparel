@@ -1,21 +1,31 @@
 import React from 'react';
-import { Flag } from 'lucide-react';
-import { DonationOpportunity } from '../../types/database';
+import { Flag, Trash2, Calendar, UserCheck } from 'lucide-react';
+import { DonationOpportunity, User } from '../../types/database';
 
 interface OpportunityCardProps {
   opportunity: DonationOpportunity & { calculatedDist?: number };
   isSelected: boolean;
   onSelect: () => void;
   onFlag: () => void;
+  currentUser?: User | null;
+  onDelete?: (opportunity: DonationOpportunity) => void;
 }
 
 export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   opportunity,
   isSelected,
   onSelect,
-  onFlag
+  onFlag,
+  currentUser,
+  onDelete
 }) => {
   const flagCount = opportunity.flags ? opportunity.flags.length : (opportunity.flags_count || 0);
+
+  const isCreator = Boolean(
+    currentUser &&
+    opportunity.created_by &&
+    (opportunity.created_by === currentUser.user_id || opportunity.created_by === currentUser.email)
+  );
 
   return (
     <div
@@ -33,6 +43,16 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
               </span>
             ) : (
               <span className="pill on" style={{ fontSize: 11 }}>Active Bin</span>
+            )}
+            {opportunity.end_date && (
+              <span className="pill" style={{ fontSize: 11, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Calendar style={{ width: 11, height: 11 }} /> Until {new Date(opportunity.end_date).toLocaleDateString()}
+              </span>
+            )}
+            {isCreator && (
+              <span className="pill" style={{ fontSize: 11, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <UserCheck style={{ width: 11, height: 11 }} /> Your Upload
+              </span>
             )}
           </div>
 
@@ -66,7 +86,30 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           {opportunity.organizer ? `Organized by ${opportunity.organizer}` : 'Community Drop-off'}
         </span>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {isCreator && onDelete && (
+            <button
+              type="button"
+              className="btn btn-g"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                color: '#dc2626',
+                borderColor: '#fca5a5',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+              title="Delete this donation drive (Only visible to you as the uploader)"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(opportunity);
+              }}
+            >
+              <Trash2 className="ico" style={{ width: 12, height: 12, color: '#dc2626' }} /> Delete
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-g"
@@ -78,7 +121,6 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           >
             <Flag className="ico" style={{ width: 12, height: 12 }} /> Flag
           </button>
-
         </div>
       </div>
     </div>

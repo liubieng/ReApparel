@@ -1,17 +1,21 @@
 import React from 'react';
-import { MapPin, Navigation, Flag, Info } from 'lucide-react';
-import { DonationOpportunity } from '../../types/database';
+import { MapPin, Navigation, Flag, Info, Trash2, Calendar, UserCheck } from 'lucide-react';
+import { DonationOpportunity, User } from '../../types/database';
 
 interface OpportunityDrawerProps {
   opportunity: DonationOpportunity | null;
   onClose: () => void;
   onFlag: (opp: DonationOpportunity) => void;
+  currentUser?: User | null;
+  onDelete?: (opp: DonationOpportunity) => void;
 }
 
 export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
   opportunity,
   onClose,
-  onFlag
+  onFlag,
+  currentUser,
+  onDelete
 }) => {
   if (!opportunity) return null;
 
@@ -19,6 +23,12 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
   const flagCount = opportunity.flags && opportunity.flags.length > 0
     ? opportunity.flags.length
     : (opportunity.flags_count || 0);
+
+  const isCreator = Boolean(
+    currentUser &&
+    opportunity.created_by &&
+    (opportunity.created_by === currentUser.user_id || opportunity.created_by === currentUser.email)
+  );
 
   return (
     <div
@@ -99,6 +109,16 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
                 </span>
               </span>
             )}
+            {opportunity.end_date && (
+              <span className="pill" style={{ fontSize: 11.5, background: 'var(--surface)', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Calendar style={{ width: 12, height: 12 }} /> Expires: {new Date(opportunity.end_date).toLocaleDateString()}
+              </span>
+            )}
+            {isCreator && (
+              <span className="pill" style={{ fontSize: 11.5, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <UserCheck style={{ width: 12, height: 12 }} /> Uploaded by You
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <MapPin className="ico" style={{ width: 14, height: 14 }} />
@@ -122,6 +142,15 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
             {opportunity.latitude.toFixed(5)}, {opportunity.longitude.toFixed(5)}
           </div>
         </div>
+        {opportunity.end_date && (
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>DRIVE DURATION & END DATE</div>
+            <div style={{ fontSize: 12.5, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Calendar style={{ width: 12, height: 12, color: 'var(--primary)' }} />
+              <span>{opportunity.start_date ? new Date(opportunity.start_date).toLocaleDateString() : 'Active'} &rarr; {new Date(opportunity.end_date).toLocaleDateString()}</span>
+            </div>
+          </div>
+        )}
         {opportunity.organizer && (
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>ORGANIZED BY</div>
@@ -159,7 +188,7 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([opportunity.address, opportunity.city, opportunity.province, opportunity.country].filter(Boolean).join(', '))}`}
           target="_blank"
@@ -177,6 +206,25 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
         >
           <Flag className="ico" style={{ width: 13, height: 13 }} /> Report Issue
         </button>
+        {isCreator && onDelete && (
+          <button
+            type="button"
+            className="btn btn-g"
+            style={{
+              fontSize: 12,
+              padding: '6px 14px',
+              color: '#dc2626',
+              borderColor: '#fca5a5',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5
+            }}
+            title="Delete this donation drive (Only available to you as the uploader)"
+            onClick={() => onDelete(opportunity)}
+          >
+            <Trash2 className="ico" style={{ width: 13, height: 13, color: '#dc2626' }} /> Delete My Drive
+          </button>
+        )}
       </div>
     </div>
   );

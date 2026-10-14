@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AlertTriangle, Plus, MapPin } from 'lucide-react';
-import { DonationOpportunity, DonationFlagType } from '../../types/database';
+import { DonationOpportunity, DonationFlagType, User } from '../../types/database';
 import { mapsService } from './mapsService';
 import {
   COUNTRIES,
@@ -19,6 +19,7 @@ import { OpportunityDrawer } from './OpportunityDrawer';
 import { OpportunityCard } from './OpportunityCard';
 import { FlagModal } from './FlagModal';
 import { AddDonationModal } from './AddDonationModal';
+import { ConfirmModal } from '../../components/modals/ConfirmModal';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
@@ -29,6 +30,7 @@ interface DonationMapProps {
   toast: (msg: string) => void;
   highlightId: number | null;
   setHighlightId: (id: number | null) => void;
+  currentUser?: User | null;
 }
 
 /**
@@ -47,7 +49,8 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   onRefreshData,
   toast,
   highlightId,
-  setHighlightId
+  setHighlightId,
+  currentUser
 }) => {
   // Cascading Location Filters: Region -> Barangay -> Country -> Province -> City
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
@@ -77,6 +80,10 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
 
   // Community Flagging Modal
   const [flagModalOpp, setFlagModalOpp] = useState<DonationOpportunity | null>(null);
+
+  // Community Deletion Confirmation Modal
+  const [deleteConfirmOpp, setDeleteConfirmOpp] = useState<DonationOpportunity | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Dynamic Location Options
   const availableRegions = REGIONS;
@@ -215,6 +222,10 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
       if (onlyActiveDrives && !opp.is_live_drive) {
         return false;
       }
+      // Remove donation opportunity from map and feed once its duration has ended
+      if (mapsService.isOpportunityExpired(opp)) {
+        return false;
+      }
       return true;
     });
   }, [opportunities, selectedRegion, selectedBarangay, selectedCountry, selectedProvince, selectedCity, searchQuery, selectedCategory, maxDistanceKm, onlyActiveDrives, userLocation]);
@@ -286,6 +297,47 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     } catch (err: any) {
       console.error('Error posting donation drive:', err);
       toast('Failed to post donation drive. Please try again.');
+    }
+  };
+
+  // Delete Community Donation Drive (Authorized for uploader/creator only)
+  const handleDeleteOpportunity = (opp: DonationOpportunity) => {
+    const isCreator = Boolean(
+      currentUser &&
+      opp.created_by &&
+      (opp.created_by === currentUser.user_id || opp.created_by === currentUser.email)
+    );
+    if (!isCreator) {
+      toast('You can only delete donation opportunities that you uploaded.');
+      return;
+    }
+    setDeleteConfirmOpp(opp);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmOpp) return;
+    setIsDeleting(true);
+    try {
+      const success = await mapsService.deleteDonationOpportunity(
+        deleteConfirmOpp.donation_id,
+        currentUser?.user_id
+      );
+      if (success) {
+        toast(`"${deleteConfirmOpp.name}" was successfully removed.`);
+        if (selectedOpp?.donation_id === deleteConfirmOpp.donation_id) {
+          setSelectedOpp(null);
+          setHighlightId(null);
+        }
+        await onRefreshData();
+      } else {
+        toast('Failed to delete opportunity. Permission denied or item not found.');
+      }
+    } catch (err: any) {
+      console.error('Error deleting donation opportunity:', err);
+      toast(err?.message || 'Failed to delete donation opportunity.');
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmOpp(null);
     }
   };
 
@@ -401,6 +453,8 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
               setHighlightId(null);
             }}
             onFlag={(opp) => setFlagModalOpp(opp)}
+            currentUser={currentUser}
+            onDelete={handleDeleteOpportunity}
           />
 
           {/* 4. Opportunity Feed Cards List */}
@@ -417,6 +471,8 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
                 isSelected={selectedOpp?.donation_id === opp.donation_id}
                 onSelect={() => handleSelectOpp(opp)}
                 onFlag={() => setFlagModalOpp(opp)}
+                currentUser={currentUser}
+                onDelete={handleDeleteOpportunity}
               />
             ))}
 
@@ -647,6 +703,17 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
         onClose={() => setIsAddDriveOpen(false)}
         onSubmit={handleAddDriveSubmit}
         userLocation={userLocation}
+        currentUserId={currentUser?.user_id}
+      />
+
+      {/* 7. Community Drive Deletion Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deleteConfirmOpp)}
+        title="Delete Donation Opportunity"
+        message={`Are you sure you want to delete "${deleteConfirmOpp?.name}"? It will be permanently removed from the donation map.`}
+        confirmLabel={isDeleting ? 'Deleting...' : 'Delete Drive'}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmOpp(null)}
       />
     </div>
   );

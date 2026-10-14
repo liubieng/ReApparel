@@ -1597,6 +1597,16 @@ class MockDatabaseEngine {
     this.notify();
   }
 
+  public deleteDonationOpportunity(donationId: number): boolean {
+    const prevLen = this.state.donation_opportunities.length;
+    this.state.donation_opportunities = this.state.donation_opportunities.filter(o => o.donation_id !== donationId);
+    if (this.state.donation_flags) {
+      this.state.donation_flags = this.state.donation_flags.filter(f => f.donation_id !== donationId);
+    }
+    this.notify();
+    return this.state.donation_opportunities.length < prevLen;
+  }
+
   public addMultipleDonationOpportunities(newOpps: DonationOpportunity[]) {
     for (const opp of newOpps) {
       const matchIndex = this.state.donation_opportunities.findIndex(

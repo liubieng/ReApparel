@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { DonationOpportunity } from '../../types/database';
-import { MapPin, Navigation, Share2, X, AlertCircle } from 'lucide-react';
+import { MapPin, Navigation, Share2, X, AlertCircle, Calendar } from 'lucide-react';
 
 const customLeafletPinIcon = typeof window !== 'undefined' ? L.divIcon({
   className: 'reapparel-leaflet-pin',
@@ -33,13 +33,15 @@ interface AddDonationModalProps {
   onClose: () => void;
   onSubmit: (data: Omit<DonationOpportunity, 'donation_id'>) => Promise<void>;
   userLocation?: { lat: number; lng: number } | null;
+  currentUserId?: string;
 }
 
 export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  userLocation
+  userLocation,
+  currentUserId
 }) => {
   const [name, setName] = useState('');
   const [organizer, setOrganizer] = useState('');
@@ -49,6 +51,12 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   const [hours, setHours] = useState('Mon-Sat 8:00 AM - 5:00 PM');
   const [acceptedTypes, setAcceptedTypes] = useState('Everyday clean clothing, jackets, children wear, shoes, blankets');
   const [contactNumber, setContactNumber] = useState('');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split('T')[0];
+  });
   const [postPlatform, setPostPlatform] = useState<'facebook' | 'instagram' | 'community' | 'announcement'>('facebook');
   const [postUrl, setPostUrl] = useState('');
   const [postSnippet, setPostSnippet] = useState('');
@@ -183,6 +191,11 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
       return;
     }
 
+    if (!endDate) {
+      setErrorMsg('Please specify the drive end date (duration).');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
 
@@ -216,7 +229,10 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
         region: 'Central Visayas',
         province: 'Negros Oriental',
         city: 'Dumaguete City',
-        barangay: detectedBarangay
+        barangay: detectedBarangay,
+        created_by: currentUserId || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate
       });
       onClose();
     } catch (err: any) {
@@ -481,6 +497,50 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
                 onChange={(e) => setAcceptedTypes(e.target.value)}
                 style={{ fontSize: 13 }}
               />
+            </div>
+          </div>
+
+          {/* Drive Duration & Expiration */}
+          <div style={{
+            padding: 12,
+            background: 'var(--surface-2)',
+            borderRadius: 10,
+            border: '1px solid var(--border)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Calendar style={{ width: 14, height: 14, color: 'var(--primary)' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                Drive Duration & Expiration
+              </span>
+              <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                (Drive will automatically expire and be removed from the map after this date)
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={{ fontSize: 12.5, width: '100%' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                  End Date * (Expiration Date)
+                </label>
+                <input
+                  type="date"
+                  required
+                  min={startDate || new Date().toISOString().split('T')[0]}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{ fontSize: 12.5, width: '100%' }}
+                />
+              </div>
             </div>
           </div>
 

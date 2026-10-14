@@ -491,7 +491,18 @@ export default function App() {
       if (!supabase) return;
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')) {
+        // STRICT GUARD: Only auto-process auth state transitions if this is an explicit incoming email verification link
+        const isAuthCallback = typeof window !== 'undefined' && (
+          window.location.hash.includes('access_token') || 
+          window.location.hash.includes('type=') || 
+          window.location.search.includes('code=')
+        );
+
+        if (!isAuthCallback) {
+          return;
+        }
+
+        if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
           const authUser = session.user;
           const currentActiveId = mockDatabase.getCurrentUser()?.user_id;
 
@@ -589,9 +600,17 @@ export default function App() {
       }
     } catch {}
     mockDatabase.setCurrentUserId(null);
+    safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
     safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
+    safeStorage.removeItem('reapparel_user_id');
     setCurrentUser(null);
     setView('login');
+    setGarments([]);
+    setAssessments([]);
+    setFriends([]);
+    setFriendRequests([]);
+    setBorrows([]);
+    setNotifications([]);
     toast('Logged out successfully.');
   };
 
@@ -800,11 +819,30 @@ export default function App() {
       requiredConfirmText: 'DELETE',
       onConfirm: async () => {
         try {
-          await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
+          // 1. Immediately sign out of Supabase auth so no lingering session exists
+          const supabase = getSupabase();
+          if (supabase) {
+            await supabase.auth.signOut().catch(() => {});
+          }
+
+          // 2. Clear all local storage session markers
           mockDatabase.setCurrentUserId(null);
+          safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
           safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
+          safeStorage.removeItem('reapparel_user_id');
+
+          // 3. Delete user account and cascade delete all closet data
+          await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
+
+          // 4. Reset React state and navigate to login view
           setCurrentUser(null);
           setView('login');
+          setGarments([]);
+          setAssessments([]);
+          setFriends([]);
+          setFriendRequests([]);
+          setBorrows([]);
+          setNotifications([]);
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
           toast('Account and wardrobe data permanently erased. You may register again anytime.');
         } catch (err) {
@@ -1070,6 +1108,7 @@ export default function App() {
                 toast={toast}
                 highlightId={donHighlight}
                 setHighlightId={setDonHighlight}
+                currentUser={currentUser}
               />
             </div>
           )}

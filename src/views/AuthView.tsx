@@ -12,7 +12,9 @@ import {
   MailCheck, 
   CheckCircle2, 
   RefreshCw, 
-  ArrowLeft 
+  ArrowLeft,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { User } from '../types/database';
 import { mockDatabase, getSupabase } from '../services/supabaseClient';
@@ -45,6 +47,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Email Verification State
   const [pendingEmail, setPendingEmail] = useState('');
@@ -913,14 +917,44 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
             <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               Password
             </label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required={authMode === 'register'}
-              minLength={authMode === 'register' ? 8 : undefined}
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required={authMode === 'register'}
+                minLength={authMode === 'register' ? 8 : undefined}
+                style={{ paddingRight: 38 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                title={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  padding: '4px',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 4
+                }}
+              >
+                {showPassword ? (
+                  <EyeOff style={{ width: 17, height: 17 }} />
+                ) : (
+                  <Eye style={{ width: 17, height: 17 }} />
+                )}
+              </button>
+            </div>
           </div>
 
           {authMode === 'register' && (
@@ -928,13 +962,43 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 Confirm Password *
               </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  style={{ paddingRight: 38 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(prev => !prev)}
+                  title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    padding: '4px',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 4
+                  }}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff style={{ width: 17, height: 17 }} />
+                  ) : (
+                    <Eye style={{ width: 17, height: 17 }} />
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -983,7 +1047,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               New to ReApparel?{' '}
               <button
                 type="button"
-                onClick={() => { setAuthMode('register'); setErrorMsg(null); }}
+                onClick={() => { setAuthMode('register'); setErrorMsg(null); setShowPassword(false); setShowConfirmPassword(false); }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -1002,7 +1066,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
               Already have an account?{' '}
               <button
                 type="button"
-                onClick={() => { setAuthMode('login'); setErrorMsg(null); }}
+                onClick={() => { setAuthMode('login'); setErrorMsg(null); setShowPassword(false); setShowConfirmPassword(false); }}
                 style={{
                   background: 'none',
                   border: 'none',
