@@ -740,6 +740,8 @@ export default function App() {
       onConfirm: async () => {
         try {
 
+          await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
+
           const supabase = getSupabase();
           if (supabase) {
             await supabase.auth.signOut().catch(() => { });
@@ -749,8 +751,6 @@ export default function App() {
           safeStorage.removeItem(STORAGE_KEY_ACTIVE_USER);
           safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
           safeStorage.removeItem('reapparel_user_id');
-
-          await closetService.deleteUserAccount(targetUser.user_id, targetUser.email);
 
           setCurrentUser(null);
           setView('login');

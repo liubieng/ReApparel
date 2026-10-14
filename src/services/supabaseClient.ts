@@ -1945,12 +1945,16 @@ export async function runDatabaseDiagnostic(): Promise<DatabaseDiagnosticResult>
   let writePerm: DatabaseDiagnosticResult['writePermission'] = 'allowed';
   let writeMsg = 'Cloud writes permitted.';
   try {
-    const probeRes = await supabase.from('clothing_item').insert([{
+    const probePayload: Record<string, any> = {
       user_id: 'a0000000-0000-0000-0000-000000000001',
       name: '__probe_test_diagnostic__',
-      image_url: 'silhouette',
-      addition_type: 'Old'
-    }]).select();
+      image_url: 'silhouette'
+    };
+    let probeRes = await supabase.from('clothing_item').insert([probePayload]).select();
+    if (probeRes.error && (probeRes.error.code === '23502' || probeRes.error.message?.includes('addition_type'))) {
+      probePayload.addition_type = 'Old';
+      probeRes = await supabase.from('clothing_item').insert([probePayload]).select();
+    }
 
     if (probeRes.error) {
       if (probeRes.error.code === '42501') {
@@ -2009,13 +2013,19 @@ export async function syncAllLocalDataToSupabase(): Promise<{ success: boolean; 
       const canonicalUid = toCanonicalUserId(item.user_id);
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid);
       if (isUuid) {
-        const { data, error } = await supabase.from('clothing_item').insert([{
+        const syncPayload: Record<string, any> = {
           user_id: canonicalUid,
           name: item.name,
           image_url: item.image_url,
-          addition_type: (item as any).addition_type || 'Old',
           wear_count: item.wear_count || item.worn_count || 0
-        }]).select().single();
+        };
+        let { data, error } = await supabase.from('clothing_item').insert([syncPayload]).select().single();
+        if (error && (error.code === '23502' || error.message?.includes('addition_type'))) {
+          syncPayload.addition_type = 'Old';
+          const retry = await supabase.from('clothing_item').insert([syncPayload]).select().single();
+          data = retry.data;
+          error = retry.error;
+        }
 
         if (error) {
           if (error.code === '42501') {

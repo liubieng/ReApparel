@@ -122,7 +122,6 @@ CREATE TABLE clothing_item (
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     image_url TEXT NOT NULL,
-    addition_type TEXT NOT NULL CHECK (addition_type IN ('Old', 'New')),
     wear_count INT DEFAULT 0,
     date_added TIMESTAMPTZ DEFAULT now()
 );

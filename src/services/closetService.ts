@@ -161,17 +161,25 @@ export const closetService = {
 
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(canonicalUid || '');
         if (isUuid) {
-          const { data, error } = await supabase
+          const itemPayload: Record<string, any> = {
+            user_id: canonicalUid,
+            name: item.name,
+            image_url: item.image_url,
+            wear_count: 0
+          };
+
+          let { data, error } = await supabase
             .from('clothing_item')
-            .insert([{
-              user_id: canonicalUid,
-              name: item.name,
-              image_url: item.image_url,
-              addition_type: (item as any).addition_type || 'Old',
-              wear_count: 0
-            }])
+            .insert([itemPayload])
             .select()
             .single();
+
+          if (error && (error.code === '23502' || error.message?.includes('addition_type'))) {
+            itemPayload.addition_type = 'Old';
+            const retry = await supabase.from('clothing_item').insert([itemPayload]).select().single();
+            data = retry.data;
+            error = retry.error;
+          }
 
           if (!error && data) {
 
@@ -609,6 +617,10 @@ export const closetService = {
     const supabase = getSupabase();
     if (supabase) {
       try {
+        try {
+          await supabase.rpc('delete_user_account');
+        } catch {}
+
         const canonicalUid = toCanonicalUserId(userId);
 
         const { data: userItems } = await supabase
@@ -670,17 +682,25 @@ export const closetService = {
 
         for (const item of missingItems) {
           try {
-            const { data: inserted, error: insErr } = await supabase
+            const itemPayload: Record<string, any> = {
+              user_id: targetUid,
+              name: item.name,
+              image_url: item.image_url,
+              wear_count: item.wear_count || item.worn_count || 0
+            };
+
+            let { data: inserted, error: insErr } = await supabase
               .from('clothing_item')
-              .insert([{
-                user_id: targetUid,
-                name: item.name,
-                image_url: item.image_url,
-                addition_type: (item as any).addition_type || 'Old',
-                wear_count: item.wear_count || item.worn_count || 0
-              }])
+              .insert([itemPayload])
               .select()
               .single();
+
+            if (insErr && (insErr.code === '23502' || insErr.message?.includes('addition_type'))) {
+              itemPayload.addition_type = 'Old';
+              const retry = await supabase.from('clothing_item').insert([itemPayload]).select().single();
+              inserted = retry.data;
+              insErr = retry.error;
+            }
 
             if (!insErr && inserted) {
               if (item.tags && item.tags.length > 0) {
