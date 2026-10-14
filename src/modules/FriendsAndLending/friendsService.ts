@@ -216,42 +216,7 @@ export const friendsService = {
           updated_at: r.updated_at || new Date().toISOString()
         }));
 
-        const unsynced = localPending.filter(
-          l => !remote.some(r =>
-            (isSameUser(r.sender_id, l.sender_id) && isSameUser(r.receiver_id, l.receiver_id)) ||
-            (isSameUser(r.sender_id, l.receiver_id) && isSameUser(r.receiver_id, l.sender_id))
-          )
-        );
-
-        for (const l of unsynced) {
-          try {
-            const senderUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, l.sender_id));
-            const receiverUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, l.receiver_id));
-            const syncedSender = senderUser ? await ensureUserSyncedToSupabase(senderUser) : null;
-            const syncedReceiver = receiverUser ? await ensureUserSyncedToSupabase(receiverUser) : null;
-
-            const finalSenderId = syncedSender?.user_id || l.sender_id;
-            const finalReceiverId = syncedReceiver?.user_id || l.receiver_id;
-
-            const { data: ins, error: insErr } = await supabase
-              .from('friend_request')
-              .insert([{ sender_id: finalSenderId, receiver_id: finalReceiverId, status: 'pending' }])
-              .select();
-            if (!insErr && ins && ins[0]) {
-              remote.push({
-                request_id: ins[0].request_id,
-                sender_id: ins[0].sender_id,
-                receiver_id: ins[0].receiver_id,
-                status: ins[0].status,
-                updated_at: ins[0].updated_at || new Date().toISOString()
-              });
-            } else if (insErr) {
-              console.warn('[friendsService] Could not push unsynced friend_request:', insErr.message);
-            }
-          } catch {}
-        }
-
-        // Ensure any foreign senders/receivers are known in local user store
+        // Ensure any foreign senders/receivers are known in local user store first
         const missingUserIds = Array.from(new Set(
           remote.flatMap(r => [r.sender_id, r.receiver_id])
             .filter(id => id && !mockDatabase.getAllUsers().some(u => isSameUser(u.user_id, id)))
@@ -261,7 +226,7 @@ export const friendsService = {
           try {
             const { data: usersData } = await withTimeout(
               supabase.from('users').select('*').in('user_id', missingUserIds),
-              2500
+              2000
             );
             if (usersData && Array.isArray(usersData)) {
               usersData.forEach((u: any) => mockDatabase.upsertUser(u));
@@ -270,6 +235,48 @@ export const friendsService = {
         }
 
         mockDatabase.replaceFriendRequestsForUser(uid, remote);
+
+        // Push any local-only pending requests to Supabase in the background (non-blocking)
+        const unsynced = localPending.filter(
+          l => !remote.some(r =>
+            (isSameUser(r.sender_id, l.sender_id) && isSameUser(r.receiver_id, l.receiver_id)) ||
+            (isSameUser(r.sender_id, l.receiver_id) && isSameUser(r.receiver_id, l.sender_id))
+          )
+        );
+
+        if (unsynced.length > 0) {
+          void Promise.allSettled(
+            unsynced.map(async (l) => {
+              try {
+                const senderUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, l.sender_id));
+                const receiverUser = mockDatabase.getAllUsers().find(u => isSameUser(u.user_id, l.receiver_id));
+                const syncedSender = senderUser ? await ensureUserSyncedToSupabase(senderUser) : null;
+                const syncedReceiver = receiverUser ? await ensureUserSyncedToSupabase(receiverUser) : null;
+
+                const finalSenderId = syncedSender?.user_id || l.sender_id;
+                const finalReceiverId = syncedReceiver?.user_id || l.receiver_id;
+
+                const isSenderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalSenderId);
+                const isReceiverUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalReceiverId);
+                if (!isSenderUuid || !isReceiverUuid) return;
+
+                const { data: ins } = await supabase
+                  .from('friend_request')
+                  .insert([{ sender_id: finalSenderId, receiver_id: finalReceiverId, status: 'pending' }])
+                  .select();
+                if (ins && ins[0]) {
+                  mockDatabase.upsertFriendRequest({
+                    request_id: ins[0].request_id,
+                    sender_id: ins[0].sender_id,
+                    receiver_id: ins[0].receiver_id,
+                    status: ins[0].status,
+                    updated_at: ins[0].updated_at || new Date().toISOString()
+                  });
+                }
+              } catch {}
+            })
+          );
+        }
       }
     } catch (err) {
       console.warn('[friendsService] fetchFriendRequestsFromSupabase error:', err);
@@ -285,8 +292,9 @@ export const friendsService = {
       const { data, error } = await withTimeout(
         supabase
           .from('users')
-          .select('user_id, email, first_name, last_name, friend_code, created_at'),
-        3000
+          .select('user_id, email, first_name, last_name, friend_code, created_at')
+          .limit(100),
+        2500
       );
       if (error || !data || data.length === 0) return;
       (data as User[]).forEach(u => mockDatabase.upsertUser(u));
@@ -440,8 +448,10 @@ export const friendsService = {
       const joinRes = await withTimeout(
         supabase
           .from('borrow')
-          .select('*, clothing_item(*)'),
-        4000
+          .select('*, clothing_item(*)')
+          .order('created_at', { ascending: false })
+          .limit(100),
+        2500
       );
       data = joinRes.data;
       error = joinRes.error;
@@ -451,8 +461,10 @@ export const friendsService = {
         const simpleRes = await withTimeout(
           supabase
             .from('borrow')
-            .select('*'),
-          4000
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100),
+          2500
         );
         data = simpleRes.data;
         error = simpleRes.error;

@@ -340,7 +340,7 @@ export default function App() {
     refresh();
     const pollTimer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
-    }, 10000);
+    }, 3000);
     const onFocus = () => refresh();
     window.addEventListener('focus', onFocus);
 
@@ -373,17 +373,12 @@ export default function App() {
               }).catch(() => { });
             } else if (payload?.new) {
               const r = payload.new;
-              if (r.sender_id === uid || r.receiver_id === uid) {
-                mockDatabase.upsertFriendRequest({
-                  request_id: r.request_id,
-                  sender_id: r.sender_id,
-                  receiver_id: r.receiver_id,
-                  status: r.status,
-                  updated_at: r.updated_at || new Date().toISOString()
-                });
-                setFriendRequests(friendsService.getFriendRequests());
-                setFriends(friendsService.getConnectedFriends());
-                setNotifications(friendsService.getNotifications(uid));
+              if (isSameUser(r.sender_id, uid) || isSameUser(r.receiver_id, uid)) {
+                friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
+                  setFriendRequests(friendsService.getFriendRequests());
+                  setFriends(friendsService.getConnectedFriends());
+                  setNotifications(friendsService.getNotifications(uid));
+                }).catch(() => { });
               }
             }
           }

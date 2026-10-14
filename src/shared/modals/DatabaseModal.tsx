@@ -84,7 +84,20 @@ CREATE POLICY "Anon full access donation_opportunity" ON donation_opportunity FO
 
 ALTER TABLE donation_flag ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access donation_flag" ON donation_flag;
-CREATE POLICY "Anon full access donation_flag" ON donation_flag FOR ALL TO anon USING (true) WITH CHECK (true);`;
+CREATE POLICY "Anon full access donation_flag" ON donation_flag FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- Enable Supabase Realtime for Instant Push Notifications & Borrow Sync
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;`;
 
 const SQL_DISABLE_RLS = `-- ReApparel: Quick Disable RLS for Local Prototype
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
@@ -190,7 +203,11 @@ CREATE TABLE donation_flag (
 );
 
 -- Performance Indexes for High-Frequency Queries and RLS Subqueries
+CREATE INDEX IF NOT EXISTS idx_users_friend_code ON users (friend_code);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 CREATE INDEX IF NOT EXISTS idx_clothing_item_user ON clothing_item (user_id);
+CREATE INDEX IF NOT EXISTS idx_friend_request_receiver ON friend_request (receiver_id);
+CREATE INDEX IF NOT EXISTS idx_friend_request_sender ON friend_request (sender_id);
 CREATE INDEX IF NOT EXISTS idx_friend_request_status_users ON friend_request (status, sender_id, receiver_id);
 CREATE INDEX IF NOT EXISTS idx_daily_clothing_log_user_date ON daily_clothing_log (user_id, log_date);
 CREATE INDEX IF NOT EXISTS idx_daily_log_item_log_id ON daily_log_item (log_id);
@@ -198,7 +215,20 @@ CREATE INDEX IF NOT EXISTS idx_borrow_borrower ON borrow (borrower_id);
 CREATE INDEX IF NOT EXISTS idx_borrow_item ON borrow (item_id);
 CREATE INDEX IF NOT EXISTS idx_donation_flag_donation_id ON donation_flag (donation_id);
 CREATE INDEX IF NOT EXISTS idx_item_tag_item_id ON item_tag (item_id);
-CREATE INDEX IF NOT EXISTS idx_bsas_assessment_user ON bsas_assessment (user_id);`;
+CREATE INDEX IF NOT EXISTS idx_bsas_assessment_user ON bsas_assessment (user_id);
+
+-- Enable Supabase Realtime
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;`;
 
 export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   isOpen,

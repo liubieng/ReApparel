@@ -249,7 +249,7 @@ export const closetService = {
     const supabase = getSupabase();
     if (supabase) {
       try {
-        const { data, error } = await supabase.from('tag').select('*');
+        const { data, error } = await withTimeout(supabase.from('tag').select('*'), 2000);
         if (!error && data && data.length > 0) return data as Tag[];
       } catch {}
     }
@@ -416,7 +416,7 @@ export const closetService = {
           .eq('user_id', targetUid)
           .order('log_date', { ascending: false });
 
-        const { data, error } = await withTimeout(query, 4000);
+        const { data, error } = await withTimeout(query, 2500);
 
         if (!error && data && data.length > 0) {
           const remoteLogs: DailyClothingLog[] = (data as any[]).map(r => {
