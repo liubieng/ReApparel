@@ -74,67 +74,35 @@ export const mapsService = {
     if (supabase) {
       try {
 
-        const metaTag = (opp.created_by || opp.end_date || opp.start_date)
-          ? ` [REAPPAREL_META:${JSON.stringify({ created_by: opp.created_by, start_date: opp.start_date, end_date: opp.end_date })}]`
-          : '';
-
         const fullPayload: Record<string, any> = {
           name: opp.name.trim(),
           address: opp.address.trim(),
           latitude: Number(opp.latitude),
           longitude: Number(opp.longitude),
           hours: opp.hours?.trim() || 'Mon-Sun 8:00 AM - 8:00 PM',
-          accepted_types: opp.accepted_types?.trim() || 'Clothing, Shoes, Linens, Bags'
+          accepted_types: opp.accepted_types?.trim() || 'Clothing, Shoes, Linens, Bags',
+          post_snippet: opp.post_snippet?.trim() || null,
+          post_platform: opp.post_platform || 'facebook',
+          post_title: opp.post_title?.trim() || opp.name.trim(),
+          post_url: opp.post_url?.trim() || null,
+          is_live_drive: typeof opp.is_live_drive === 'boolean' ? opp.is_live_drive : true,
+          city: opp.city?.trim() || null,
+          province: opp.province?.trim() || null,
+          barangay: opp.barangay?.trim() || null,
+          organizer: opp.organizer?.trim() || null,
+          created_by: opp.created_by || null,
+          start_date: opp.start_date || null,
+          end_date: opp.end_date || null
         };
 
-        if (opp.organizer) fullPayload.organizer = opp.organizer.trim();
-        if (opp.post_url) fullPayload.post_url = opp.post_url.trim();
-        if (opp.post_platform) fullPayload.post_platform = opp.post_platform;
-        if (opp.post_title) fullPayload.post_title = opp.post_title.trim();
-        fullPayload.post_snippet = ((opp.post_snippet || '') + metaTag).trim() || null;
-        if (typeof opp.is_live_drive === 'boolean') fullPayload.is_live_drive = opp.is_live_drive;
-        if (opp.city) fullPayload.city = opp.city.trim();
-        if (opp.province) fullPayload.province = opp.province.trim();
-        if (opp.barangay) fullPayload.barangay = opp.barangay.trim();
-        if (opp.created_by) fullPayload.created_by = opp.created_by;
-        if (opp.start_date) fullPayload.start_date = opp.start_date;
-        if (opp.end_date) fullPayload.end_date = opp.end_date;
-
-        let { data, error } = await withTimeout(
+        const { data, error } = await withTimeout(
           supabase
             .from('donation_opportunity')
             .insert([fullPayload])
             .select()
             .single(),
-          5000
+          3000
         );
-
-        if (error && (error.code === 'PGRST204' || error.code === '42703' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
-          const corePayload: Record<string, any> = {
-            name: opp.name.trim(),
-            address: opp.address.trim(),
-            latitude: Number(opp.latitude),
-            longitude: Number(opp.longitude),
-            hours: opp.hours?.trim() || 'Mon-Sun 8:00 AM - 8:00 PM',
-            accepted_types: opp.accepted_types?.trim() || 'Clothing, Shoes, Linens, Bags',
-            post_snippet: ((opp.post_snippet || '') + metaTag).trim() || null
-          };
-          if (opp.organizer) corePayload.organizer = opp.organizer.trim();
-          if (opp.city) corePayload.city = opp.city.trim();
-          if (opp.province) corePayload.province = opp.province.trim();
-          if (opp.barangay) corePayload.barangay = opp.barangay.trim();
-
-          const fallbackRes = await withTimeout(
-            supabase
-              .from('donation_opportunity')
-              .insert([corePayload])
-              .select()
-              .single(),
-            5000
-          );
-          data = fallbackRes.data;
-          error = fallbackRes.error;
-        }
 
         if (!error && data && data.donation_id) {
           mockDatabase.updateDonationOpportunityId(created.donation_id, data.donation_id);
@@ -192,18 +160,7 @@ export const mapsService = {
         let created_by = r.created_by;
         let start_date = r.start_date;
         let end_date = r.end_date;
-        let snippet = r.post_snippet || '';
-
-        const metaMatch = snippet.match(/\s*\[REAPPAREL_META:(\{.*?\})\]\s*/);
-        if (metaMatch) {
-          try {
-            const parsed = JSON.parse(metaMatch[1]);
-            if (!created_by && parsed.created_by) created_by = parsed.created_by;
-            if (!start_date && parsed.start_date) start_date = parsed.start_date;
-            if (!end_date && parsed.end_date) end_date = parsed.end_date;
-            snippet = snippet.replace(metaMatch[0], '').trim();
-          } catch {}
-        }
+        const snippet = r.post_snippet || '';
 
         let platform = r.post_platform;
         if (!platform && r.post_url) {
