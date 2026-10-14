@@ -483,9 +483,18 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                           display: 'inline-block'
                         }}
                       />
-                      <div>
-                        <strong style={{ fontSize: 12.5, display: 'block', color: 'var(--text)' }}>{item.name}</strong>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.category || item.type_tag || 'Garment'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                        {item.category && (
+                          <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', fontWeight: 500 }}>
+                            {item.category}
+                          </span>
+                        )}
+                        {item.color && (
+                          <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.color_tag || '#64748b' }} />
+                            {item.color}
+                          </span>
+                        )}
                       </div>
                       {!isLocked && (
                         <button
@@ -681,6 +690,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                 {filteredClosetGarments.map(garment => {
                   const isSelected = selectedItems.some(i => i.item_id === garment.item_id);
                   const isHex = garment.image_url?.startsWith('#');
+                  const wearCount = garment.worn_count ?? garment.wear_count ?? 0;
 
                   return (
                     <div
@@ -724,21 +734,42 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                         height: 110,
                         width: '100%',
                         borderRadius: 6,
-                        marginBottom: 8,
+                        marginBottom: 6,
                         backgroundColor: isHex ? garment.image_url : 'var(--surface-2)',
                         backgroundImage: isHex ? undefined : `url("${garment.image_url}")`,
                         backgroundSize: 'contain',
                         backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center'
-                      }} />
+                        backgroundPosition: 'center',
+                        position: 'relative'
+                      }}>
+                        <span style={{
+                          position: 'absolute',
+                          top: 4,
+                          left: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          background: wearCount > 0 ? 'var(--primary)' : 'rgba(100, 116, 139, 0.85)',
+                          color: '#ffffff',
+                          lineHeight: 1.2
+                        }}>
+                          {wearCount} {wearCount === 1 ? 'wear' : 'wears'}
+                        </span>
+                      </div>
 
-                      <strong style={{ fontSize: 12.5, marginBottom: 2, color: 'var(--text)' }}>
-                        {garment.name}
-                      </strong>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
-                        <span>{garment.category || garment.type_tag || 'Garment'}</span>
-                        <span>{garment.worn_count ?? garment.wear_count ?? 0} wears</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                        {garment.category && (
+                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', fontWeight: 500 }}>
+                            {garment.category}
+                          </span>
+                        )}
+                        {garment.color && (
+                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: garment.color_tag || '#64748b' }} />
+                            {garment.color}
+                          </span>
+                        )}
                       </div>
 
                     </div>
@@ -916,12 +947,22 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                                   display: 'inline-block'
                                 }}
                               />
-                              <div>
-                                <strong style={{ fontSize: 12.5, display: 'block', color: 'var(--text)' }}>
-                                  {item.name}
-                                </strong>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {item.category && (
+                                    <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', fontWeight: 500 }}>
+                                      {item.category}
+                                    </span>
+                                  )}
+                                  {item.color && (
+                                    <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, background: 'var(--surface)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: item.color_tag || '#64748b' }} />
+                                      {item.color}
+                                    </span>
+                                  )}
+                                </div>
                                 <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
-                                  {item.category || item.type_tag || 'Garment'} &middot; {item.worn_count ?? item.wear_count ?? 0} total wears
+                                  {item.worn_count ?? item.wear_count ?? 0} total wears
                                 </span>
                               </div>
                             </div>
