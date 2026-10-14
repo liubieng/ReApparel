@@ -796,9 +796,7 @@ export default function App() {
 
   const handleDeleteNotification = (notifId: string) => {
     friendsService.deleteNotification(notifId);
-    if (currentUser) {
-      setNotifications(friendsService.getNotifications(currentUser.user_id));
-    }
+    setNotifications(prev => prev.filter(n => n.id !== notifId));
   };
 
   const handleMarkNotificationRead = (notifId: string) => {

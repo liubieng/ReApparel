@@ -411,10 +411,17 @@ class MockDatabaseEngine {
   private state: MockDatabaseState;
   private listeners: Set<() => void> = new Set();
   private currentUserId: string | null;
+  private dismissedNotificationIds: Set<string> = new Set();
 
   constructor() {
     this.state = loadInitialMockState();
     this.currentUserId = safeStorage.getItem(STORAGE_KEY_ACTIVE_USER) || null;
+    try {
+      const stored = safeStorage.getItem('reapparel_dismissed_notifications');
+      if (stored) {
+        this.dismissedNotificationIds = new Set(JSON.parse(stored));
+      }
+    } catch {}
   }
 
   public subscribe(listener: () => void): () => void {
@@ -1297,6 +1304,14 @@ class MockDatabaseEngine {
   public clearNotifications(userId?: string) {
     const targetUid = userId || this.currentUserId;
     if (this.state.notifications) {
+      this.state.notifications.forEach(n => {
+        if (!targetUid || isSameUser(n.user_id, targetUid)) {
+          this.dismissedNotificationIds.add(n.id);
+        }
+      });
+      try {
+        safeStorage.setItem('reapparel_dismissed_notifications', JSON.stringify(Array.from(this.dismissedNotificationIds)));
+      } catch {}
       this.state.notifications = this.state.notifications.filter(n => n.user_id && !isSameUser(n.user_id, targetUid));
       this.notify();
     }
@@ -1313,6 +1328,10 @@ class MockDatabaseEngine {
   }
 
   public deleteNotification(notificationId: string) {
+    this.dismissedNotificationIds.add(notificationId);
+    try {
+      safeStorage.setItem('reapparel_dismissed_notifications', JSON.stringify(Array.from(this.dismissedNotificationIds)));
+    } catch {}
     if (this.state.notifications) {
       this.state.notifications = this.state.notifications.filter(item => item.id !== notificationId);
       this.notify();
@@ -1363,6 +1382,7 @@ class MockDatabaseEngine {
         );
       }
       const notifId = `notif-bw-status-${b.borrow_id}-${b.status}`;
+      if (this.dismissedNotificationIds.has(notifId)) return;
       const alreadyNotified = this.state.notifications.some(n => n.id === notifId);
       if (!alreadyNotified) {
         const lender = this.state.users.find(u => u.user_id === lenderId || (lenderId && isSameUser(u.user_id, lenderId))) || b.lender;
