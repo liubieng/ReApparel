@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flag, Trash2, Calendar, UserCheck } from 'lucide-react';
+import { Flag, Trash2, Calendar, UserCheck, AlertCircle } from 'lucide-react';
 import { DonationOpportunity, User } from '../../shared/types/database';
 
 interface OpportunityCardProps {
@@ -37,13 +37,6 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <strong style={{ fontSize: 14 }}>{opportunity.name}</strong>
-            {flagCount > 0 ? (
-              <span className="pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 600 }}>
-                ⚠️ {flagCount} active flag{flagCount === 1 ? '' : 's'}
-              </span>
-            ) : (
-              <span className="pill on" style={{ fontSize: 11 }}>Active Bin</span>
-            )}
             {opportunity.end_date && (
               <span className="pill" style={{ fontSize: 11, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Calendar style={{ width: 11, height: 11 }} /> Until {new Date(opportunity.end_date).toLocaleDateString()}
@@ -113,13 +106,23 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           <button
             type="button"
             className="btn btn-g"
-            style={{ padding: '3px 8px', fontSize: 11 }}
+            style={{
+              padding: '3px 8px',
+              fontSize: 11,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              ...(flagCount > 0 ? { color: '#dc2626', borderColor: '#fca5a5' } : {})
+            }}
+            title={flagCount > 0 ? `${flagCount} community report${flagCount === 1 ? '' : 's'}` : 'Report an issue'}
             onClick={(e) => {
               e.stopPropagation();
               onFlag();
             }}
           >
-            <Flag className="ico" style={{ width: 12, height: 12 }} /> Flag
+            {flagCount > 0
+              ? <AlertCircle className="ico" style={{ width: 12, height: 12, color: '#dc2626' }} />
+              : <Flag className="ico" style={{ width: 12, height: 12 }} />} Flag
           </button>
         </div>
       </div>
