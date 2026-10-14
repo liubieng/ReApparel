@@ -244,12 +244,9 @@ export default function App() {
           closetService.getDailyLogs(user.user_id).catch(() => mockDatabase.getDailyLogs(user.user_id)),
           friendsService.fetchAndMergeUsersFromSupabase().catch(() => { }),
           friendsService.fetchFriendRequestsFromSupabase(user.user_id).catch(() => []),
-          friendsService.fetchBorrowsFromSupabase(user.user_id).catch(() => [])
+          friendsService.fetchBorrowsFromSupabase(user.user_id).catch(() => []),
+          mapsService.fetchAndMergeFromSupabase().catch(() => { })
         ];
-
-        if (options?.forceDonations || view === 'donations') {
-          fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => { }));
-        }
 
         const [items, userAssessments, userLogs] = await Promise.all(fetchPromises);
 
@@ -305,10 +302,10 @@ export default function App() {
     };
     refresh();
 
-    // Fast 10-second background poll while on donation map view
+    // Fast 2.5-second background poll while on donation map view for instantaneous updates
     const pollTimer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
-    }, 10000);
+    }, 2500);
 
     const onFocus = () => refresh();
     const onVisibilityChange = () => {

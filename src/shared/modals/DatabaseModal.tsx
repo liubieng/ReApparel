@@ -31,101 +31,171 @@ interface DatabaseModalProps {
   toast?: (msg: string) => void;
 }
 
-const SQL_ANON_PERMISSIVE = `-- ReApparel: Enable Anonymous Prototype Reads & Writes
--- Run this in your Supabase Dashboard -> SQL Editor if you want
--- your remote Supabase PostgreSQL database to directly accept writes.
+const SQL_ANON_PERMISSIVE = `-- ReApparel: Instant Real-Time Cloud Sync & Permissive Permissions
+-- Run this in your Supabase Dashboard -> SQL Editor.
+-- Fixes missing columns, sets full replica identity, and grants instantaneous multi-user reads & writes.
 
--- 1. Clothing Items
+-- 1. Ensure All Columns Exist for Community Donation Drives & Social Posts
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS organizer TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS post_url TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS post_platform TEXT DEFAULT 'facebook';
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS post_title TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS post_snippet TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS is_live_drive BOOLEAN DEFAULT TRUE;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS hours TEXT DEFAULT 'Mon-Sun 8:00 AM - 8:00 PM';
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS accepted_types TEXT DEFAULT 'Clothing, Shoes, Linens, Bags';
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS province TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS barangay TEXT;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS created_by UUID;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE IF EXISTS donation_opportunity ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+
+-- 2. Ensure All Columns Exist for Wardrobe Clothing Items & Verification Flags
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS color TEXT;
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS type_tag TEXT;
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS color_tag TEXT;
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS addition_type TEXT DEFAULT 'Old';
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS cost NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS is_borrowed BOOLEAN DEFAULT FALSE;
+ALTER TABLE IF EXISTS clothing_item ADD COLUMN IF NOT EXISTS borrower_id UUID;
+ALTER TABLE IF EXISTS donation_flag ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- 3. Enable Full Replica Identity for Complete Realtime Payloads
+ALTER TABLE IF EXISTS users REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS clothing_item REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS item_tag REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS tag REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS bsas_assessment REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS daily_clothing_log REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS daily_log_item REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS friend_request REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS borrow REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS donation_opportunity REPLICA IDENTITY FULL;
+ALTER TABLE IF EXISTS donation_flag REPLICA IDENTITY FULL;
+
+-- 4. Enable Row Level Security (RLS) with Public Access (both anon and authenticated users)
 ALTER TABLE clothing_item ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access clothing_item" ON clothing_item;
-CREATE POLICY "Anon full access clothing_item" ON clothing_item FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access clothing_item" ON clothing_item;
+CREATE POLICY "Full access clothing_item" ON clothing_item FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 2. Item Tags
 ALTER TABLE item_tag ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access item_tag" ON item_tag;
-CREATE POLICY "Anon full access item_tag" ON item_tag FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access item_tag" ON item_tag;
+CREATE POLICY "Full access item_tag" ON item_tag FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 3. BSAS Assessments
 ALTER TABLE bsas_assessment ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access bsas_assessment" ON bsas_assessment;
-CREATE POLICY "Anon full access bsas_assessment" ON bsas_assessment FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access bsas_assessment" ON bsas_assessment;
+CREATE POLICY "Full access bsas_assessment" ON bsas_assessment FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 4. Daily Clothing Logs & Items
 ALTER TABLE daily_clothing_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access daily_clothing_log" ON daily_clothing_log;
-CREATE POLICY "Anon full access daily_clothing_log" ON daily_clothing_log FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access daily_clothing_log" ON daily_clothing_log;
+CREATE POLICY "Full access daily_clothing_log" ON daily_clothing_log FOR ALL TO public USING (true) WITH CHECK (true);
 
 ALTER TABLE daily_log_item ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access daily_log_item" ON daily_log_item;
-CREATE POLICY "Anon full access daily_log_item" ON daily_log_item FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access daily_log_item" ON daily_log_item;
+CREATE POLICY "Full access daily_log_item" ON daily_log_item FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 5. Friend Requests & Borrows
 ALTER TABLE friend_request ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access friend_request" ON friend_request;
-CREATE POLICY "Anon full access friend_request" ON friend_request FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access friend_request" ON friend_request;
+CREATE POLICY "Full access friend_request" ON friend_request FOR ALL TO public USING (true) WITH CHECK (true);
 
 ALTER TABLE borrow ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access borrow" ON borrow;
-CREATE POLICY "Anon full access borrow" ON borrow FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access borrow" ON borrow;
+CREATE POLICY "Full access borrow" ON borrow FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 6. Users & Tags
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access users" ON users;
-CREATE POLICY "Anon full access users" ON users FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access users" ON users;
+CREATE POLICY "Full access users" ON users FOR ALL TO public USING (true) WITH CHECK (true);
 
 ALTER TABLE tag ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access tag" ON tag;
-CREATE POLICY "Anon full access tag" ON tag FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access tag" ON tag;
+CREATE POLICY "Full access tag" ON tag FOR ALL TO public USING (true) WITH CHECK (true);
 
--- 7. Donation Opportunities & Flags
 ALTER TABLE donation_opportunity ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access donation_opportunity" ON donation_opportunity;
-CREATE POLICY "Anon full access donation_opportunity" ON donation_opportunity FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access donation_opportunity" ON donation_opportunity;
+CREATE POLICY "Full access donation_opportunity" ON donation_opportunity FOR ALL TO public USING (true) WITH CHECK (true);
 
 ALTER TABLE donation_flag ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access donation_flag" ON donation_flag;
-CREATE POLICY "Anon full access donation_flag" ON donation_flag FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access donation_flag" ON donation_flag;
+CREATE POLICY "Full access donation_flag" ON donation_flag FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Enable Supabase Realtime for Instant Push Notifications & Borrow Sync
+-- 5. Enable Supabase Realtime Publication for Instant Multi-User Updates
 DO $$
 BEGIN
   BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
-  EXCEPTION WHEN OTHERS THEN NULL;
+    ALTER PUBLICATION supabase_realtime ADD TABLE users;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE clothing_item;
-  EXCEPTION WHEN OTHERS THEN NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE item_tag;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE tag;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE bsas_assessment;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE daily_clothing_log;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE daily_log_item;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE donation_flag;
-  EXCEPTION WHEN OTHERS THEN NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
 END $$;`;
 
-const SQL_DISABLE_RLS = `-- ReApparel: Quick Disable RLS for Local Prototype
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE clothing_item DISABLE ROW LEVEL SECURITY;
-ALTER TABLE item_tag DISABLE ROW LEVEL SECURITY;
-ALTER TABLE bsas_assessment DISABLE ROW LEVEL SECURITY;
-ALTER TABLE daily_clothing_log DISABLE ROW LEVEL SECURITY;
-ALTER TABLE daily_log_item DISABLE ROW LEVEL SECURITY;
-ALTER TABLE friend_request DISABLE ROW LEVEL SECURITY;
-ALTER TABLE borrow DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tag DISABLE ROW LEVEL SECURITY;
-ALTER TABLE donation_opportunity DISABLE ROW LEVEL SECURITY;
-ALTER TABLE donation_flag DISABLE ROW LEVEL SECURITY;`;
+const SQL_DISABLE_RLS = `-- ReApparel: Quick Disable RLS for Local Prototype & Defense
+ALTER TABLE IF EXISTS users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clothing_item DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS item_tag DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bsas_assessment DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS daily_clothing_log DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS daily_log_item DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS friend_request DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS borrow DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS tag DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS donation_opportunity DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS donation_flag DISABLE ROW LEVEL SECURITY;`;
 
 const SQL_FULL_SCHEMA = `-- ReApparel Full PostgreSQL Database Schema
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
     first_name TEXT NOT NULL,
@@ -134,7 +204,7 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE bsas_assessment (
+CREATE TABLE IF NOT EXISTS bsas_assessment (
     assessment_id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     score INT NOT NULL CHECK (score BETWEEN 0 AND 7),
@@ -142,29 +212,37 @@ CREATE TABLE bsas_assessment (
     taken_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE clothing_item (
+CREATE TABLE IF NOT EXISTS clothing_item (
     item_id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     image_url TEXT NOT NULL,
+    category TEXT,
+    color TEXT,
+    type_tag TEXT,
+    color_tag TEXT,
+    addition_type TEXT DEFAULT 'Old',
+    cost NUMERIC(10,2) DEFAULT 0,
     wear_count INT DEFAULT 0,
+    is_borrowed BOOLEAN DEFAULT FALSE,
+    borrower_id UUID,
     date_added TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE tag (
+CREATE TABLE IF NOT EXISTS tag (
     tag_id SERIAL PRIMARY KEY,
     tag_name TEXT NOT NULL,
     tag_type TEXT NOT NULL CHECK (tag_type IN ('Category', 'Color'))
 );
 
-CREATE TABLE item_tag (
+CREATE TABLE IF NOT EXISTS item_tag (
     item_tag_id SERIAL PRIMARY KEY,
     item_id INT NOT NULL REFERENCES clothing_item(item_id) ON DELETE CASCADE,
     tag_id INT NOT NULL REFERENCES tag(tag_id) ON DELETE CASCADE,
     UNIQUE(item_id, tag_id)
 );
 
-CREATE TABLE daily_clothing_log (
+CREATE TABLE IF NOT EXISTS daily_clothing_log (
     log_id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     log_date DATE NOT NULL,
@@ -173,14 +251,14 @@ CREATE TABLE daily_clothing_log (
     UNIQUE (user_id, log_date)
 );
 
-CREATE TABLE daily_log_item (
+CREATE TABLE IF NOT EXISTS daily_log_item (
     daily_log_item_id SERIAL PRIMARY KEY,
     log_id INT NOT NULL REFERENCES daily_clothing_log(log_id) ON DELETE CASCADE,
     item_id INT NOT NULL REFERENCES clothing_item(item_id) ON DELETE CASCADE,
     UNIQUE (log_id, item_id)
 );
 
-CREATE TABLE friend_request (
+CREATE TABLE IF NOT EXISTS friend_request (
     request_id SERIAL PRIMARY KEY,
     sender_id UUID NOT NULL REFERENCES users(user_id),
     receiver_id UUID NOT NULL REFERENCES users(user_id),
@@ -189,7 +267,7 @@ CREATE TABLE friend_request (
     UNIQUE (sender_id, receiver_id)
 );
 
-CREATE TABLE borrow (
+CREATE TABLE IF NOT EXISTS borrow (
     borrow_id SERIAL PRIMARY KEY,
     borrower_id UUID NOT NULL REFERENCES users(user_id),
     item_id INT NOT NULL REFERENCES clothing_item(item_id),
@@ -198,19 +276,35 @@ CREATE TABLE borrow (
     status TEXT NOT NULL CHECK (status IN ('Pending', 'Accepted', 'Rejected', 'Returned')) DEFAULT 'Pending'
 );
 
-CREATE TABLE donation_opportunity (
+CREATE TABLE IF NOT EXISTS donation_opportunity (
     donation_id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     address TEXT NOT NULL,
     latitude NUMERIC(10,8) NOT NULL,
-    longitude NUMERIC(11,8) NOT NULL
+    longitude NUMERIC(11,8) NOT NULL,
+    hours TEXT DEFAULT 'Mon-Sun 8:00 AM - 8:00 PM',
+    accepted_types TEXT DEFAULT 'Clothing, Shoes, Linens, Bags',
+    city TEXT,
+    province TEXT,
+    barangay TEXT,
+    organizer TEXT,
+    post_url TEXT,
+    post_platform TEXT DEFAULT 'facebook',
+    post_title TEXT,
+    post_snippet TEXT,
+    is_live_drive BOOLEAN DEFAULT TRUE,
+    created_by UUID,
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE donation_flag (
+CREATE TABLE IF NOT EXISTS donation_flag (
     flag_id SERIAL PRIMARY KEY,
     donation_id INT NOT NULL REFERENCES donation_opportunity(donation_id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(user_id),
     flag_type TEXT NOT NULL CHECK (flag_type IN ('Inactive', 'Inaccurate')),
+    notes TEXT,
     flagged_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -229,28 +323,65 @@ CREATE INDEX IF NOT EXISTS idx_donation_flag_donation_id ON donation_flag (donat
 CREATE INDEX IF NOT EXISTS idx_item_tag_item_id ON item_tag (item_id);
 CREATE INDEX IF NOT EXISTS idx_bsas_assessment_user ON bsas_assessment (user_id);
 
+-- Enable Replica Identity Full for Realtime
+ALTER TABLE users REPLICA IDENTITY FULL;
+ALTER TABLE clothing_item REPLICA IDENTITY FULL;
+ALTER TABLE item_tag REPLICA IDENTITY FULL;
+ALTER TABLE tag REPLICA IDENTITY FULL;
+ALTER TABLE bsas_assessment REPLICA IDENTITY FULL;
+ALTER TABLE daily_clothing_log REPLICA IDENTITY FULL;
+ALTER TABLE daily_log_item REPLICA IDENTITY FULL;
+ALTER TABLE friend_request REPLICA IDENTITY FULL;
+ALTER TABLE borrow REPLICA IDENTITY FULL;
+ALTER TABLE donation_opportunity REPLICA IDENTITY FULL;
+ALTER TABLE donation_flag REPLICA IDENTITY FULL;
+
 -- Enable Supabase Realtime
 DO $$
 BEGIN
   BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
-  EXCEPTION WHEN OTHERS THEN NULL;
+    ALTER PUBLICATION supabase_realtime ADD TABLE users;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE clothing_item;
-  EXCEPTION WHEN OTHERS THEN NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE item_tag;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE tag;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE bsas_assessment;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE daily_clothing_log;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE daily_log_item;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE donation_flag;
-  EXCEPTION WHEN OTHERS THEN NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
 END $$;`;
 

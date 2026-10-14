@@ -212,25 +212,28 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   const facebookPosts = useMemo(() => {
     return filteredOpportunities.filter(o => {
       const url = o.post_url?.trim().toLowerCase() || '';
-      const isFb = o.post_platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.me');
-      return isFb && (o.is_live_drive || o.post_title || o.post_snippet || url);
+      const platform = (o.post_platform || '').toLowerCase();
+      const isFb = platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.me') || (!platform && !url.includes('instagram'));
+      return isFb && (o.is_live_drive || o.post_title || o.post_snippet || url || o.name);
     });
   }, [filteredOpportunities]);
 
   const instagramPosts = useMemo(() => {
     return filteredOpportunities.filter(o => {
       const url = o.post_url?.trim().toLowerCase() || '';
-      const isIg = o.post_platform === 'instagram' || url.includes('instagram.com');
-      return isIg && o.post_platform !== 'facebook' && (o.is_live_drive || o.post_title || o.post_snippet || url);
+      const platform = (o.post_platform || '').toLowerCase();
+      const isIg = platform === 'instagram' || url.includes('instagram.com');
+      return isIg && platform !== 'facebook' && (o.is_live_drive || o.post_title || o.post_snippet || url);
     });
   }, [filteredOpportunities]);
 
   const otherPosts = useMemo(() => {
     return filteredOpportunities.filter(o => {
       const url = o.post_url?.trim().toLowerCase() || '';
-      const isFb = o.post_platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.me');
-      const isIg = o.post_platform === 'instagram' || url.includes('instagram.com');
-      return !isFb && !isIg && (o.post_platform === 'announcement' || o.post_platform === 'community' || o.post_snippet || url);
+      const platform = (o.post_platform || '').toLowerCase();
+      const isFb = platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.me') || (!platform && !url.includes('instagram'));
+      const isIg = platform === 'instagram' || url.includes('instagram.com');
+      return !isFb && !isIg && (platform === 'announcement' || platform === 'community' || o.post_snippet || url);
     });
   }, [filteredOpportunities]);
 

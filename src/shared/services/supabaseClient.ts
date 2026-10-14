@@ -1637,11 +1637,17 @@ class MockDatabaseEngine {
               Math.abs(o.longitude - opp.longitude) < 0.001)
       );
       if (matchIndex >= 0) {
-
+        const existing = this.state.donation_opportunities[matchIndex];
         this.state.donation_opportunities[matchIndex] = {
+          ...existing,
           ...opp,
-          ...this.state.donation_opportunities[matchIndex],
-          donation_id: opp.donation_id
+          donation_id: opp.donation_id,
+          post_platform: opp.post_platform || existing.post_platform || 'facebook',
+          post_url: opp.post_url || existing.post_url,
+          post_title: opp.post_title || existing.post_title || opp.name,
+          post_snippet: opp.post_snippet || existing.post_snippet,
+          is_live_drive: typeof opp.is_live_drive === 'boolean' ? opp.is_live_drive : (typeof existing.is_live_drive === 'boolean' ? existing.is_live_drive : true),
+          organizer: opp.organizer || existing.organizer
         };
       } else {
         this.state.donation_opportunities.unshift(opp);

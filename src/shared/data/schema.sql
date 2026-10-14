@@ -55,7 +55,15 @@ CREATE TABLE clothing_item (
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     name TEXT NOT NULL DEFAULT 'Garment',
     image_url TEXT NOT NULL,
+    category TEXT,
+    color TEXT,
+    type_tag TEXT,
+    color_tag TEXT,
+    addition_type TEXT DEFAULT 'Old',
+    cost NUMERIC(10,2) DEFAULT 0,
     wear_count INT DEFAULT 0 CHECK (wear_count >= 0),
+    is_borrowed BOOLEAN DEFAULT FALSE,
+    borrower_id UUID,
     date_added TIMESTAMPTZ DEFAULT now()
 );
 
@@ -158,10 +166,13 @@ CREATE TABLE donation_opportunity (
     barangay TEXT,
     organizer TEXT,
     post_url TEXT,
-    post_platform TEXT,
+    post_platform TEXT DEFAULT 'facebook',
     post_title TEXT,
     post_snippet TEXT,
-    is_live_drive BOOLEAN DEFAULT FALSE,
+    is_live_drive BOOLEAN DEFAULT TRUE,
+    created_by UUID,
+    start_date DATE,
+    end_date DATE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -234,66 +245,61 @@ ALTER TABLE borrow ENABLE ROW LEVEL SECURITY;
 ALTER TABLE donation_opportunity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE donation_flag ENABLE ROW LEVEL SECURITY;
 
--- Tags & Donation centers are community accessible
-CREATE POLICY "Public read tags" ON tag FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Public read donation spots" ON donation_opportunity;
-DROP POLICY IF EXISTS "Anon full access donation_opportunity" ON donation_opportunity;
-CREATE POLICY "Anon full access donation_opportunity" ON donation_opportunity FOR ALL USING (true) WITH CHECK (true);
+-- Tags & Tables accessible for multi-user prototype sync
+ALTER TABLE clothing_item ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access clothing_item" ON clothing_item;
+DROP POLICY IF EXISTS "Full access clothing_item" ON clothing_item;
+CREATE POLICY "Full access clothing_item" ON clothing_item FOR ALL TO public USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Anon full access donation_flag" ON donation_flag;
-CREATE POLICY "Anon full access donation_flag" ON donation_flag FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE item_tag ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access item_tag" ON item_tag;
+DROP POLICY IF EXISTS "Full access item_tag" ON item_tag;
+CREATE POLICY "Full access item_tag" ON item_tag FOR ALL TO public USING (true) WITH CHECK (true);
 
--- User profiles
-CREATE POLICY "Users viewable by authenticated users" ON users FOR SELECT USING (true);
-CREATE POLICY "Users can insert own profile" ON users FOR INSERT WITH CHECK (true);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING ((SELECT auth.uid()) = user_id);
+ALTER TABLE bsas_assessment ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access bsas_assessment" ON bsas_assessment;
+DROP POLICY IF EXISTS "Full access bsas_assessment" ON bsas_assessment;
+CREATE POLICY "Full access bsas_assessment" ON bsas_assessment FOR ALL TO public USING (true) WITH CHECK (true);
 
--- BSAS assessments: Private to owner
-CREATE POLICY "BSAS owner select" ON bsas_assessment FOR SELECT USING ((SELECT auth.uid()) = user_id);
-CREATE POLICY "BSAS owner insert" ON bsas_assessment FOR INSERT WITH CHECK ((SELECT auth.uid()) = user_id);
+ALTER TABLE daily_clothing_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access daily_clothing_log" ON daily_clothing_log;
+DROP POLICY IF EXISTS "Full access daily_clothing_log" ON daily_clothing_log;
+CREATE POLICY "Full access daily_clothing_log" ON daily_clothing_log FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Clothing items: Owner manages, friends can view
-CREATE POLICY "Clothing owner all" ON clothing_item FOR ALL USING ((SELECT auth.uid()) = user_id);
-CREATE POLICY "Friends can view closet items" ON clothing_item FOR SELECT USING (
-    (SELECT auth.uid()) = user_id OR
-    EXISTS (
-        SELECT 1 FROM friend_request
-        WHERE status = 'accepted' AND (
-            (sender_id = (SELECT auth.uid()) AND receiver_id = clothing_item.user_id) OR
-            (receiver_id = (SELECT auth.uid()) AND sender_id = clothing_item.user_id)
-        )
-    )
-);
+ALTER TABLE daily_log_item ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access daily_log_item" ON daily_log_item;
+DROP POLICY IF EXISTS "Full access daily_log_item" ON daily_log_item;
+CREATE POLICY "Full access daily_log_item" ON daily_log_item FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Item tags viewable if clothing item is viewable
-CREATE POLICY "Item tags viewable" ON item_tag FOR SELECT USING (true);
-CREATE POLICY "Item tags manageable by item owner" ON item_tag FOR ALL USING (
-    EXISTS (SELECT 1 FROM clothing_item WHERE clothing_item.item_id = item_tag.item_id AND clothing_item.user_id = (SELECT auth.uid()))
-);
-
--- Daily wear logs
-CREATE POLICY "Daily log owner all" ON daily_clothing_log FOR ALL USING ((SELECT auth.uid()) = user_id);
-CREATE POLICY "Daily log item owner all" ON daily_log_item FOR ALL USING (
-    EXISTS (SELECT 1 FROM daily_clothing_log WHERE daily_clothing_log.log_id = daily_log_item.log_id AND daily_clothing_log.user_id = (SELECT auth.uid()))
-);
-
--- Friend requests (Allow anon client communication)
-DROP POLICY IF EXISTS "Friend requests participant select" ON friend_request;
-DROP POLICY IF EXISTS "Friend requests sender insert" ON friend_request;
-DROP POLICY IF EXISTS "Friend requests participant update" ON friend_request;
+ALTER TABLE friend_request ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access friend_request" ON friend_request;
-CREATE POLICY "Anon full access friend_request" ON friend_request FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access friend_request" ON friend_request;
+CREATE POLICY "Full access friend_request" ON friend_request FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Borrows (Allow anon client lending)
-DROP POLICY IF EXISTS "Borrow viewable by borrower or lender" ON borrow;
-DROP POLICY IF EXISTS "Borrow insert by borrower" ON borrow;
-DROP POLICY IF EXISTS "Borrow update by parties" ON borrow;
+ALTER TABLE borrow ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Anon full access borrow" ON borrow;
-CREATE POLICY "Anon full access borrow" ON borrow FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Full access borrow" ON borrow;
+CREATE POLICY "Full access borrow" ON borrow FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Donation flags
-CREATE POLICY "Donation flags viewable by all" ON donation_flag FOR SELECT USING (true);
-CREATE POLICY "Donation flags insert by authenticated" ON donation_flag FOR INSERT WITH CHECK ((SELECT auth.uid()) = user_id);
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access users" ON users;
+DROP POLICY IF EXISTS "Full access users" ON users;
+CREATE POLICY "Full access users" ON users FOR ALL TO public USING (true) WITH CHECK (true);
+
+ALTER TABLE tag ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access tag" ON tag;
+DROP POLICY IF EXISTS "Full access tag" ON tag;
+CREATE POLICY "Full access tag" ON tag FOR ALL TO public USING (true) WITH CHECK (true);
+
+ALTER TABLE donation_opportunity ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access donation_opportunity" ON donation_opportunity;
+DROP POLICY IF EXISTS "Full access donation_opportunity" ON donation_opportunity;
+CREATE POLICY "Full access donation_opportunity" ON donation_opportunity FOR ALL TO public USING (true) WITH CHECK (true);
+
+ALTER TABLE donation_flag ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon full access donation_flag" ON donation_flag;
+DROP POLICY IF EXISTS "Full access donation_flag" ON donation_flag;
+CREATE POLICY "Full access donation_flag" ON donation_flag FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- --------------------------------------------------------------------
 -- Performance Indexes for High-Frequency Queries and RLS Subqueries
@@ -312,28 +318,65 @@ CREATE INDEX IF NOT EXISTS idx_donation_flag_donation_id ON donation_flag (donat
 CREATE INDEX IF NOT EXISTS idx_item_tag_item_id ON item_tag (item_id);
 CREATE INDEX IF NOT EXISTS idx_bsas_assessment_user ON bsas_assessment (user_id);
 
--- Enable Supabase Realtime
+-- Enable Replica Identity Full for Realtime Broadcast
+ALTER TABLE users REPLICA IDENTITY FULL;
+ALTER TABLE clothing_item REPLICA IDENTITY FULL;
+ALTER TABLE item_tag REPLICA IDENTITY FULL;
+ALTER TABLE tag REPLICA IDENTITY FULL;
+ALTER TABLE bsas_assessment REPLICA IDENTITY FULL;
+ALTER TABLE daily_clothing_log REPLICA IDENTITY FULL;
+ALTER TABLE daily_log_item REPLICA IDENTITY FULL;
+ALTER TABLE friend_request REPLICA IDENTITY FULL;
+ALTER TABLE borrow REPLICA IDENTITY FULL;
+ALTER TABLE donation_opportunity REPLICA IDENTITY FULL;
+ALTER TABLE donation_flag REPLICA IDENTITY FULL;
+
+-- Enable Supabase Realtime Publication
 DO $$
 BEGIN
   BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-  BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
-  EXCEPTION WHEN OTHERS THEN NULL;
+    ALTER PUBLICATION supabase_realtime ADD TABLE users;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE clothing_item;
-  EXCEPTION WHEN OTHERS THEN NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE item_tag;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE tag;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE bsas_assessment;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE daily_clothing_log;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE daily_log_item;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE friend_request;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE donation_flag;
-  EXCEPTION WHEN OTHERS THEN NULL;
+  EXCEPTION WHEN duplicate_object THEN NULL;
   END;
 END $$;
 

@@ -205,6 +205,14 @@ export const mapsService = {
           } catch {}
         }
 
+        let platform = r.post_platform;
+        if (!platform && r.post_url) {
+          const lowerUrl = r.post_url.toLowerCase();
+          if (lowerUrl.includes('facebook') || lowerUrl.includes('fb.')) platform = 'facebook';
+          else if (lowerUrl.includes('instagram') || lowerUrl.includes('instagr')) platform = 'instagram';
+        }
+        if (!platform) platform = 'facebook';
+
         return {
           ...r,
           latitude: Number(r.latitude),
@@ -215,7 +223,9 @@ export const mapsService = {
           created_by,
           start_date,
           end_date,
-          post_snippet: snippet || undefined
+          post_platform: platform,
+          post_title: r.post_title || r.name,
+          post_snippet: snippet || r.name || undefined
         };
       }) as DonationOpportunity[];
     if (remote.length > 0) mockDatabase.addMultipleDonationOpportunities(remote);
