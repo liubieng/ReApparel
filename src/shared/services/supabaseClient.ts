@@ -1530,11 +1530,11 @@ class MockDatabaseEngine {
 
   public getDonationOpportunities(): DonationOpportunity[] {
     return this.state.donation_opportunities.map(opp => {
-      const flags = this.state.donation_flags.filter(f => f.donation_id === opp.donation_id);
+      const flags = (this.state.donation_flags || []).filter(f => f.donation_id === opp.donation_id);
       return {
         ...opp,
-        flags,
-        flags_count: flags.length
+        flags: flags.length > 0 ? flags : (opp.flags || []),
+        flags_count: flags.length > 0 ? flags.length : (opp.flags?.length || opp.flags_count || 0)
       };
     });
   }
@@ -1550,7 +1550,13 @@ class MockDatabaseEngine {
       flagged_at: new Date().toISOString(),
       user_name: user ? `${user.first_name} ${user.last_name}` : 'Community Member'
     };
+    if (!this.state.donation_flags) this.state.donation_flags = [];
     this.state.donation_flags.unshift(newFlag);
+    const opp = this.state.donation_opportunities.find(o => o.donation_id === donationId);
+    if (opp) {
+      opp.flags = (this.state.donation_flags || []).filter(f => f.donation_id === donationId);
+      opp.flags_count = opp.flags.length;
+    }
     this.notify();
     return newFlag;
   }
@@ -1596,7 +1602,16 @@ class MockDatabaseEngine {
   }
 
   public addMultipleDonationOpportunities(newOpps: DonationOpportunity[]) {
+    if (!this.state.donation_flags) this.state.donation_flags = [];
     for (const opp of newOpps) {
+      if (opp.flags && Array.isArray(opp.flags)) {
+        if (opp.flags.length > 0) {
+          const otherFlags = this.state.donation_flags.filter(f => f.donation_id !== opp.donation_id);
+          this.state.donation_flags = [...otherFlags, ...opp.flags];
+        } else if ((opp as any)._hasFetchedFlags) {
+          this.state.donation_flags = this.state.donation_flags.filter(f => f.donation_id !== opp.donation_id);
+        }
+      }
       const matchIndex = this.state.donation_opportunities.findIndex(
         o => o.donation_id === opp.donation_id ||
              (o.name.toLowerCase() === opp.name.toLowerCase() &&
@@ -1604,10 +1619,11 @@ class MockDatabaseEngine {
               Math.abs(o.longitude - opp.longitude) < 0.001)
       );
       if (matchIndex >= 0) {
-
         this.state.donation_opportunities[matchIndex] = {
-          ...opp,
           ...this.state.donation_opportunities[matchIndex],
+          ...opp,
+          flags: (opp.flags && opp.flags.length > 0) ? opp.flags : this.state.donation_opportunities[matchIndex].flags,
+          flags_count: (opp.flags && opp.flags.length > 0) ? opp.flags.length : this.state.donation_opportunities[matchIndex].flags_count,
           donation_id: opp.donation_id
         };
       } else {

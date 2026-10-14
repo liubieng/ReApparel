@@ -18,28 +18,34 @@ export const mapsService = {
     return mockDatabase.getDonationOpportunities();
   },
 
-  addFlag(donationId: number, flagType: DonationFlag['flag_type'], notes?: string): DonationFlag {
+  async addFlag(donationId: number, flagType: DonationFlag['flag_type'], notes?: string): Promise<DonationFlag> {
     const flag = mockDatabase.addDonationFlag(donationId, flagType, notes);
     const supabase = getSupabase();
     if (supabase) {
-      (async () => {
-        try {
-          const user = mockDatabase.getCurrentUser();
-          let finalUid: string | null = null;
-          if (user) {
-            const synced = await ensureUserSyncedToSupabase(user);
-            finalUid = synced.user_id;
-          }
-          const isUuid = finalUid ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalUid) : false;
-          await supabase.from('donation_flag').insert([{
+      try {
+        const user = mockDatabase.getCurrentUser();
+        let finalUid: string | null = null;
+        if (user) {
+          const synced = await ensureUserSyncedToSupabase(user);
+          finalUid = synced.user_id;
+        }
+        const isUuid = finalUid ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalUid) : false;
+        const res = await withTimeout(
+          supabase.from('donation_flag').insert([{
             donation_id: flag.donation_id,
             user_id: isUuid ? finalUid : null,
             flag_type: flag.flag_type,
             notes: flag.notes,
             flagged_at: flag.flagged_at
-          }]);
-        } catch {}
-      })();
+          }]).select().single(),
+          5000
+        );
+        if (res.data?.flag_id) {
+          flag.flag_id = res.data.flag_id;
+        }
+      } catch (err) {
+        console.warn('Error inserting donation_flag into Supabase:', err);
+      }
     }
     return flag;
   },
@@ -156,15 +162,56 @@ export const mapsService = {
       const { data, error } = await withTimeout(
         supabase
           .from('donation_opportunity')
-          .select('*')
+          .select('*, donation_flag(*)')
           .order('donation_id', { ascending: false })
           .limit(200),
-        3000
+        5000
       );
-      if (error || !data || data.length === 0) return;
-      this.mergeRemoteRows(data as any[]);
-    } catch {
+      if (!error && data && data.length > 0) {
+        this.mergeRemoteRows(data as any[]);
+        return;
+      }
 
+      // Fallback: fetch donation opportunities and flags separately if relational join is unavailable
+      const [oppRes, flagRes] = await Promise.allSettled([
+        withTimeout(
+          supabase
+            .from('donation_opportunity')
+            .select('*')
+            .order('donation_id', { ascending: false })
+            .limit(200),
+          4000
+        ),
+        withTimeout(
+          supabase
+            .from('donation_flag')
+            .select('*')
+            .order('flag_id', { ascending: false })
+            .limit(500),
+          4000
+        )
+      ]);
+
+      const oppData = oppRes.status === 'fulfilled' ? oppRes.value.data : null;
+      const flagData = flagRes.status === 'fulfilled' ? flagRes.value.data : null;
+
+      if (oppData && Array.isArray(oppData) && oppData.length > 0) {
+        const flagsByDonationId: Record<number, any[]> = {};
+        if (flagData && Array.isArray(flagData)) {
+          for (const f of flagData) {
+            const dId = Number(f.donation_id);
+            if (!flagsByDonationId[dId]) flagsByDonationId[dId] = [];
+            flagsByDonationId[dId].push(f);
+          }
+        }
+        const enriched = oppData.map(opp => ({
+          ...opp,
+          donation_flag: flagsByDonationId[Number(opp.donation_id)] || []
+        }));
+        this.mergeRemoteRows(enriched);
+      }
+    } catch (err) {
+      console.warn('Notice fetching donation opportunities from Supabase:', err);
     }
   },
 
@@ -188,13 +235,30 @@ export const mapsService = {
           } catch {}
         }
 
+        const rawFlags = Array.isArray(r.donation_flag)
+          ? r.donation_flag
+          : Array.isArray(r.flags)
+          ? r.flags
+          : [];
+
+        const flags: DonationFlag[] = rawFlags.map((f: any) => ({
+          flag_id: Number(f.flag_id) || Date.now(),
+          donation_id: Number(f.donation_id) || Number(r.donation_id),
+          user_id: f.user_id || 'community',
+          flag_type: f.flag_type || 'Other',
+          notes: f.notes || '',
+          flagged_at: f.flagged_at || new Date().toISOString(),
+          user_name: f.user_name || 'Community Member'
+        }));
+
         return {
           ...r,
           latitude: Number(r.latitude),
           longitude: Number(r.longitude),
           is_live_drive: r.is_live_drive ?? true,
-          flags: r.flags || [],
-          flags_count: r.flags_count || 0,
+          flags,
+          flags_count: flags.length,
+          _hasFetchedFlags: Array.isArray(r.donation_flag) || Array.isArray(r.flags),
           created_by,
           start_date,
           end_date,

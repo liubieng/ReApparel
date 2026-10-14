@@ -244,6 +244,15 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   }, [highlightId, opportunities]);
 
+  useEffect(() => {
+    if (selectedOpp) {
+      const match = opportunities.find(o => o.donation_id === selectedOpp.donation_id);
+      if (match && match !== selectedOpp) {
+        setSelectedOpp(match);
+      }
+    }
+  }, [opportunities, selectedOpp]);
+
   const handleSelectOpp = (opp: DonationOpportunity) => {
     setSelectedOpp(opp);
     setHighlightId(opp.donation_id);
@@ -253,7 +262,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   const handleSubmitFlag = async (flagType: DonationFlagType, notes?: string) => {
     if (!flagModalOpp) return;
     try {
-      mapsService.addFlag(flagModalOpp.donation_id, flagType, notes);
+      await mapsService.addFlag(flagModalOpp.donation_id, flagType, notes);
       toast(`Report submitted for ${flagModalOpp.name}. Thank you!`);
       await onRefreshData();
     } catch {

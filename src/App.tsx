@@ -246,9 +246,7 @@ export default function App() {
           friendsService.fetchBorrowsFromSupabase(user.user_id).catch(() => [])
         ];
 
-        if (options?.forceDonations || view === 'donations') {
-          fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => { }));
-        }
+        fetchPromises.push(mapsService.fetchAndMergeFromSupabase().catch(() => { }));
 
         const [items, userAssessments, userLogs] = await Promise.all(fetchPromises);
 
@@ -436,6 +434,14 @@ export default function App() {
             } else if (payload?.new?.donation_id) {
               mapsService.mergeRemoteRows([payload.new]);
             }
+            setOpportunities(mapsService.getDonationOpportunities());
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'donation_flag' },
+          async () => {
+            await mapsService.fetchAndMergeFromSupabase();
             setOpportunities(mapsService.getDonationOpportunities());
           }
         )
