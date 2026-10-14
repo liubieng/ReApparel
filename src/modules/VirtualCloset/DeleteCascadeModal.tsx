@@ -50,7 +50,7 @@ export const DeleteCascadeModal: React.FC<DeleteCascadeModalProps> = ({
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: '0 0 16px' }}>
-          Are you sure you want to remove <strong>"{garment.name}"</strong>? In compliance with relational database integrity (PostgreSQL Cascade Rules), removing this garment will also clean up associated daily logs and loan references.
+          Are you sure you want to delete <strong>"{garment.name}"</strong>? This will permanently delete all records of this clothing.
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
