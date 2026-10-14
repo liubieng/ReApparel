@@ -51,8 +51,11 @@ export const mapsService = {
             notes: flag.notes,
             flagged_at: flag.flagged_at
           }]);
+          broadcastDonationEvent('UPDATE', { donation_id: donationId, type: 'FLAG' });
         } catch {}
       })();
+    } else {
+      broadcastDonationEvent('UPDATE', { donation_id: donationId, type: 'FLAG' });
     }
     return flag;
   },

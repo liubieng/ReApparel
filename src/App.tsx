@@ -8,7 +8,8 @@ import {
   STORAGE_KEY_ACTIVE_VIEW,
   deduplicateAssessments,
   getLocalDateString,
-  ensureUserSyncedToSupabase
+  ensureUserSyncedToSupabase,
+  isSameUser
 } from './shared/services/supabaseClient';
 
 import {
@@ -364,6 +365,34 @@ export default function App() {
   }, [view, currentUser?.user_id]);
 
   useEffect(() => {
+    const uid = currentUser?.user_id;
+    if (!uid) return;
+
+    const syncOnFocus = () => {
+      Promise.all([
+        friendsService.fetchFriendRequestsFromSupabase(uid).catch(() => []),
+        friendsService.fetchBorrowsFromSupabase(uid).catch(() => [])
+      ]).then(() => {
+        setFriendRequests(friendsService.getFriendRequests());
+        setFriends(friendsService.getConnectedFriends());
+        setBorrows(friendsService.getBorrows());
+        setNotifications(friendsService.getNotifications(uid));
+      }).catch(() => {});
+    };
+
+    window.addEventListener('focus', syncOnFocus);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') syncOnFocus();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    return () => {
+      window.removeEventListener('focus', syncOnFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [currentUser?.user_id]);
+
+  useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
@@ -396,6 +425,22 @@ export default function App() {
             }
           }
         )
+        .on(
+          'broadcast',
+          { event: 'friend_request_updated' },
+          (msg: any) => {
+            const uid = mockDatabase.getCurrentUser()?.user_id;
+            if (!uid) return;
+            const payload = msg?.payload;
+            if (!payload || !payload.sender_id || !payload.receiver_id || isSameUser(payload.sender_id, uid) || isSameUser(payload.receiver_id, uid)) {
+              friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
+                setFriendRequests(friendsService.getFriendRequests());
+                setFriends(friendsService.getConnectedFriends());
+                setNotifications(friendsService.getNotifications(uid));
+              }).catch(() => { });
+            }
+          }
+        )
         .subscribe();
 
       return () => {
@@ -419,6 +464,51 @@ export default function App() {
             await friendsService.fetchBorrowsFromSupabase(uid);
             setBorrows(friendsService.getBorrows());
             setNotifications(friendsService.getNotifications(uid));
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'borrow_updated' },
+          async (msg: any) => {
+            const uid = mockDatabase.getCurrentUser()?.user_id;
+            if (!uid) return;
+            await friendsService.fetchBorrowsFromSupabase(uid);
+            setBorrows(friendsService.getBorrows());
+            setNotifications(friendsService.getNotifications(uid));
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } catch { }
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    try {
+      const channel = supabase
+        .channel('realtime_app_closet')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'clothing_item' },
+          () => {
+            const uid = mockDatabase.getCurrentUser()?.user_id;
+            if (uid) {
+              closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
+            }
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'clothing_item_updated' },
+          () => {
+            const uid = mockDatabase.getCurrentUser()?.user_id;
+            if (uid) {
+              closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
+            }
           }
         )
         .subscribe();

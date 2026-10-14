@@ -145,6 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const isActive = currentView === item.id;
             const isRequests = item.id === 'requests';
             const isNotifications = item.id === 'notifications';
+            const isFriends = item.id === 'friends';
             const badgeCount = isRequests ? borrowsCount : isNotifications ? (pendingFriendsCount + unreadNotificationsCount) : isFriends ? pendingFriendsCount : 0;
 
             return (

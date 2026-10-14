@@ -1,6 +1,20 @@
 import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, isSameUser, ensureUserSyncedToSupabase } from '../../shared/services/supabaseClient';
 import { User, FriendRequest, Borrow, ClothingItem } from '../../shared/types/database';
 
+export function broadcastFriendEvent(event: 'friend_request_updated' | 'borrow_updated', payload?: any): void {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  try {
+    const channelName = event === 'friend_request_updated' ? 'realtime_app_friend_requests' : 'realtime_app_borrows';
+    const channel = supabase.channel(channelName);
+    channel.send({
+      type: 'broadcast',
+      event,
+      payload
+    }).catch(() => {});
+  } catch {}
+}
+
 export const friendsService = {
   getCurrentUser(): User | null {
     return mockDatabase.getCurrentUser();
@@ -180,6 +194,11 @@ export const friendsService = {
               mockDatabase.upsertFriendRequest(localReq);
             }
           }
+          broadcastFriendEvent('friend_request_updated', {
+            sender_id: currentUser.user_id,
+            receiver_id: targetUser.user_id,
+            action: 'CREATE'
+          });
         } catch (err) {
           console.warn('[friendsService] Failed to persist friend_request:', err);
         }
@@ -317,6 +336,13 @@ export const friendsService = {
 
           if (error) {
             console.warn('[friendsService] Supabase respondToRequest error:', error.message);
+          } else {
+            broadcastFriendEvent('friend_request_updated', {
+              request_id: requestId,
+              sender_id: req.sender_id,
+              receiver_id: req.receiver_id,
+              action: status.toUpperCase()
+            });
           }
         }
       } catch (err) {
@@ -372,6 +398,11 @@ export const friendsService = {
           .from('friend_request')
           .delete()
           .or(`and(sender_id.eq.${currentUid},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUid})`);
+        broadcastFriendEvent('friend_request_updated', {
+          sender_id: currentUid,
+          receiver_id: friendId,
+          action: 'REMOVE'
+        });
       } catch (err) {
         console.warn('[friendsService] removeFriend Supabase delete error:', err);
       }
@@ -428,6 +459,14 @@ export const friendsService = {
             borrow.borrow_id = data[0].borrow_id;
             mockDatabase.upsertBorrow(borrow);
           }
+          const item = mockDatabase.getClothingItems().find(i => i.item_id === itemId);
+          broadcastFriendEvent('borrow_updated', {
+            borrow_id: borrow.borrow_id,
+            borrower_id: borrow.borrower_id,
+            owner_id: item?.user_id,
+            item_id: itemId,
+            action: 'CREATE'
+          });
         }
       } catch (err) {
         console.warn('[friendsService] Failed to insert borrow to Supabase:', err);
@@ -526,6 +565,15 @@ export const friendsService = {
 
         if (error) {
           console.warn('[friendsService] Supabase updateBorrowStatus error:', error.message);
+        } else {
+          const b = mockDatabase.getBorrows().find(x => x.borrow_id === borrowId);
+          broadcastFriendEvent('borrow_updated', {
+            borrow_id: borrowId,
+            status,
+            borrower_id: b?.borrower_id,
+            item_id: b?.item_id,
+            action: 'UPDATE'
+          });
         }
       } catch (err) {
         console.warn('[friendsService] updateBorrowStatus error:', err);

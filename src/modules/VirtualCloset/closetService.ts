@@ -4,6 +4,19 @@ import { CURATED_COLOR_FAMILIES } from '../../shared/data/seedData';
 
 export { deduplicateAssessments };
 
+export function broadcastClosetEvent(action: 'INSERT' | 'UPDATE' | 'DELETE', payload?: any): void {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  try {
+    const channel = supabase.channel('realtime_app_closet');
+    channel.send({
+      type: 'broadcast',
+      event: 'clothing_item_updated',
+      payload: { action, ...payload }
+    }).catch(() => {});
+  } catch {}
+}
+
 export function inferCategoryFromName(name?: string): string {
   if (!name) return 'Tops';
   const lower = name.toLowerCase();
@@ -358,6 +371,7 @@ export const closetService = {
             } catch {}
 
             mockDatabase.updateClothingItemId(localItem.item_id, data.item_id);
+            broadcastClosetEvent('INSERT', { user_id: canonicalUid, item_id: data.item_id });
             return { ...localItem, item_id: data.item_id, ...data };
           }
         }
@@ -365,6 +379,7 @@ export const closetService = {
     } catch {
 
     }
+    broadcastClosetEvent('INSERT', { user_id: canonicalUid, item_id: localItem.item_id });
     return localItem;
   },
 
@@ -381,9 +396,12 @@ export const closetService = {
             ...(updates.wear_count !== undefined && { wear_count: updates.wear_count })
           })
           .eq('item_id', itemId);
+        broadcastClosetEvent('UPDATE', { item_id: itemId, updates });
       } catch {
 
       }
+    } else {
+      broadcastClosetEvent('UPDATE', { item_id: itemId, updates });
     }
     return localUpdated;
   },
@@ -397,9 +415,12 @@ export const closetService = {
           .from('clothing_item')
           .delete()
           .eq('item_id', itemId);
+        broadcastClosetEvent('DELETE', { item_id: itemId });
       } catch {
 
       }
+    } else {
+      broadcastClosetEvent('DELETE', { item_id: itemId });
     }
     return localResult;
   },
