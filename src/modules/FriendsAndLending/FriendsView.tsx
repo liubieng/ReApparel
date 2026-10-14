@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { User, FriendRequest, ClothingItem } from '../../shared/types/database';
 import { friendsService } from './friendsService';
-import { closetService } from '../VirtualCloset';
+import { closetService, inferCategoryFromName, inferColorFromName } from '../VirtualCloset';
 import { NORMAL_CLOTHING_COLORS } from '../../shared/data/seedData';
 
 interface FriendsViewProps {
@@ -466,10 +466,16 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
             <span className="pill on" style={{ fontSize: 11 }}>
-              {detailItem.item.category || detailItem.item.type_tag || 'Garment'}
+              {(detailItem.item.category && detailItem.item.category !== 'Tops')
+                ? detailItem.item.category
+                : inferCategoryFromName(detailItem.item.name)}
             </span>
             <span className="pill" style={{ fontSize: 11 }}>
-              Color: {detailItem.item.color || 'Curated'}
+              Color: {(detailItem.item.color && detailItem.item.color !== 'Neutral' && detailItem.item.color !== 'Curated')
+                ? detailItem.item.color
+                : (inferColorFromName(detailItem.item.name).name !== 'Curated'
+                    ? inferColorFromName(detailItem.item.name).name
+                    : (detailItem.item.color || 'Curated'))}
             </span>
             {detailItem.item.size && (
               <span className="pill" style={{ fontSize: 11 }}>
@@ -488,19 +494,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           </div>
 
           {isUnavailable ? (
-            <div>
-              <button
-                type="button"
-                disabled
-                className="btn btn-g"
-                style={{ width: '100%', justifyContent: 'center', opacity: 0.6, cursor: 'not-allowed', padding: '10px 16px', fontSize: 13 }}
-              >
-                Borrow Request Unavailable
-              </button>
-              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--danger)', textAlign: 'center' }}>
-                This garment is currently active on loan or marked unavailable.
-              </p>
-            </div>
+            <button
+              type="button"
+              disabled
+              className="btn btn-g"
+              style={{ width: '100%', justifyContent: 'center', opacity: 0.6, cursor: 'not-allowed', padding: '10px 16px', fontSize: 13 }}
+            >
+              Borrow Request Unavailable
+            </button>
           ) : (
             <button
               type="button"
@@ -577,8 +578,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           }}>
             {filteredSingleGarments.map(item => {
               const isHex = item.image_url?.startsWith('#');
-              const categoryTag = item.category || item.type_tag || 'Garment';
-              const colorTag = item.color || 'Curated';
+              const categoryTag = (item.category && item.category !== 'Tops')
+                ? item.category
+                : inferCategoryFromName(item.name);
+              const colorTag = (item.color && item.color !== 'Neutral' && item.color !== 'Curated')
+                ? item.color
+                : (inferColorFromName(item.name).name !== 'Curated'
+                    ? inferColorFromName(item.name).name
+                    : (item.color || 'Curated'));
               const isUnavailable = item.status === 'Borrowed' ||
                                     item.is_active === false ||
                                     item.tags?.some((t: any) => (typeof t === 'string' ? t : t.tag_name) === 'Borrowed');
@@ -756,8 +763,14 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           }}>
             {filteredAllGarments.map(item => {
               const isHex = item.image_url?.startsWith('#');
-              const categoryTag = item.category || item.type_tag || 'Garment';
-              const colorTag = item.color || 'Curated';
+              const categoryTag = (item.category && item.category !== 'Tops')
+                ? item.category
+                : inferCategoryFromName(item.name);
+              const colorTag = (item.color && item.color !== 'Neutral' && item.color !== 'Curated')
+                ? item.color
+                : (inferColorFromName(item.name).name !== 'Curated'
+                    ? inferColorFromName(item.name).name
+                    : (item.color || 'Curated'));
               const ownerInitials = `${item.ownerFriend.first_name[0] || ''}${item.ownerFriend.last_name[0] || ''}`.toUpperCase();
               const isUnavailable = item.status === 'Borrowed' ||
                                     item.is_active === false ||

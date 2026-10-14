@@ -307,14 +307,13 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
             )}
           </div>
 
-          {pendingBorrows.length === 0 && pendingFriends.length === 0 ? (
+          {pendingBorrows.length === 0 ? (
             <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
               <Inbox style={{ width: 36, height: 36, opacity: 0.35, margin: '0 auto 8px' }} />
-              <p style={{ margin: 0, fontSize: 13 }}>No pending requests.</p>
+              <p style={{ margin: 0, fontSize: 13 }}>No pending borrow requests.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
               {pendingBorrows.map(borrow => (
                 <div
                   key={borrow.borrow_id}
@@ -375,63 +374,6 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                   </div>
                 </div>
               ))}
-
-              {pendingFriends.map(req => {
-                const sender = req.sender || friendsService.getAllUsers().find(u => isSameUser(u.user_id, req.sender_id));
-                const senderDisplayName = sender ? `${sender.first_name} ${sender.last_name}` : 'Peer';
-                return (
-                  <div
-                    key={req.request_id}
-                    style={{
-                      padding: 12,
-                      borderRadius: 8,
-                      background: 'var(--surface-2)',
-                      border: '1px solid var(--border)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: 13, color: 'var(--text)' }}>
-                        Friend Request from {senderDisplayName}
-                      </strong>
-                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--primary)', color: '#ffffff' }}>
-                        FRIEND
-                      </span>
-                    </div>
-
-                    {sender?.friend_code && (
-                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                        Friend code: <code style={{ fontWeight: 600 }}>{sender.friend_code}</code>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                      {onAcceptFriend && (
-                        <button
-                          type="button"
-                          className="btn btn-p"
-                          style={{ fontSize: 11.5, padding: '4px 10px' }}
-                          onClick={() => onAcceptFriend(req.request_id)}
-                        >
-                          <Check className="ico" style={{ width: 12, height: 12 }} /> Accept
-                        </button>
-                      )}
-                      {onDenyFriend && (
-                        <button
-                          type="button"
-                          className="btn btn-g"
-                          style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--danger)' }}
-                          onClick={() => onDenyFriend(req.request_id)}
-                        >
-                          <X className="ico" style={{ width: 12, height: 12 }} /> Deny
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           )}
         </div>

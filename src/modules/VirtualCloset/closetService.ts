@@ -1,7 +1,44 @@
 import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, isSameUser, ensureUserSyncedToSupabase } from '../../shared/services/supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../../shared/types/database';
+import { CURATED_COLOR_FAMILIES } from '../../shared/data/seedData';
 
 export { deduplicateAssessments };
+
+export function inferCategoryFromName(name?: string): string {
+  if (!name) return 'Tops';
+  const lower = name.toLowerCase();
+  if (lower.includes('bottom') || lower.includes('pant') || lower.includes('short') || lower.includes('skirt') || lower.includes('jean') || lower.includes('trouser') || lower.includes('legging') || lower.includes('jogger')) {
+    return 'Bottoms';
+  }
+  if (lower.includes('outerwear') || lower.includes('jacket') || lower.includes('coat') || lower.includes('hoodie') || lower.includes('sweater') || lower.includes('blazer') || lower.includes('cardigan') || lower.includes('fleece')) {
+    return 'Outerwear';
+  }
+  if (lower.includes('dress') || lower.includes('gown') || lower.includes('one-piece')) {
+    return 'Dresses';
+  }
+  if (lower.includes('shoe') || lower.includes('sneaker') || lower.includes('boot') || lower.includes('sandal') || lower.includes('heel') || lower.includes('loafer') || lower.includes('footwear')) {
+    return 'Shoes';
+  }
+  if (lower.includes('knitwear')) {
+    return 'Knitwear';
+  }
+  if (lower.includes('top') || lower.includes('shirt') || lower.includes('tee') || lower.includes('blouse') || lower.includes('tank') || lower.includes('polo')) {
+    return 'Tops';
+  }
+  return 'Tops';
+}
+
+export function inferColorFromName(name?: string): { name: string; hex: string } {
+  if (!name) return { name: 'Curated', hex: '#64748b' };
+  const lower = name.toLowerCase();
+  for (const c of CURATED_COLOR_FAMILIES) {
+    const re = new RegExp(`\\b${c.name.toLowerCase()}\\b`, 'i');
+    if (re.test(lower)) {
+      return { name: c.name, hex: c.hex };
+    }
+  }
+  return { name: 'Curated', hex: '#64748b' };
+}
 
 export interface BSASCooldownInfo {
   canTake: boolean;
@@ -112,10 +149,20 @@ export const closetService = {
                 if (it.tag?.tag_type === 'Color' && !col) col = it.tag.tag_name;
               });
             }
+
+            const inferredCat = inferCategoryFromName(r.name);
+            const inferredCol = inferColorFromName(r.name);
+
+            const finalCat = (cat && cat !== 'Tops') ? cat : (r.category && r.category !== 'Tops' ? r.category : inferredCat);
+            const finalCol = (col && col !== 'Neutral') ? col : (r.color && r.color !== 'Neutral' ? r.color : (inferredCol.name !== 'Curated' ? inferredCol.name : (col || r.color || 'Neutral')));
+            const finalColorHex = r.color_tag || inferredCol.hex;
+
             return {
               ...r,
-              category: cat || r.category || 'Tops',
-              color: col || r.color || 'Neutral'
+              category: finalCat,
+              type_tag: finalCat,
+              color: finalCol,
+              color_tag: finalColorHex
             } as ClothingItem;
           });
 
@@ -188,15 +235,35 @@ export const closetService = {
           }
 
           if (!error && data) {
-            if (item.tags && item.tags.length > 0) {
-              const tagsPayload = item.tags.map(t => ({
-                item_id: data.item_id,
-                tag_id: t.tag_id
-              }));
-              try {
-                await withTimeout(supabase.from('item_tag').insert(tagsPayload), 2000);
-              } catch {}
-            }
+            try {
+              const { data: allTags } = await withTimeout(supabase.from('tag').select('*'), 2000);
+              const catName = item.category || inferCategoryFromName(item.name);
+              const colName = item.color || inferColorFromName(item.name).name;
+
+              const tagIdsToInsert: number[] = [];
+              if (allTags && Array.isArray(allTags)) {
+                const catTag = allTags.find((t: any) => t.tag_name?.toLowerCase() === catName?.toLowerCase());
+                if (catTag) tagIdsToInsert.push(catTag.tag_id);
+                const colTag = allTags.find((t: any) => t.tag_name?.toLowerCase() === colName?.toLowerCase());
+                if (colTag) tagIdsToInsert.push(colTag.tag_id);
+              }
+              if (item.tags && item.tags.length > 0) {
+                item.tags.forEach(t => {
+                  if (t.tag_id && !tagIdsToInsert.includes(t.tag_id)) {
+                    tagIdsToInsert.push(t.tag_id);
+                  }
+                });
+              }
+              if (tagIdsToInsert.length > 0) {
+                await withTimeout(
+                  supabase.from('item_tag').upsert(
+                    tagIdsToInsert.map(tag_id => ({ item_id: data.item_id, tag_id })),
+                    { onConflict: 'item_id,tag_id' }
+                  ),
+                  2000
+                );
+              }
+            } catch {}
 
             mockDatabase.updateClothingItemId(localItem.item_id, data.item_id);
             return { ...localItem, item_id: data.item_id, ...data };
