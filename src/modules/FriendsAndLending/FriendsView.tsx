@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { User, FriendRequest, ClothingItem } from '../../shared/types/database';
 import { friendsService } from './friendsService';
-import { closetService, inferCategoryFromName, inferColorFromName } from '../VirtualCloset';
+import { closetService, inferCategoryFromName, inferColorFromName, resolveGarmentCategory, resolveGarmentColor } from '../VirtualCloset';
 import { NORMAL_CLOTHING_COLORS } from '../../shared/data/seedData';
 
 interface FriendsViewProps {
@@ -181,16 +181,18 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const filteredSingleGarments = useMemo(() => {
     let result = friendGarments.filter(item => {
+      const resolvedCat = resolveGarmentCategory(item);
+      const resolvedCol = resolveGarmentColor(item);
 
       const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
-        return (item.category && item.category.toLowerCase() === sel.toLowerCase()) ||
+        return (resolvedCat.toLowerCase() === sel.toLowerCase()) ||
                (item.type_tag && item.type_tag.toLowerCase() === sel.toLowerCase());
       });
       if (!matchType) return false;
 
       const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
-        const itemColor = (item.color || '').toLowerCase();
-        const itemColorTag = (item.color_tag || '').toLowerCase();
+        const itemColor = resolvedCol.name.toLowerCase();
+        const itemColorTag = (item.color_tag || resolvedCol.hex || '').toLowerCase();
         const selLower = sel.toLowerCase();
         return itemColor.includes(selLower) || itemColorTag.includes(selLower);
       });
@@ -209,16 +211,18 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const filteredAllGarments = useMemo(() => {
     let result = allFriendsGarments.filter(item => {
+      const resolvedCat = resolveGarmentCategory(item);
+      const resolvedCol = resolveGarmentColor(item);
 
       const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
-        return (item.category && item.category.toLowerCase() === sel.toLowerCase()) ||
+        return (resolvedCat.toLowerCase() === sel.toLowerCase()) ||
                (item.type_tag && item.type_tag.toLowerCase() === sel.toLowerCase());
       });
       if (!matchType) return false;
 
       const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
-        const itemColor = (item.color || '').toLowerCase();
-        const itemColorTag = (item.color_tag || '').toLowerCase();
+        const itemColor = resolvedCol.name.toLowerCase();
+        const itemColorTag = (item.color_tag || resolvedCol.hex || '').toLowerCase();
         const selLower = sel.toLowerCase();
         return itemColor.includes(selLower) || itemColorTag.includes(selLower);
       });
@@ -466,17 +470,29 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
             <span className="pill on" style={{ fontSize: 11 }}>
-              {(detailItem.item.category && detailItem.item.category !== 'Tops')
-                ? detailItem.item.category
-                : inferCategoryFromName(detailItem.item.name)}
+              {resolveGarmentCategory(detailItem.item)}
             </span>
-            <span className="pill" style={{ fontSize: 11 }}>
-              Color: {(detailItem.item.color && detailItem.item.color !== 'Neutral' && detailItem.item.color !== 'Curated')
-                ? detailItem.item.color
-                : (inferColorFromName(detailItem.item.name).name !== 'Curated'
-                    ? inferColorFromName(detailItem.item.name).name
-                    : (detailItem.item.color || 'Curated'))}
-            </span>
+            {(() => {
+              const col = resolveGarmentColor(detailItem.item);
+              return (
+                <span className="pill" style={{
+                  fontSize: 11,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}>
+                  <span style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: col.hex,
+                    border: col.name.toLowerCase() === 'white' ? '1px solid #cbd5e1' : 'none',
+                    display: 'inline-block'
+                  }} />
+                  Color: {col.name}
+                </span>
+              );
+            })()}
             {detailItem.item.size && (
               <span className="pill" style={{ fontSize: 11 }}>
                 Size: {detailItem.item.size}
@@ -578,14 +594,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           }}>
             {filteredSingleGarments.map(item => {
               const isHex = item.image_url?.startsWith('#');
-              const categoryTag = (item.category && item.category !== 'Tops')
-                ? item.category
-                : inferCategoryFromName(item.name);
-              const colorTag = (item.color && item.color !== 'Neutral' && item.color !== 'Curated')
-                ? item.color
-                : (inferColorFromName(item.name).name !== 'Curated'
-                    ? inferColorFromName(item.name).name
-                    : (item.color || 'Curated'));
+              const categoryTag = resolveGarmentCategory(item);
+              const colorInfo = resolveGarmentColor(item);
               const isUnavailable = item.status === 'Borrowed' ||
                                     item.is_active === false ||
                                     item.tags?.some((t: any) => (typeof t === 'string' ? t : t.tag_name) === 'Borrowed');
@@ -636,7 +646,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         {categoryTag}
                       </span>
                     )}
-                    {item.color && (
+                    {colorInfo.name && (
                       <span style={{
                         fontSize: 11,
                         padding: '3px 8px',
@@ -647,8 +657,15 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                         alignItems: 'center',
                         gap: 4
                       }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color_tag || '#64748b', display: 'inline-block' }} />
-                        {item.color}
+                        <span style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          background: colorInfo.hex,
+                          border: colorInfo.name.toLowerCase() === 'white' ? '1px solid #cbd5e1' : 'none',
+                          display: 'inline-block'
+                        }} />
+                        {colorInfo.name}
                       </span>
                     )}
                     {isUnavailable && (
@@ -763,14 +780,8 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
           }}>
             {filteredAllGarments.map(item => {
               const isHex = item.image_url?.startsWith('#');
-              const categoryTag = (item.category && item.category !== 'Tops')
-                ? item.category
-                : inferCategoryFromName(item.name);
-              const colorTag = (item.color && item.color !== 'Neutral' && item.color !== 'Curated')
-                ? item.color
-                : (inferColorFromName(item.name).name !== 'Curated'
-                    ? inferColorFromName(item.name).name
-                    : (item.color || 'Curated'));
+              const categoryTag = resolveGarmentCategory(item);
+              const colorInfo = resolveGarmentColor(item);
               const ownerInitials = `${item.ownerFriend.first_name[0] || ''}${item.ownerFriend.last_name[0] || ''}`.toUpperCase();
               const isUnavailable = item.status === 'Borrowed' ||
                                     item.is_active === false ||
@@ -833,7 +844,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                     {item.name}
                   </strong>
 
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                     <span style={{
                       fontSize: 10.5,
                       padding: '2px 8px',
@@ -850,9 +861,20 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
                       borderRadius: 12,
                       background: 'var(--surface-2)',
                       color: 'var(--text-muted)',
-                      border: '1px solid var(--border)'
+                      border: '1px solid var(--border)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
                     }}>
-                      {colorTag}
+                      <span style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        background: colorInfo.hex,
+                        border: colorInfo.name.toLowerCase() === 'white' ? '1px solid #cbd5e1' : 'none',
+                        display: 'inline-block'
+                      }} />
+                      {colorInfo.name}
                     </span>
                     {isUnavailable && (
                       <span style={{

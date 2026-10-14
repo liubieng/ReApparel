@@ -31,13 +31,84 @@ export function inferCategoryFromName(name?: string): string {
 export function inferColorFromName(name?: string): { name: string; hex: string } {
   if (!name) return { name: 'Curated', hex: '#64748b' };
   const lower = name.toLowerCase();
+
+  const colorSynonyms: Record<string, string> = {
+    tan: 'Beige',
+    khaki: 'Beige',
+    cream: 'Beige',
+    charcoal: 'Gray',
+    grey: 'Gray',
+    maroon: 'Burgundy',
+    crimson: 'Red',
+    scarlet: 'Red',
+    cyan: 'Blue',
+    indigo: 'Navy',
+    denim: 'Blue',
+    emerald: 'Green',
+    forest: 'Green',
+    mint: 'Green',
+    sage: 'Green',
+    mustard: 'Yellow',
+    coral: 'Pink',
+    rose: 'Pink',
+    lavender: 'Violet',
+    purple: 'Violet'
+  };
+
   for (const c of CURATED_COLOR_FAMILIES) {
+    if (c.name.toLowerCase() === 'neutral') continue;
     const re = new RegExp(`\\b${c.name.toLowerCase()}\\b`, 'i');
     if (re.test(lower)) {
       return { name: c.name, hex: c.hex };
     }
   }
+
+  for (const [syn, familyName] of Object.entries(colorSynonyms)) {
+    const re = new RegExp(`\\b${syn}\\b`, 'i');
+    if (re.test(lower)) {
+      const fam = CURATED_COLOR_FAMILIES.find(c => c.name.toLowerCase() === familyName.toLowerCase());
+      if (fam) return { name: fam.name, hex: fam.hex };
+    }
+  }
+
   return { name: 'Curated', hex: '#64748b' };
+}
+
+export function resolveGarmentColor(item: { name?: string; color?: string; color_tag?: string }): { name: string; hex: string } {
+  const inferred = inferColorFromName(item.name);
+  const hasValidColor = item.color && item.color !== 'Neutral' && item.color !== 'Curated';
+
+  if (hasValidColor) {
+    const colorFamily = CURATED_COLOR_FAMILIES.find(c => c.name.toLowerCase() === item.color!.toLowerCase());
+    return {
+      name: item.color!,
+      hex: item.color_tag || colorFamily?.hex || '#64748b'
+    };
+  }
+
+  if (inferred.name !== 'Curated') {
+    return inferred;
+  }
+
+  if (item.color) {
+    return {
+      name: item.color,
+      hex: item.color_tag || '#64748b'
+    };
+  }
+
+  return { name: 'Curated', hex: '#64748b' };
+}
+
+export function resolveGarmentCategory(item: { name?: string; category?: string; type_tag?: string }): string {
+  if (item.category && item.category !== 'Tops') {
+    return item.category;
+  }
+  const inferred = inferCategoryFromName(item.name);
+  if (inferred !== 'Tops') {
+    return inferred;
+  }
+  return item.category || item.type_tag || 'Tops';
 }
 
 export interface BSASCooldownInfo {
@@ -150,19 +221,16 @@ export const closetService = {
               });
             }
 
-            const inferredCat = inferCategoryFromName(r.name);
-            const inferredCol = inferColorFromName(r.name);
-
-            const finalCat = (cat && cat !== 'Tops') ? cat : (r.category && r.category !== 'Tops' ? r.category : inferredCat);
-            const finalCol = (col && col !== 'Neutral') ? col : (r.color && r.color !== 'Neutral' ? r.color : (inferredCol.name !== 'Curated' ? inferredCol.name : (col || r.color || 'Neutral')));
-            const finalColorHex = r.color_tag || inferredCol.hex;
+            const itemForResolution = { ...r, category: cat || r.category, color: col || r.color };
+            const finalCat = resolveGarmentCategory(itemForResolution);
+            const finalColInfo = resolveGarmentColor(itemForResolution);
 
             return {
               ...r,
               category: finalCat,
               type_tag: finalCat,
-              color: finalCol,
-              color_tag: finalColorHex
+              color: finalColInfo.name,
+              color_tag: finalColInfo.hex
             } as ClothingItem;
           });
 
@@ -172,14 +240,32 @@ export const closetService = {
             const loc = localItems.find(l => l.item_id === rem.item_id);
             if (loc) {
               const maxWear = Math.max(rem.wear_count || 0, loc.wear_count || 0, loc.worn_count || 0);
-              return { ...rem, ...loc, wear_count: maxWear, worn_count: maxWear };
+              const resolvedCat = (loc.category && loc.category !== 'Tops') ? loc.category : rem.category;
+              const resolvedCol = (loc.color && loc.color !== 'Neutral' && loc.color !== 'Curated') ? loc.color : rem.color;
+              const resolvedHex = (resolvedCol === rem.color) ? rem.color_tag : (loc.color_tag || rem.color_tag);
+              return {
+                ...rem,
+                ...loc,
+                category: resolvedCat,
+                type_tag: resolvedCat,
+                color: resolvedCol,
+                color_tag: resolvedHex,
+                wear_count: maxWear,
+                worn_count: maxWear
+              };
             }
             return rem;
           });
 
           localItems.forEach(loc => {
             if (!merged.some(m => m.item_id === loc.item_id)) {
-              merged.push(loc);
+              merged.push({
+                ...loc,
+                category: resolveGarmentCategory(loc),
+                type_tag: resolveGarmentCategory(loc),
+                color: resolveGarmentColor(loc).name,
+                color_tag: resolveGarmentColor(loc).hex
+              });
             }
           });
           return merged;
@@ -188,7 +274,13 @@ export const closetService = {
 
       }
     }
-    return localItems;
+    return localItems.map(loc => ({
+      ...loc,
+      category: resolveGarmentCategory(loc),
+      type_tag: resolveGarmentCategory(loc),
+      color: resolveGarmentColor(loc).name,
+      color_tag: resolveGarmentColor(loc).hex
+    }));
   },
 
   async addItem(item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>): Promise<ClothingItem> {

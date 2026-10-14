@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CURATED_COLOR_FAMILIES, NORMAL_CLOTHING_COLORS, createGarmentSilhouette } from '../../shared/data/seedData';
 import { ClothingItem } from '../../shared/types/database';
+import { resolveGarmentCategory, resolveGarmentColor } from './closetService';
 
 interface VirtualClosetViewProps {
   garments: ClothingItem[];
@@ -45,7 +46,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   const wardrobeCategories = useMemo(() => {
     const map = new Map<string, { name: string; count: number }>();
     garments.forEach(g => {
-      const cat = (g.category || g.type_tag || '').trim();
+      const cat = resolveGarmentCategory(g);
       if (!cat) return;
       if (map.has(cat)) {
         map.get(cat)!.count += 1;
@@ -59,24 +60,14 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   const wardrobeColors = useMemo(() => {
     const map = new Map<string, { name: string; hex: string; count: number }>();
     garments.forEach(g => {
-      const gName = (g.color || '').trim();
-      const gHex = (g.color_tag || (g.image_url?.startsWith('#') ? g.image_url : '')).trim();
-
-      const matched = CURATED_COLOR_FAMILIES.find(f =>
-        (gName && f.name.toLowerCase() === gName.toLowerCase()) ||
-        (gHex && f.hex.toLowerCase() === gHex.toLowerCase())
-      );
-
-      const key = matched ? matched.name : (gName || gHex);
+      const colInfo = resolveGarmentColor(g);
+      const key = colInfo.name;
       if (!key) return;
-
-      const familyName = matched ? matched.name : (gName || 'Custom');
-      const familyHex = gHex || matched?.hex || '#64748b';
 
       if (map.has(key)) {
         map.get(key)!.count += 1;
       } else {
-        map.set(key, { name: familyName, hex: familyHex, count: 1 });
+        map.set(key, { name: colInfo.name, hex: colInfo.hex, count: 1 });
       }
     });
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
@@ -84,18 +75,19 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
 
   const filteredGarments = useMemo(() => {
     return garments.filter(g => {
-      const type = g.type_tag || g.category || '';
       const wear = g.worn_count ?? g.wear_count ?? 0;
+      const resolvedCat = resolveGarmentCategory(g);
+      const resolvedCol = resolveGarmentColor(g);
 
       const matchType = selectedTypes.size === 0 || Array.from(selectedTypes).some(sel => {
-        return (g.category && g.category.toLowerCase() === sel.toLowerCase()) ||
+        return (resolvedCat.toLowerCase() === sel.toLowerCase()) ||
                (g.type_tag && g.type_tag.toLowerCase() === sel.toLowerCase());
       });
       if (!matchType) return false;
 
       const matchColor = selectedColors.size === 0 || Array.from(selectedColors).some(sel => {
-        const itemColor = (g.color || '').toLowerCase();
-        const itemColorTag = (g.color_tag || '').toLowerCase();
+        const itemColor = resolvedCol.name.toLowerCase();
+        const itemColorTag = (g.color_tag || resolvedCol.hex || '').toLowerCase();
         const selLower = sel.toLowerCase();
         return itemColor.includes(selLower) || itemColorTag.includes(selLower);
       });
@@ -108,8 +100,8 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = g.name.toLowerCase().includes(q);
-        const matchCat = (g.category || '').toLowerCase().includes(q);
-        const matchColorName = (g.color || '').toLowerCase().includes(q);
+        const matchCat = resolvedCat.toLowerCase().includes(q);
+        const matchColorName = resolvedCol.name.toLowerCase().includes(q);
         const matchTypeTag = (g.type_tag || '').toLowerCase().includes(q);
         if (!matchName && !matchCat && !matchColorName && !matchTypeTag) return false;
       }
@@ -405,17 +397,31 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                    {garment.category && (
-                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', fontWeight: 500 }}>
-                        {garment.category}
-                      </span>
-                    )}
-                    {garment.color && (
-                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: garment.color_tag || '#64748b' }} />
-                        {garment.color}
-                      </span>
-                    )}
+                    {(() => {
+                      const categoryTag = resolveGarmentCategory(garment);
+                      const colorInfo = resolveGarmentColor(garment);
+                      return (
+                        <>
+                          {categoryTag && (
+                            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', fontWeight: 500 }}>
+                              {categoryTag}
+                            </span>
+                          )}
+                          {colorInfo.name && (
+                            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: '50%',
+                                background: colorInfo.hex,
+                                border: colorInfo.name.toLowerCase() === 'white' ? '1px solid #cbd5e1' : 'none'
+                              }} />
+                              {colorInfo.name}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
