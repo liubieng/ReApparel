@@ -335,6 +335,7 @@ export const closetService = {
             user_id: canonicalUid,
             name: item.name,
             image_url: item.image_url,
+            addition_type: (item as any).addition_type || 'Old',
             wear_count: 0
           };
 
@@ -346,16 +347,6 @@ export const closetService = {
               .single(),
             2500
           );
-
-          if (error && (error.code === '23502' || error.message?.includes('addition_type'))) {
-            itemPayload.addition_type = 'Old';
-            const retry = await withTimeout(
-              supabase.from('clothing_item').insert([itemPayload]).select().single(),
-              2500
-            );
-            data = retry.data;
-            error = retry.error;
-          }
 
           if (!error && data) {
             try {
@@ -889,6 +880,7 @@ export const closetService = {
               user_id: targetUid,
               name: item.name,
               image_url: item.image_url,
+              addition_type: (item as any).addition_type || 'Old',
               wear_count: item.wear_count || item.worn_count || 0
             };
 
@@ -897,13 +889,6 @@ export const closetService = {
               .insert([itemPayload])
               .select()
               .single();
-
-            if (insErr && (insErr.code === '23502' || insErr.message?.includes('addition_type'))) {
-              itemPayload.addition_type = 'Old';
-              const retry = await supabase.from('clothing_item').insert([itemPayload]).select().single();
-              inserted = retry.data;
-              insErr = retry.error;
-            }
 
             if (!insErr && inserted) {
               if (item.tags && item.tags.length > 0) {

@@ -1786,7 +1786,7 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
 
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  if (UUID_PATTERN.test(user.user_id) && syncedUserSessionCache.has(user.user_id)) {
+  if (UUID_PATTERN.test(user.user_id) && (syncedUserSessionCache.has(user.user_id) || (user.email && syncedUserSessionCache.has(user.email.toLowerCase())))) {
     return user;
   }
 
@@ -1813,6 +1813,7 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
 
       if (byId && byId.length > 0) {
         syncedUserSessionCache.add(user.user_id);
+        if (user.email) syncedUserSessionCache.add(user.email.toLowerCase());
         return byId[0] as User;
       }
     }
@@ -1834,6 +1835,7 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
         mockDatabase.realignUserId(oldUid, newUid);
         mockDatabase.upsertUser(remoteUser);
         syncedUserSessionCache.add(newUid);
+        if (remoteUser.email) syncedUserSessionCache.add(remoteUser.email.toLowerCase());
         return remoteUser;
       }
     }
@@ -1882,6 +1884,7 @@ export async function ensureUserSyncedToSupabase(user: User): Promise<User> {
     } else {
       mockDatabase.upsertUser(user);
       syncedUserSessionCache.add(user.user_id);
+      if (user.email) syncedUserSessionCache.add(user.email.toLowerCase());
     }
   } catch (err) {
     console.warn('[ensureUserSyncedToSupabase] exception:', err);
