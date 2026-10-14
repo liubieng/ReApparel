@@ -304,11 +304,24 @@ export default function App() {
     };
     refresh();
 
+    // Fast 10-second background poll while on donation map view
     const pollTimer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
-    }, 120000);
+    }, 10000);
 
-    return () => clearInterval(pollTimer);
+    const onFocus = () => refresh();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(pollTimer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [view]);
 
   useEffect(() => {
@@ -432,6 +445,24 @@ export default function App() {
               mapsService.mergeRemoteRows([payload.new]);
             }
             setOpportunities(mapsService.getDonationOpportunities());
+          }
+        )
+        .on(
+          'broadcast',
+          { event: 'donation_updated' },
+          (msg: any) => {
+            const payload = msg?.payload;
+            if (payload?.action === 'DELETE' && payload?.donation_id) {
+              mapsService.removeDonationOpportunity(payload.donation_id);
+              setOpportunities(mapsService.getDonationOpportunities());
+            } else if (payload?.row?.donation_id) {
+              mapsService.mergeRemoteRows([payload.row]);
+              setOpportunities(mapsService.getDonationOpportunities());
+            } else {
+              mapsService.fetchAndMergeFromSupabase().then(() => {
+                setOpportunities(mapsService.getDonationOpportunities());
+              }).catch(() => {});
+            }
           }
         )
         .subscribe();

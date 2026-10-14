@@ -11,6 +11,19 @@ export function isOpportunityExpired(opp: DonationOpportunity): boolean {
   return false;
 }
 
+export function broadcastDonationEvent(action: 'INSERT' | 'DELETE' | 'UPDATE', payload?: any): void {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  try {
+    const channel = supabase.channel('realtime_community_donations');
+    channel.send({
+      type: 'broadcast',
+      event: 'donation_updated',
+      payload: { action, ...payload }
+    }).catch(() => {});
+  } catch {}
+}
+
 export const mapsService = {
   isOpportunityExpired,
 
@@ -123,6 +136,7 @@ export const mapsService = {
         if (!error && data && data.donation_id) {
           mockDatabase.updateDonationOpportunityId(created.donation_id, data.donation_id);
           created.donation_id = data.donation_id;
+          broadcastDonationEvent('INSERT', { donation_id: data.donation_id, row: data });
         } else if (error) {
           console.warn('Supabase remote donation sync notice:', error.message);
           if (error.code === '42501') {
@@ -223,6 +237,7 @@ export const mapsService = {
           supabase.from('donation_flag').delete().eq('donation_id', donationId),
           supabase.from('donation_opportunity').delete().eq('donation_id', donationId)
         ]);
+        broadcastDonationEvent('DELETE', { donation_id: donationId });
       } catch (err) {
         console.warn('Error deleting donation opportunity from Supabase:', err);
       }

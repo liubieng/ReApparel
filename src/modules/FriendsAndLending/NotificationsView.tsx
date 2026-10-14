@@ -51,9 +51,11 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
   const inboxItems = React.useMemo(() => {
     const items = [...rawInboxItems];
     pendingFriends.forEach(req => {
+      const synthId = `synth-fr-${req.request_id}`;
+      if (friendsService.isNotificationDismissed(synthId)) return;
       const alreadyHas = items.some(
         n => n.type === 'friend_request' &&
-             (n.request_id === req.request_id ||
+             (n.id === synthId || n.request_id === req.request_id ||
               (isSameUser(n.sender_id, req.sender_id) && isSameUser(n.receiver_id, req.receiver_id)))
       );
       if (!alreadyHas) {

@@ -97,6 +97,10 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
 END $$;`;
 
 const SQL_DISABLE_RLS = `-- ReApparel: Quick Disable RLS for Local Prototype
@@ -226,6 +230,10 @@ BEGIN
   END;
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE borrow;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE donation_opportunity;
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 END $$;`;

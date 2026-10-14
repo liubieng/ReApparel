@@ -547,5 +547,9 @@ export const friendsService = {
 
   deleteNotification(notificationId: string) {
     mockDatabase.deleteNotification(notificationId);
+  },
+
+  isNotificationDismissed(notificationId: string): boolean {
+    return mockDatabase.isNotificationDismissed(notificationId);
   }
 };

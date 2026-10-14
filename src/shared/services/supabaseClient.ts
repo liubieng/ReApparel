@@ -54,17 +54,31 @@ export const safeStorage = {
   }
 };
 
-try {
-  safeStorage.removeItem('reapparel_mock_database_v1');
-  safeStorage.removeItem('reapparel_mock_database_v2');
-  safeStorage.removeItem('reapparel_clean_database_v3');
-  safeStorage.removeItem('reapparel_clean_database_v4');
-  safeStorage.removeItem('reapparel_clean_database_v5');
-  safeStorage.removeItem('reapparel_clean_database_v6');
-  safeStorage.removeItem('reapparel_clean_database_v7');
-  safeStorage.removeItem('reapparel_prod_database_v1');
-} catch (e) {
+export const STORAGE_KEY_DISMISSED_NOTIFICATIONS = 'reapparel_dismissed_notifications_v1';
 
+export function getDismissedNotificationIds(): Set<string> {
+  const stored = safeStorage.getItem(STORAGE_KEY_DISMISSED_NOTIFICATIONS);
+  if (!stored) return new Set<string>();
+  try {
+    const arr = JSON.parse(stored);
+    return new Set<string>(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+export function saveDismissedNotificationId(id: string) {
+  if (!id) return;
+  const set = getDismissedNotificationIds();
+  set.add(id);
+  safeStorage.setItem(STORAGE_KEY_DISMISSED_NOTIFICATIONS, JSON.stringify(Array.from(set)));
+}
+
+export function saveDismissedNotificationIds(ids: string[]) {
+  if (!ids || ids.length === 0) return;
+  const set = getDismissedNotificationIds();
+  ids.forEach(id => { if (id) set.add(id); });
+  safeStorage.setItem(STORAGE_KEY_DISMISSED_NOTIFICATIONS, JSON.stringify(Array.from(set)));
 }
 
 export interface SupabaseConfig {
@@ -1285,16 +1299,25 @@ class MockDatabaseEngine {
     this.notify();
   }
 
+  public isNotificationDismissed(notificationId: string): boolean {
+    return getDismissedNotificationIds().has(notificationId);
+  }
+
   public getNotifications(userId?: string): AppNotification[] {
     const targetUid = userId || this.currentUserId;
     if (!targetUid) return [];
     if (!this.state.notifications) this.state.notifications = [];
-    return this.state.notifications.filter(n => !n.user_id || isSameUser(n.user_id, targetUid));
+    const dismissed = getDismissedNotificationIds();
+    return this.state.notifications.filter(n => (!n.user_id || isSameUser(n.user_id, targetUid)) && (!n.id || !dismissed.has(n.id)));
   }
 
   public clearNotifications(userId?: string) {
     const targetUid = userId || this.currentUserId;
     if (this.state.notifications) {
+      const idsToDismiss = this.state.notifications
+        .filter(n => !n.user_id || isSameUser(n.user_id, targetUid))
+        .map(n => n.id);
+      saveDismissedNotificationIds(idsToDismiss);
       this.state.notifications = this.state.notifications.filter(n => n.user_id && !isSameUser(n.user_id, targetUid));
       this.notify();
     }
@@ -1311,7 +1334,14 @@ class MockDatabaseEngine {
   }
 
   public deleteNotification(notificationId: string) {
+    saveDismissedNotificationId(notificationId);
     if (this.state.notifications) {
+      const target = this.state.notifications.find(item => item.id === notificationId);
+      if (target && target.request_id) {
+        saveDismissedNotificationId(`notif-bw-status-${target.request_id}-Returned`);
+        saveDismissedNotificationId(`notif-bw-status-${target.request_id}-Accepted`);
+        saveDismissedNotificationId(`notif-bw-status-${target.request_id}-Rejected`);
+      }
       this.state.notifications = this.state.notifications.filter(item => item.id !== notificationId);
       this.notify();
     }
@@ -1354,65 +1384,71 @@ class MockDatabaseEngine {
 
     if (b.status === 'Pending' && lenderId) {
       if (!this.state.notifications) this.state.notifications = [];
-      const alreadyNotified = this.state.notifications.some(
-        n => (n.type === 'borrow' || n.type === 'borrow_request') &&
-             (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId))
-      );
-      if (!alreadyNotified) {
-        const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
-        this.state.notifications.unshift({
-          id: `notif-borrow-${b.borrow_id || Date.now()}`,
-          user_id: lenderId,
-          title: `New borrow request!`,
-          message: `${borrower ? `${borrower.first_name} ${borrower.last_name}` : 'A friend'} requested to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
-          time: 'Recently',
-          type: 'borrow',
-          read: false,
-          sender_name: borrower ? `${borrower.first_name} ${borrower.last_name}` : undefined,
-          sender_id: b.borrower_id,
-          receiver_id: lenderId,
-          request_id: b.borrow_id
-        });
+      const notifId = `notif-borrow-${b.borrow_id || Date.now()}`;
+      if (!this.isNotificationDismissed(notifId)) {
+        const alreadyNotified = this.state.notifications.some(
+          n => (n.type === 'borrow' || n.type === 'borrow_request') &&
+               (n.id === notifId || n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId))
+        );
+        if (!alreadyNotified) {
+          const borrower = this.state.users.find(u => u.user_id === b.borrower_id || isSameUser(u.user_id, b.borrower_id)) || b.borrower;
+          this.state.notifications.unshift({
+            id: notifId,
+            user_id: lenderId,
+            title: `New borrow request!`,
+            message: `${borrower ? `${borrower.first_name} ${borrower.last_name}` : 'A friend'} requested to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
+            time: 'Recently',
+            type: 'borrow',
+            read: false,
+            sender_name: borrower ? `${borrower.first_name} ${borrower.last_name}` : undefined,
+            sender_id: b.borrower_id,
+            receiver_id: lenderId,
+            request_id: b.borrow_id
+          });
+        }
       }
     }
 
     if (b.borrower_id && b.status !== 'Pending') {
       if (!this.state.notifications) this.state.notifications = [];
 
+      // Only remove the lender's incoming borrow request notification
       if (lenderId) {
         this.state.notifications = this.state.notifications.filter(
-          n => !(n.type === 'borrow' && (n.request_id === b.borrow_id || (n.sender_id === b.borrower_id && n.receiver_id === lenderId)))
+          n => !(isSameUser(n.user_id, lenderId) && (n.type === 'borrow' || n.type === 'borrow_request') && n.request_id === b.borrow_id)
         );
       }
       const notifId = `notif-bw-status-${b.borrow_id}-${b.status}`;
-      const alreadyNotified = this.state.notifications.some(n => n.id === notifId);
-      if (!alreadyNotified) {
-        const lender = this.state.users.find(u => u.user_id === lenderId || (lenderId && isSameUser(u.user_id, lenderId))) || b.lender;
-        let notifTitle = 'Borrow request updated';
-        let notifMsg = `Your borrow request for "${clothingItem?.name || 'garment'}" was updated to ${b.status}.`;
-        if (b.status === 'Accepted') {
-          notifTitle = 'Borrow request approved!';
-          notifMsg = `${lender ? lender.first_name : 'Your friend'} approved your request to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`;
-        } else if (b.status === 'Rejected') {
-          notifTitle = 'Borrow request declined';
-          notifMsg = `${lender ? lender.first_name : 'The lender'} was unable to approve your request for "${clothingItem?.name || 'clothing item'}".`;
-        } else if (b.status === 'Returned') {
-          notifTitle = 'Item marked as returned';
-          notifMsg = `"${clothingItem?.name || 'clothing item'}" has been marked as returned to ${lender ? lender.first_name : 'owner'}.`;
+      if (!this.isNotificationDismissed(notifId)) {
+        const existingNotif = this.state.notifications.find(n => n.id === notifId);
+        if (!existingNotif) {
+          const lender = this.state.users.find(u => u.user_id === lenderId || (lenderId && isSameUser(u.user_id, lenderId))) || b.lender;
+          let notifTitle = 'Borrow request updated';
+          let notifMsg = `Your borrow request for "${clothingItem?.name || 'garment'}" was updated to ${b.status}.`;
+          if (b.status === 'Accepted') {
+            notifTitle = 'Borrow request approved!';
+            notifMsg = `${lender ? lender.first_name : 'Your friend'} approved your request to borrow "${clothingItem?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`;
+          } else if (b.status === 'Rejected') {
+            notifTitle = 'Borrow request declined';
+            notifMsg = `${lender ? lender.first_name : 'The lender'} was unable to approve your request for "${clothingItem?.name || 'clothing item'}".`;
+          } else if (b.status === 'Returned') {
+            notifTitle = 'Item marked as returned';
+            notifMsg = `"${clothingItem?.name || 'clothing item'}" has been marked as returned to ${lender ? lender.first_name : 'owner'}.`;
+          }
+          this.state.notifications.unshift({
+            id: notifId,
+            user_id: b.borrower_id,
+            title: notifTitle,
+            message: notifMsg,
+            time: 'Recently',
+            type: 'borrow',
+            read: false,
+            sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+            sender_id: lenderId,
+            receiver_id: b.borrower_id,
+            request_id: b.borrow_id
+          });
         }
-        this.state.notifications.unshift({
-          id: notifId,
-          user_id: b.borrower_id,
-          title: notifTitle,
-          message: notifMsg,
-          time: 'Recently',
-          type: 'borrow',
-          read: false,
-          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
-          sender_id: lenderId,
-          receiver_id: b.borrower_id,
-          request_id: b.borrow_id
-        });
       }
     }
 
@@ -1468,7 +1504,6 @@ class MockDatabaseEngine {
       }
       const lender = this.getCurrentUser();
       if (this.state.notifications) {
-
         this.state.notifications = this.state.notifications.filter(
           n => !(n.type === 'borrow' && n.request_id === borrowId && isSameUser(n.user_id, lender?.user_id || ''))
         );
@@ -1476,48 +1511,51 @@ class MockDatabaseEngine {
         this.state.notifications = [];
       }
 
-      if (status === 'Accepted') {
-        this.state.notifications.unshift({
-          id: `notif-bw-${Date.now()}`,
-          user_id: b.borrower_id,
-          title: `Borrow request approved!`,
-          message: `${lender?.first_name || 'Your friend'} approved your request to borrow "${item?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
-          time: 'Just now',
-          type: 'borrow',
-          read: false,
-          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
-          sender_id: lender?.user_id,
-          receiver_id: b.borrower_id,
-          request_id: borrowId
-        });
-      } else if (status === 'Returned') {
-        this.state.notifications.unshift({
-          id: `notif-rt-${Date.now()}`,
-          user_id: b.borrower_id,
-          title: `Item marked as returned`,
-          message: `"${item?.name || 'clothing item'}" has been marked as returned to ${lender?.first_name || 'owner'}. Thank you for mindful borrowing!`,
-          time: 'Just now',
-          type: 'borrow',
-          read: false,
-          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
-          sender_id: lender?.user_id,
-          receiver_id: b.borrower_id,
-          request_id: borrowId
-        });
-      } else if (status === 'Rejected') {
-        this.state.notifications.unshift({
-          id: `notif-dec-${Date.now()}`,
-          user_id: b.borrower_id,
-          title: `Borrow request declined`,
-          message: `${lender?.first_name || 'Owner'} was unable to approve your request for "${item?.name || 'clothing item'}".`,
-          time: 'Just now',
-          type: 'borrow',
-          read: false,
-          sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
-          sender_id: lender?.user_id,
-          receiver_id: b.borrower_id,
-          request_id: borrowId
-        });
+      const notifId = `notif-bw-status-${borrowId}-${status}`;
+      if (!this.isNotificationDismissed(notifId) && !this.state.notifications.some(n => n.id === notifId)) {
+        if (status === 'Accepted') {
+          this.state.notifications.unshift({
+            id: notifId,
+            user_id: b.borrower_id,
+            title: `Borrow request approved!`,
+            message: `${lender?.first_name || 'Your friend'} approved your request to borrow "${item?.name || 'clothing item'}" from ${b.start_date} to ${b.end_date}.`,
+            time: 'Just now',
+            type: 'borrow',
+            read: false,
+            sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+            sender_id: lender?.user_id,
+            receiver_id: b.borrower_id,
+            request_id: borrowId
+          });
+        } else if (status === 'Returned') {
+          this.state.notifications.unshift({
+            id: notifId,
+            user_id: b.borrower_id,
+            title: `Item marked as returned`,
+            message: `"${item?.name || 'clothing item'}" has been marked as returned to ${lender?.first_name || 'owner'}. Thank you for mindful borrowing!`,
+            time: 'Just now',
+            type: 'borrow',
+            read: false,
+            sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+            sender_id: lender?.user_id,
+            receiver_id: b.borrower_id,
+            request_id: borrowId
+          });
+        } else if (status === 'Rejected') {
+          this.state.notifications.unshift({
+            id: notifId,
+            user_id: b.borrower_id,
+            title: `Borrow request declined`,
+            message: `${lender?.first_name || 'Owner'} was unable to approve your request for "${item?.name || 'clothing item'}".`,
+            time: 'Just now',
+            type: 'borrow',
+            read: false,
+            sender_name: lender ? `${lender.first_name} ${lender.last_name}` : undefined,
+            sender_id: lender?.user_id,
+            receiver_id: b.borrower_id,
+            request_id: borrowId
+          });
+        }
       }
       this.notify();
     }
