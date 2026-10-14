@@ -20,6 +20,11 @@ import { FlagModal } from './FlagModal';
 import { AddDonationModal } from './AddDonationModal';
 import { ConfirmModal } from '../../shared/modals/ConfirmModal';
 
+const getCleanSnippet = (snippet?: string): string => {
+  if (!snippet) return '';
+  return snippet.replace(/\[REAPPAREL_META:[\s\S]*?\]/g, '').trim();
+};
+
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 interface DonationMapProps {
@@ -160,6 +165,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
       }
       return { ...opp, calculatedDist: dist };
     }).filter(opp => {
+      if (opp.name === 'd' || opp.name === 'Test Drive') return false;
       if (selectedRegion !== 'all') {
         const oppRegion = opp.region || 'Central Visayas';
         if (oppRegion.toLowerCase() !== selectedRegion.toLowerCase()) return false;
@@ -533,9 +539,9 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
                           <strong style={{ display: 'block', fontSize: 12.5, marginBottom: 4, color: 'var(--text)' }}>
                             {post.organizer || post.name}
                           </strong>
-                          {post.post_snippet && (
+                          {getCleanSnippet(post.post_snippet) && (
                             <p style={{ margin: '0 0 6px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                              &ldquo;{post.post_snippet}&rdquo;
+                              &ldquo;{getCleanSnippet(post.post_snippet)}&rdquo;
                             </p>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -579,9 +585,9 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
                           <strong style={{ display: 'block', fontSize: 12.5, marginBottom: 4, color: 'var(--text)' }}>
                             {post.organizer || post.name}
                           </strong>
-                          {post.post_snippet && (
+                          {getCleanSnippet(post.post_snippet) && (
                             <p style={{ margin: '0 0 6px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                              &ldquo;{post.post_snippet}&rdquo;
+                              &ldquo;{getCleanSnippet(post.post_snippet)}&rdquo;
                             </p>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -625,9 +631,9 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
                           <strong style={{ display: 'block', fontSize: 12.5, marginBottom: 4, color: 'var(--text)' }}>
                             {post.organizer || post.name}
                           </strong>
-                          {post.post_snippet && (
+                          {getCleanSnippet(post.post_snippet) && (
                             <p style={{ margin: '0 0 6px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                              &ldquo;{post.post_snippet}&rdquo;
+                              &ldquo;{getCleanSnippet(post.post_snippet)}&rdquo;
                             </p>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -155,12 +155,26 @@ export const mapsService = {
 
   mergeRemoteRows(rows: any[]): void {
     const remote = rows
-      .filter(r => r && r.name && r.name !== 'Test Drive')
+      .filter(r => r && r.name && r.name !== 'Test Drive' && r.name !== 'd')
       .map(r => {
         let created_by = r.created_by;
         let start_date = r.start_date;
         let end_date = r.end_date;
-        const snippet = r.post_snippet || '';
+        let snippet = (r.post_snippet || '').trim();
+
+        // If legacy rows in database contain [REAPPAREL_META:...], cleanly strip it
+        if (snippet.includes('[REAPPAREL_META:')) {
+          try {
+            const metaMatch = snippet.match(/\[REAPPAREL_META:([\s\S]*?)\]/);
+            if (metaMatch && metaMatch[1]) {
+              const meta = JSON.parse(metaMatch[1]);
+              if (!created_by && meta.created_by) created_by = meta.created_by;
+              if (!start_date && meta.start_date) start_date = meta.start_date;
+              if (!end_date && meta.end_date) end_date = meta.end_date;
+            }
+          } catch {}
+          snippet = snippet.replace(/\[REAPPAREL_META:[\s\S]*?\]/g, '').trim();
+        }
 
         let platform = r.post_platform;
         if (!platform && r.post_url) {
@@ -182,7 +196,7 @@ export const mapsService = {
           end_date,
           post_platform: platform,
           post_title: r.post_title || r.name,
-          post_snippet: snippet || r.name || undefined
+          post_snippet: snippet || undefined
         };
       }) as DonationOpportunity[];
     if (remote.length > 0) mockDatabase.addMultipleDonationOpportunities(remote);

@@ -75,11 +75,17 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
         </div>
       )}
 
-      {opportunity.post_snippet && (
-        <div style={{ fontSize: 12, margin: '6px 0', fontStyle: 'italic', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-          &ldquo;{opportunity.post_snippet}&rdquo;
-        </div>
-      )}
+      {(() => {
+        const cleanSnippet = (opportunity.post_snippet || '')
+          .replace(/\[REAPPAREL_META:[\s\S]*?\]/g, '')
+          .trim();
+        if (!cleanSnippet) return null;
+        return (
+          <div style={{ fontSize: 12, margin: '6px 0', fontStyle: 'italic', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            &ldquo;{cleanSnippet}&rdquo;
+          </div>
+        );
+      })()}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>

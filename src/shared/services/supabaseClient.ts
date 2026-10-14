@@ -207,13 +207,22 @@ function loadInitialMockState(): MockDatabaseState {
       } else if (!parsed.donation_opportunities) {
         parsed.donation_opportunities = [];
       } else {
-        parsed.donation_opportunities = parsed.donation_opportunities.filter((o: DonationOpportunity) => {
-          const name = (o.name || '').toLowerCase();
-          return !name.includes('in peace') &&
-                 !name.includes('linksy') &&
-                 !name.includes('dumaguete animal sanctuary') &&
-                 !name.includes('bantayan community');
-        });
+        parsed.donation_opportunities = parsed.donation_opportunities
+          .filter((o: DonationOpportunity) => {
+            const name = (o.name || '').toLowerCase().trim();
+            return !name.includes('in peace') &&
+                   !name.includes('linksy') &&
+                   !name.includes('dumaguete animal sanctuary') &&
+                   !name.includes('bantayan community') &&
+                   name !== 'd' &&
+                   name !== 'test drive';
+          })
+          .map((o: DonationOpportunity) => {
+            if (o.post_snippet && o.post_snippet.includes('REAPPAREL_META')) {
+              o.post_snippet = o.post_snippet.replace(/\[REAPPAREL_META:[\s\S]*?\]/g, '').trim() || undefined;
+            }
+            return o;
+          });
       }
       parsed.donation_flags = parsed.donation_flags || [];
 
