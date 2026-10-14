@@ -393,6 +393,18 @@ export default function App() {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
+      let debounceTimer: any = null;
+      const triggerRefresh = (uid: string) => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
+            setFriendRequests(friendsService.getFriendRequests());
+            setFriends(friendsService.getConnectedFriends());
+            setNotifications(friendsService.getNotifications(uid));
+          }).catch(() => { });
+        }, 120);
+      };
+
       const channel = supabase
         .channel('realtime_app_friend_requests')
         .on(
@@ -405,19 +417,11 @@ export default function App() {
               if (payload.old?.request_id) {
                 mockDatabase.deleteFriendRequest(payload.old.request_id);
               }
-              friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
-                setFriendRequests(friendsService.getFriendRequests());
-                setFriends(friendsService.getConnectedFriends());
-                setNotifications(friendsService.getNotifications(uid));
-              }).catch(() => { });
+              triggerRefresh(uid);
             } else if (payload?.new) {
               const r = payload.new;
               if (isSameUser(r.sender_id, uid) || isSameUser(r.receiver_id, uid)) {
-                friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
-                  setFriendRequests(friendsService.getFriendRequests());
-                  setFriends(friendsService.getConnectedFriends());
-                  setNotifications(friendsService.getNotifications(uid));
-                }).catch(() => { });
+                triggerRefresh(uid);
               }
             }
           }
@@ -430,17 +434,14 @@ export default function App() {
             if (!uid) return;
             const payload = msg?.payload;
             if (!payload || !payload.sender_id || !payload.receiver_id || isSameUser(payload.sender_id, uid) || isSameUser(payload.receiver_id, uid)) {
-              friendsService.fetchFriendRequestsFromSupabase(uid).then(() => {
-                setFriendRequests(friendsService.getFriendRequests());
-                setFriends(friendsService.getConnectedFriends());
-                setNotifications(friendsService.getNotifications(uid));
-              }).catch(() => { });
+              triggerRefresh(uid);
             }
           }
         )
         .subscribe();
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         supabase.removeChannel(channel);
       };
     } catch { }
@@ -450,33 +451,38 @@ export default function App() {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
+      let debounceTimer: any = null;
+      const triggerRefresh = (uid: string) => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          await friendsService.fetchBorrowsFromSupabase(uid);
+          setBorrows(friendsService.getBorrows());
+          setNotifications(friendsService.getNotifications(uid));
+        }, 120);
+      };
+
       const channel = supabase
         .channel('realtime_app_borrows')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'borrow' },
-          async (payload: any) => {
+          () => {
             const uid = mockDatabase.getCurrentUser()?.user_id;
-            if (!uid) return;
-            await friendsService.fetchBorrowsFromSupabase(uid);
-            setBorrows(friendsService.getBorrows());
-            setNotifications(friendsService.getNotifications(uid));
+            if (uid) triggerRefresh(uid);
           }
         )
         .on(
           'broadcast',
           { event: 'borrow_updated' },
-          async (msg: any) => {
+          () => {
             const uid = mockDatabase.getCurrentUser()?.user_id;
-            if (!uid) return;
-            await friendsService.fetchBorrowsFromSupabase(uid);
-            setBorrows(friendsService.getBorrows());
-            setNotifications(friendsService.getNotifications(uid));
+            if (uid) triggerRefresh(uid);
           }
         )
         .subscribe();
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         supabase.removeChannel(channel);
       };
     } catch { }
@@ -486,6 +492,14 @@ export default function App() {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
+      let debounceTimer: any = null;
+      const triggerRefresh = (uid: string) => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
+        }, 120);
+      };
+
       const channel = supabase
         .channel('realtime_app_closet')
         .on(
@@ -499,9 +513,7 @@ export default function App() {
               mockDatabase.deleteClothingItem(payload.old.item_id);
             }
             const uid = mockDatabase.getCurrentUser()?.user_id;
-            if (uid) {
-              closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
-            }
+            if (uid) triggerRefresh(uid);
           }
         )
         .on(
@@ -513,14 +525,13 @@ export default function App() {
               mockDatabase.upsertClothingItem(payload.row);
             }
             const uid = mockDatabase.getCurrentUser()?.user_id;
-            if (uid) {
-              closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
-            }
+            if (uid) triggerRefresh(uid);
           }
         )
         .subscribe();
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         supabase.removeChannel(channel);
       };
     } catch { }
@@ -530,6 +541,14 @@ export default function App() {
     const supabase = getSupabase();
     if (!supabase) return;
     try {
+      let debounceTimer: any = null;
+      const triggerRefresh = () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          setOpportunities(mapsService.getDonationOpportunities());
+        }, 120);
+      };
+
       const channel = supabase
         .channel('realtime_community_donations')
         .on(
@@ -541,7 +560,7 @@ export default function App() {
             } else if (payload?.new?.donation_id) {
               mapsService.mergeRemoteRows([payload.new]);
             }
-            setOpportunities(mapsService.getDonationOpportunities());
+            triggerRefresh();
           }
         )
         .on(
@@ -551,13 +570,13 @@ export default function App() {
             const payload = msg?.payload;
             if (payload?.action === 'DELETE' && payload?.donation_id) {
               mapsService.removeDonationOpportunity(payload.donation_id);
-              setOpportunities(mapsService.getDonationOpportunities());
+              triggerRefresh();
             } else if (payload?.row?.donation_id) {
               mapsService.mergeRemoteRows([payload.row]);
-              setOpportunities(mapsService.getDonationOpportunities());
+              triggerRefresh();
             } else {
               mapsService.fetchAndMergeFromSupabase().then(() => {
-                setOpportunities(mapsService.getDonationOpportunities());
+                triggerRefresh();
               }).catch(() => {});
             }
           }
@@ -565,6 +584,7 @@ export default function App() {
         .subscribe();
 
       return () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
         supabase.removeChannel(channel);
       };
     } catch { }

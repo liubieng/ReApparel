@@ -42,6 +42,7 @@ CREATE TABLE bsas_assessment (
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     score INT NOT NULL CHECK (score BETWEEN 0 AND 7),
     risk_level TEXT NOT NULL CHECK (risk_level IN ('Indicative', 'Non-Indicative')),
+    breakdown JSONB,
     taken_at TIMESTAMPTZ DEFAULT now()
 );
 

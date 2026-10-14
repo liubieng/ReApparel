@@ -460,7 +460,7 @@ export const closetService = {
 
         const query = supabase
           .from('bsas_assessment')
-          .select('assessment_id, user_id, score, risk_level, taken_at')
+          .select('assessment_id, user_id, score, risk_level, taken_at, breakdown')
           .eq('user_id', targetUid)
           .order('taken_at', { ascending: false });
 
@@ -475,7 +475,7 @@ export const closetService = {
               (isSameUser(loc.user_id, rem.user_id) &&
                Math.abs(new Date(loc.taken_at).getTime() - new Date(rem.taken_at).getTime()) < 60000)
             );
-            const breakdown = matchingLocal?.breakdown || getStoredAssessmentBreakdown(rem.user_id, rem.assessment_id);
+            const breakdown = (rem as any).breakdown || matchingLocal?.breakdown || getStoredAssessmentBreakdown(rem.user_id, rem.assessment_id);
             return breakdown ? { ...rem, breakdown } : rem;
           });
 
@@ -514,15 +514,17 @@ export const closetService = {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUid);
       if (isUuid) {
         const risk_level = score >= 4 ? 'Indicative' : 'Non-Indicative';
+        const assessmentPayload: Record<string, any> = {
+          user_id: targetUid,
+          score,
+          risk_level
+        };
+        if (breakdown) assessmentPayload.breakdown = breakdown;
 
         withTimeout(
           supabase
             .from('bsas_assessment')
-            .insert([{
-              user_id: targetUid,
-              score,
-              risk_level
-            }])
+            .insert([assessmentPayload])
             .select()
             .single(),
           3500

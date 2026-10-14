@@ -355,7 +355,7 @@ export function getLocalDateString(d: Date = new Date()): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export const SPAM_ASSESSMENT_IDS = new Set<number>([72, 73, 74, 75, 76, 77]);
+export const SPAM_ASSESSMENT_IDS = new Set<number>();
 
 export const STORAGE_KEY_BSAS_BREAKDOWNS = 'reapparel_bsas_breakdowns_v2';
 
