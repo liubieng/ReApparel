@@ -96,6 +96,30 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0;
 
+  useEffect(() => {
+    if (subView !== 'single-closet' || !viewingFriend) return;
+    const unsubscribe = mockDatabase.subscribe(() => {
+      const updated = mockDatabase.getClothingItems(viewingFriend.user_id).filter((i: ClothingItem) => i.is_public !== false);
+      if (updated.length > 0) setFriendGarments(updated);
+    });
+    return () => unsubscribe();
+  }, [subView, viewingFriend]);
+
+  useEffect(() => {
+    if (subView !== 'all-closets' || friends.length === 0) return;
+    const unsubscribe = mockDatabase.subscribe(() => {
+      const combined: ItemWithFriend[] = [];
+      for (const friend of friends) {
+        const items = mockDatabase.getClothingItems(friend.user_id).filter((i: ClothingItem) => i.is_public !== false);
+        for (const item of items) {
+          combined.push({ ...item, ownerFriend: friend });
+        }
+      }
+      if (combined.length > 0) setAllFriendsGarments(combined);
+    });
+    return () => unsubscribe();
+  }, [subView, friends]);
+
   const [detailItem, setDetailItem] = useState<{ item: ClothingItem; owner: User } | null>(null);
 
   const handleCopyCode = () => {

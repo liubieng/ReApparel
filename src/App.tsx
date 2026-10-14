@@ -491,7 +491,13 @@ export default function App() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'clothing_item' },
-          () => {
+          (payload: any) => {
+            if (payload?.new) {
+              mockDatabase.upsertClothingItem(payload.new);
+            }
+            if (payload?.eventType === 'DELETE' && payload.old?.item_id) {
+              mockDatabase.deleteClothingItem(payload.old.item_id);
+            }
             const uid = mockDatabase.getCurrentUser()?.user_id;
             if (uid) {
               closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
@@ -501,7 +507,11 @@ export default function App() {
         .on(
           'broadcast',
           { event: 'clothing_item_updated' },
-          () => {
+          (msg: any) => {
+            const payload = msg?.payload;
+            if (payload?.row) {
+              mockDatabase.upsertClothingItem(payload.row);
+            }
             const uid = mockDatabase.getCurrentUser()?.user_id;
             if (uid) {
               closetService.getItems(uid).then(items => setGarments(items)).catch(() => {});
