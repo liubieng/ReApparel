@@ -44,6 +44,7 @@
    - 9.2. Foreign Key Sync Pre-Flight Guard (`ensureUserSyncedToSupabase`)
    - 9.3. Garment Borrowing & Date Overlap Conflict Detection Algorithm
    - 9.4. Lender Approval, Status Lock (`'Borrowed'`) & Return Restoral
+   - 9.5. Notification Routing & Permanent Dismissal
 10. [Operation 7: Community Textile Donation Map & Geolocation (`#donations`)](#10-operation-7-community-textile-donation-map--geolocation-donations)
     - 10.1. Interactive Google Maps & Leaflet Geolocation Rendering
     - 10.2. Haversine Great-Circle Distance Engine
@@ -359,9 +360,10 @@ $$\Delta C = \sqrt{\left(2 + \frac{\bar{r}}{256}\right)(R_1 - R_2)^2 + 4(G_1 - G
 * **Modal:** [`EditItemModal.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/VirtualCloset/EditItemModal.tsx).
 * Modifies garment title, primary/secondary colors, subcategory, and optional replacement imagery.
 * Invokes [`closetService.updateItem(itemId, updates)`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/VirtualCloset/closetService.ts#L199-L218), updating the local store immediately and asynchronously patching remote `clothing_item`.
+* **Tag synchronization:** category and color tags are written to the relational `item_tag` table (not only the local `tags` array). The color tag hex is derived from the chosen color, and edits no longer fall back to a default (e.g. a Neutral top reverting to Navy). Existing items are repaired on sync so every account sees the same tags.
 
 ### 6.4. Garment Deletion & Relational Foreign Key Cascades
-* **Modal:** [`DeleteCascadeModal.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/VirtualCloset/DeleteCascadeModal.tsx).
+* **Modal:** [`DeleteCascadeModal.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/VirtualCloset/DeleteCascadeModal.tsx). The confirmation text is intentionally short: it only states that deleting will remove all records of the clothing item.
 * Prevents data corruption:
   1. In local memory, [`closetService.deleteItem(itemId)`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/VirtualCloset/closetService.ts#L220-L234) removes the garment from active daily logs and cancels pending loans.
   2. In Supabase, deleting `clothing_item` automatically triggers PostgreSQL `ON DELETE CASCADE` across `item_tag`, `daily_log_item`, and `borrow`.
@@ -405,6 +407,7 @@ $$\Delta C = \sqrt{\left(2 + \frac{\bar{r}}{256}\right)(R_1 - R_2)^2 + 4(G_1 - G
 * **View:** [`DailyLogView.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DailyClothingLog/DailyLogView.tsx).
 * Displays date selector with carousel of the user's digitized wardrobe.
 * Tapping a garment invokes [`handleToggleGarmentInOutfit()`](file:///c:/Users/Admin/Downloads/ReApparel/src/App.tsx#L588-L617), instantly toggling inclusion and recalculating outfit composition in 0ms.
+* Garments in the log are identified by their **category and color tag badges** (`[Category]` and `[● Color]`), matching the Virtual Closet, rather than by raw garment name.
 
 ### 7.2. Serialized Remote Synchronization Queue (`dailyLogSyncChain`)
 * Rapid user taps could trigger out-of-order network requests.
@@ -527,6 +530,10 @@ Based on UN Sustainable Development Goal 12 research data:
 * Upon approval in [`LendingDashboardView.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/FriendsAndLending/LendingDashboardView.tsx), the garment is marked `'Borrowed'`, hiding it from other friends.
 * Once returned, clicking **"Mark Returned"** restores availability.
 
+### 9.5. Notification Routing & Permanent Dismissal
+* **Requests vs Inbox:** Pending borrow requests are shown **only** in the Requests column of [`NotificationsView.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/FriendsAndLending/NotificationsView.tsx). `mockDatabase` no longer creates an Inbox notification when a borrow is created or arrives as `Pending`; inbox entries are generated only for status changes (accepted, rejected, returned). Legacy `"New borrow request"` notifications are purged on load.
+* **Dismissal persistence:** Deleting or clearing a notification records its id in a persisted `dismissedNotificationIds` set (`localStorage` key `reapparel_dismissed_notifications`). Status-notification regeneration checks this set, so a dismissed (x) notification does not reappear on the next sync. `App.tsx` also updates the notification list directly via `setNotifications(prev => prev.filter(...))`.
+
 ---
 
 ## 10. Operation 7: Community Textile Donation Map & Geolocation (`#donations`)
@@ -557,7 +564,7 @@ Based on UN Sustainable Development Goal 12 research data:
                  |                                 |
                  v                                 v
         Insert donation_flag Row          Assert opp.created_by === currentUserId
-        Increment flag count badge        Remove from Supabase & Local Cache
+        Red (!) on Flag button             Remove from Supabase & Local Cache
 ```
 
 ### 10.1. Interactive Google Maps & Leaflet Geolocation Rendering
@@ -588,6 +595,16 @@ $$d = 2 \cdot R \cdot \arctan2\left(\sqrt{a}, \sqrt{1 - a}\right) \quad (R = 6,3
 ### 10.6. Community Accuracy Flagging (`Inactive` vs `Inaccurate`)
 * **Modal:** [`FlagModal.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DonationMap/FlagModal.tsx).
 * Users report closed donation drives or incorrect contact information, persisting flags in `donation_flag`.
+* **Write path:** [`mapsService.addFlag()`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DonationMap/mapsService.ts) is `async`. It records the flag locally, then **awaits** the Supabase insert (5s timeout guard) and adopts the server-issued `flag_id`. Awaiting prevents the post-submit refresh from racing the insert.
+* **Read path (visible to every account, including anonymous/guest):**
+  1. [`mapsService.fetchAndMergeFromSupabase()`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DonationMap/mapsService.ts) queries `donation_opportunity` with an embedded relation: `select('*, donation_flag(*)')`. If the join fails or returns nothing, it falls back to two independent queries (`donation_opportunity`, `donation_flag`) joined client-side by `donation_id`.
+  2. `mergeRemoteRows()` maps the child rows (`r.donation_flag`) into `flags` / `flags_count`.
+  3. [`mockDatabase.addMultipleDonationOpportunities()`](file:///c:/Users/Admin/Downloads/ReApparel/src/shared/services/supabaseClient.ts) writes those flags into `state.donation_flags`, which is the source `getDonationOpportunities()` uses to compute each drive's flags.
+* **Realtime:** [`App.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/App.tsx) subscribes the `realtime_community_donations` channel to both `donation_opportunity` and `donation_flag`. Any flag change triggers a re-fetch so open sessions update without a reload; the open drawer re-syncs its `selectedOpp` in [`DonationMapSection.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DonationMap/DonationMapSection.tsx).
+* **Initial load:** `loadData()` in `App.tsx` always fetches donations (not only on the `#donations` view), so flags are present when the map is first opened.
+* **UI indicators (intentionally minimal):**
+  * [`OpportunityCard.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DonationMap/OpportunityCard.tsx): no status pill. A flagged drive shows a red `(!)` icon and red border on its **Flag** button (tooltip shows the report count).
+  * [`OpportunityDrawer.tsx`](file:///c:/Users/Admin/Downloads/ReApparel/src/modules/DonationMap/OpportunityDrawer.tsx): no header report badge or expiry pill. Reports are listed once, in the **Community Reports (N)** box at the bottom; the duration is shown in **Drive Duration & End Date**.
 
 ---
 
