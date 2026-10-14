@@ -19,10 +19,6 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
 }) => {
   if (!opportunity) return null;
 
-  const flagCount = opportunity.flags && opportunity.flags.length > 0
-    ? opportunity.flags.length
-    : (opportunity.flags_count || 0);
-
   const isCreator = Boolean(
     currentUser &&
     opportunity.created_by &&
@@ -59,60 +55,6 @@ export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <strong style={{ fontSize: 16 }}>{opportunity.name}</strong>
-            {flagCount > 0 ? (
-              <span className="pill" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span
-                  title={`There are ${flagCount} community report(s) for this location.`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 18,
-                    height: 18,
-                    borderRadius: '50%',
-                    background: '#dc2626',
-                    color: '#ffffff',
-                    cursor: 'help'
-                  }}
-                >
-                  <Info style={{ width: 12, height: 12 }} />
-                </span>
-                <span>{flagCount} Community Report{flagCount === 1 ? '' : 's'}</span>
-              </span>
-            ) : (
-              <span
-                className="pill on"
-                title="Verified Active"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '3px 8px',
-                  borderRadius: 20
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 18,
-                    height: 18,
-                    borderRadius: '50%',
-                    background: '#16a34a',
-                    color: '#ffffff',
-                    cursor: 'help'
-                  }}
-                >
-                  <Info style={{ width: 12, height: 12 }} />
-                </span>
-              </span>
-            )}
-            {opportunity.end_date && (
-              <span className="pill" style={{ fontSize: 11.5, background: 'var(--surface)', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Calendar style={{ width: 12, height: 12 }} /> Expires: {new Date(opportunity.end_date).toLocaleDateString()}
-              </span>
-            )}
             {isCreator && (
               <span className="pill" style={{ fontSize: 11.5, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <UserCheck style={{ width: 12, height: 12 }} /> Uploaded by You
