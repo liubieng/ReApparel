@@ -514,17 +514,23 @@ class MockDatabaseEngine {
     return this.state.users.some(u => u.email.toLowerCase() === emailClean);
   }
 
-  public registerUser(userData: { email: string; first_name: string; last_name: string; password?: string }): User {
+  public registerUser(userData: { email: string; first_name: string; last_name: string; password?: string; user_id?: string; friend_code?: string }): User {
     const emailClean = userData.email.trim().toLowerCase();
     const existing = this.state.users.find(u => u.email.toLowerCase() === emailClean);
     if (existing) {
-      throw new Error(`An account with the email "${emailClean}" already exists. Please sign in instead.`);
+      if (userData.password) existing.password = userData.password;
+      if (userData.user_id) existing.user_id = userData.user_id;
+      if (userData.first_name) existing.first_name = userData.first_name;
+      if (userData.last_name) existing.last_name = userData.last_name;
+      this.setCurrentUserId(existing.user_id);
+      this.notify();
+      return existing;
     }
 
     const codePart = (userData.first_name || 'USER').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'USER';
     const randDigits = Math.floor(1000 + Math.random() * 9000);
-    const newFriendCode = `RP-${codePart}-${randDigits}`;
-    const newUserId = generateUUID();
+    const newFriendCode = userData.friend_code || `RP-${codePart}-${randDigits}`;
+    const newUserId = userData.user_id || generateUUID();
 
     const newUser: User = {
       user_id: newUserId,

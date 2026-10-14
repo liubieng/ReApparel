@@ -484,6 +484,76 @@ export default function App() {
     } catch {}
   }, []);
 
+  // Listen for Supabase Auth state transitions (e.g. user clicked confirmation link in verification email)
+  useEffect(() => {
+    try {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')) {
+          const authUser = session.user;
+          const currentActiveId = mockDatabase.getCurrentUser()?.user_id;
+
+          // If not currently logged in as this user, sync and log them in
+          if (!currentActiveId || currentActiveId !== authUser.id) {
+            let appUser = mockDatabase.findUserByIdentifier(authUser.email || authUser.id);
+
+            if (!appUser) {
+              try {
+                const { data } = await supabase.from('users').select('*').eq('user_id', authUser.id).limit(1);
+                if (data && data.length > 0) {
+                  appUser = data[0] as User;
+                } else if (authUser.email) {
+                  const { data: byEmail } = await supabase.from('users').select('*').ilike('email', authUser.email).limit(1);
+                  if (byEmail && byEmail.length > 0) {
+                    appUser = byEmail[0] as User;
+                  }
+                }
+              } catch {}
+            }
+
+            if (!appUser && authUser.email) {
+              const fName = authUser.user_metadata?.first_name || authUser.email.split('@')[0] || 'Member';
+              const lName = authUser.user_metadata?.last_name || '';
+              appUser = mockDatabase.registerUser({
+                user_id: authUser.id,
+                email: authUser.email,
+                first_name: fName,
+                last_name: lName
+              });
+              try {
+                await supabase.from('users').upsert({
+                  user_id: appUser.user_id,
+                  email: appUser.email,
+                  first_name: appUser.first_name,
+                  last_name: appUser.last_name,
+                  friend_code: appUser.friend_code,
+                  created_at: appUser.created_at
+                });
+              } catch {}
+            }
+
+            if (appUser) {
+              mockDatabase.upsertUser(appUser);
+              mockDatabase.setCurrentUserId(appUser.user_id);
+              setCurrentUser(appUser);
+              if (window.location.hash || window.location.search) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+              }
+              toast(`Email verified! Welcome to ReApparel, ${appUser.first_name}.`);
+              await loadData();
+            }
+          }
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch {}
+  }, [loadData, toast]);
+
   // --------------------------------------------------------------------------
   // USER ACTIONS & HANDLERS
   // --------------------------------------------------------------------------
@@ -511,7 +581,13 @@ export default function App() {
   };
 
   // Logout Flow
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const supabase = getSupabase();
+      if (supabase) {
+        await supabase.auth.signOut().catch(() => {});
+      }
+    } catch {}
     mockDatabase.setCurrentUserId(null);
     safeStorage.removeItem(STORAGE_KEY_ACTIVE_VIEW);
     setCurrentUser(null);
