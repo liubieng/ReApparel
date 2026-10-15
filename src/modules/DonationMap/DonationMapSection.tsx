@@ -70,6 +70,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const availableRegions = REGIONS;
+  // Memoizes barangays corresponding to the selected region
   const availableBarangays = useMemo(() => {
     if (selectedRegion !== 'all' && BARANGAYS_BY_REGION[selectedRegion]) {
       return BARANGAYS_BY_REGION[selectedRegion];
@@ -80,14 +81,17 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
   }, [selectedRegion]);
 
   const availableCountries = COUNTRIES;
+  // Memoizes provinces for the selected country
   const availableProvinces = useMemo(() => {
     return selectedCountry === 'all' ? [] : PROVINCES_BY_COUNTRY[selectedCountry] || [];
   }, [selectedCountry]);
 
+  // Memoizes cities for the selected province
   const availableCities = useMemo(() => {
     return selectedProvince === 'all' ? [] : CITIES_BY_PROVINCE[selectedProvince] || [];
   }, [selectedProvince]);
 
+  // Requests initial user GPS location on component mount to center regional view
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -135,6 +139,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   };
 
+  // Adjusts map center and zoom level based on the selected distance radius filter
   useEffect(() => {
     if (maxDistanceKm !== 'all') {
       const refCoords = userLocation || { lat: 9.3068, lng: 123.3054 };
@@ -241,6 +246,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     });
   }, [filteredOpportunities]);
 
+  // Centers map camera on donation site when highlighted by external selection
   useEffect(() => {
     if (highlightId) {
       const match = opportunities.find(o => o.donation_id === highlightId);
@@ -251,6 +257,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   }, [highlightId, opportunities]);
 
+  // Synchronizes selected opportunity object when opportunities data updates
   useEffect(() => {
     if (selectedOpp) {
       const match = opportunities.find(o => o.donation_id === selectedOpp.donation_id);

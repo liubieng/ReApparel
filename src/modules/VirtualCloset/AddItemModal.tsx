@@ -57,6 +57,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     setIsCameraActive(false);
   };
 
+  // Cleans up active camera video streams and image processing timers on close
   useEffect(() => {
     if (!isOpen) {
       stopCameraStream();

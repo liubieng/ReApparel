@@ -363,6 +363,7 @@ export async function removeBackgroundClientSide(
   });
 }
 
+// Converts a File or Blob object into a base64 Data URL string
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

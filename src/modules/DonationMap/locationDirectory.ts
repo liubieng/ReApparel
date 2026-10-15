@@ -500,6 +500,7 @@ export const PRESET_COORDINATES: Record<string, { lat: number; lng: number }> = 
   'Japan': { lat: 36.2048, lng: 138.2529 }
 };
 
+// Resolves geographic GPS coordinates for a city, province, or country using presets or Nominatim API
 export async function getCoordinatesForLocation(
   city?: string,
   province?: string,

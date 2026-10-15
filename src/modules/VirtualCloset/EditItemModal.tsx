@@ -31,6 +31,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Synchronizes form input fields and photo list when active garment prop changes
   useEffect(() => {
     if (garment) {
       setCategory(garment.category || '');

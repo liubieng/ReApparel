@@ -49,6 +49,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
     return Math.round((end - start) / 86400000) + 1;
   }, [fromDate, toDate]);
 
+  // Resets default borrow date range and clears errors when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setFromDate(new Date().toISOString().slice(0, 10));

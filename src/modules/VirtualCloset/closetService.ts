@@ -120,6 +120,7 @@ async function pushDateToRemote(userId: string, logDate: string): Promise<void> 
   } catch {}
 }
 
+// Chains and serializes background push requests to Supabase for daily wear log updates
 function queueDateSync(userId: string, logDate: string): Promise<void> {
   dailyLogSyncChain = dailyLogSyncChain
     .then(() => pushDateToRemote(userId, logDate))

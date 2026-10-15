@@ -132,6 +132,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     return todayOutfits[0] || todayLog;
   }, [todayOutfits, dailyLogs, activeLogId, todayLog]);
 
+  // Synchronizes active outfit log ID with today's log once loaded
   React.useEffect(() => {
     if (activeLogId === 0 && todayLog.log_id !== 0) {
       setActiveLogId(todayLog.log_id);

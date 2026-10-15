@@ -17,6 +17,7 @@ function MapRecenterHandler({
   centerTarget: { lat: number; lng: number; zoom?: number } | null;
 }) {
   const map = useMap();
+  // Pans and zooms Google Map instance when center target coordinates change
   useEffect(() => {
     if (map && centerTarget) {
       map.panTo({ lat: centerTarget.lat, lng: centerTarget.lng });

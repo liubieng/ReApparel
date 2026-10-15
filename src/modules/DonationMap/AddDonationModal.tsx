@@ -69,6 +69,7 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
 
+  // Initializes Leaflet map instance and binds draggable pin coordinate drag events
   useEffect(() => {
     if (!isOpen) return;
 
@@ -133,6 +134,7 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
     };
   }, [isOpen]);
 
+  // Synchronizes map camera and marker position when latitude or longitude inputs change
   useEffect(() => {
     if (markerRef.current && mapInstanceRef.current && !isNaN(latitude) && !isNaN(longitude)) {
       const cur = markerRef.current.getLatLng();
