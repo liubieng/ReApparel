@@ -26,6 +26,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
   friendActivity: false
 };
 
+// Renders user application settings including dark mode toggle and notification preferences
 export const SettingsView: React.FC<SettingsViewProps> = ({
   theme,
   onToggleTheme,
@@ -46,6 +47,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Toggles and persists specific notification category preference to local storage
   const handleTogglePref = (key: keyof NotificationPrefs, label: string) => {
     setErrorMessage(null);
 
@@ -69,6 +71,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     toast(`${label} notifications ${nextValue ? 'enabled' : 'disabled'}`);
   };
 
+  // Renders an accessible animated switch toggle for boolean configuration settings
   const renderToggle = (checked: boolean, onToggle: () => void, label: string) => (
     <button
       type="button"

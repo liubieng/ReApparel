@@ -25,6 +25,7 @@ interface AuthViewProps {
   toast: (message: string) => void;
 }
 
+// Renders user authentication interface supporting login, registration, and email verification
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify'>(() => {
     if (typeof window !== 'undefined') {
@@ -57,6 +58,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Decrements the verification email resend cooldown countdown every second
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => {
@@ -65,6 +67,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
+  // Handles user login authentication or dispatches account registration to Supabase
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -363,6 +366,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     }
   };
 
+  // Checks whether the user confirmed their email link and completes account login
   const handleCheckEmailLink = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -447,6 +451,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, toast }) => 
     }
   };
 
+  // Requests a new verification email confirmation link from Supabase auth
   const handleResendVerification = async () => {
     if (resendCooldown > 0) return;
     setErrorMsg(null);
