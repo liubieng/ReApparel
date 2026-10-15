@@ -537,10 +537,6 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
                   </button>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle2 className="ico" style={{ width: 14, height: 14 }} />
-                      Outfit finalized &amp; wear counts incremented!
-                    </span>
                     <button
                       type="button"
                       className="btn btn-g"
