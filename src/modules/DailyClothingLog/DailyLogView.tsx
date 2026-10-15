@@ -232,12 +232,42 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   return (
     <div>
 
-      <div style={{ display: 'flex', justifyContent: isEditingHistorical ? 'space-between' : 'flex-end', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        {isEditingHistorical && (
-          <div style={{ fontSize: 13, color: 'var(--text)' }}>
-            Editing record for date: <strong style={{ color: 'var(--primary)' }}>{activeLog.log_date}</strong>
-          </div>
-        )}
+      {isEditingHistorical && (
+        <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 12 }}>
+          Editing record for date: <strong style={{ color: 'var(--primary)' }}>{activeLog.log_date}</strong>
+        </div>
+      )}
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 16,
+        borderBottom: '1px solid var(--border)',
+        paddingBottom: 8
+      }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'today' ? 'btn-p' : 'btn-g'}`}
+            style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => setActiveTab('today')}
+          >
+            <Calendar className="ico" style={{ width: 14, height: 14 }} />
+            <span>{isEditingHistorical ? `Editing Log (${activeLog.log_date})` : "Today's Outfit Entries"} ({selectedItems.length})</span>
+          </button>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'history' ? 'btn-p' : 'btn-g'}`}
+            style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => setActiveTab('history')}
+          >
+            <History className="ico" style={{ width: 14, height: 14 }} />
+            <span>Wear History &amp; Logs ({allLogsSorted.length})</span>
+          </button>
+        </div>
 
         <span style={{
           display: 'inline-flex',
@@ -263,27 +293,6 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
             </>
           )}
         </span>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-        <button
-          type="button"
-          className={`btn ${activeTab === 'today' ? 'btn-p' : 'btn-g'}`}
-          style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => setActiveTab('today')}
-        >
-          <Calendar className="ico" style={{ width: 14, height: 14 }} />
-          <span>{isEditingHistorical ? `Editing Log (${activeLog.log_date})` : "Today's Outfit Entries"} ({selectedItems.length})</span>
-        </button>
-        <button
-          type="button"
-          className={`btn ${activeTab === 'history' ? 'btn-p' : 'btn-g'}`}
-          style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => setActiveTab('history')}
-        >
-          <History className="ico" style={{ width: 14, height: 14 }} />
-          <span>Wear History &amp; Logs ({allLogsSorted.length})</span>
-        </button>
       </div>
 
       {activeTab === 'today' ? (

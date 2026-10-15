@@ -80,7 +80,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       last_name: editLastName.trim()
     };
     mockDatabase.upsertUser(updatedUser);
-    ensureUserSyncedToSupabase(updatedUser).catch(() => {});
+    ensureUserSyncedToSupabase(updatedUser).catch(() => { });
     toast('Profile updated successfully!');
     setModalAction(null);
   };
@@ -297,7 +297,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               textAlign: 'left'
             }}
           >
-            <span style={{ fontSize: 14, color: 'var(--text)' }}>Create friend code</span>
+            <span style={{ fontSize: 14, color: 'var(--text)' }}>View friend code</span>
             <ChevronRight style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
           </button>
 
