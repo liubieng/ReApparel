@@ -23,6 +23,7 @@ interface LendingDashboardViewProps {
   toast: (msg: string) => void;
 }
 
+// Renders the lending dashboard managing user borrows and loan requests from peers
 export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
   currentUser,
   borrows,
@@ -33,10 +34,12 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'yours' | 'friends'>('yours');
 
+  // Filters all garments borrowed or requested by the current user
   const myRequests = borrows.filter(b =>
     b.borrower_id === currentUser.user_id || isSameUser(b.borrower_id, currentUser.user_id)
   );
 
+  // Filters all incoming requests from peers wanting to borrow the user's garments
   const friendsRequests = borrows.filter(b => {
 
     return isSameUser(b.lender?.user_id, currentUser.user_id) ||
@@ -45,6 +48,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
            b.item?.user_id === currentUser.user_id;
   });
 
+  // Checks for date conflicts with already approved loans before accepting a borrow request
   const handleAcceptWithConflictCheck = (borrow: Borrow) => {
 
     const hasConflict = borrows.some(other => {
@@ -189,6 +193,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                       </span>
 
                       {isPending && (
+                        // Cancels a pending borrow request before loan inception
                         <button
                           type="button"
                           className="btn btn-g"
@@ -199,6 +204,7 @@ export const LendingDashboardView: React.FC<LendingDashboardViewProps> = ({
                         </button>
                       )}
                       {isAccepted && (
+                        // Confirms the borrowed garment has been returned to the owner
                         <button
                           type="button"
                           className="btn btn-g"

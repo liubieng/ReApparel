@@ -12,10 +12,12 @@ interface BorrowModalProps {
   toast: (msg: string) => void;
 }
 
+// Checks whether two date ranges overlap for borrow conflict detection
 export function checkDateOverlap(aFrom: string, aTo: string, bFrom: string, bTo: string): boolean {
   return !(aTo < bFrom || aFrom > bTo);
 }
 
+// Modal dialog for selecting borrow dates and submitting a garment loan request
 export const BorrowModal: React.FC<BorrowModalProps> = ({
   isOpen,
   onClose,
@@ -35,6 +37,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
   const [note, setNote] = useState('Attending weekend fashion exhibition, will return dry-cleaned!');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Calculates the total borrow duration in calendar days
   const durationDays = React.useMemo(() => {
     if (!fromDate || !toDate) return 0;
     const [y1, m1, d1] = fromDate.split('-').map(Number);
@@ -54,6 +57,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
     }
   }, [isOpen, garment?.item_id]);
 
+  // Validates if the selected dates conflict with an existing approved borrow on this item
   const hasConflict = React.useMemo(() => {
     if (!garment || !fromDate || !toDate) return false;
     return existingBorrows.some(b => {
@@ -63,6 +67,7 @@ export const BorrowModal: React.FC<BorrowModalProps> = ({
     });
   }, [existingBorrows, garment, fromDate, toDate]);
 
+  // Validates dates and submits the borrow request to the item owner
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);

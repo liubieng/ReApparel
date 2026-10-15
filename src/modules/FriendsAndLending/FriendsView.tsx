@@ -36,6 +36,7 @@ interface ItemWithFriend extends ClothingItem {
   ownerFriend: User;
 }
 
+// Renders the friends management hub, community closet browser, and friend request handling
 export const FriendsView: React.FC<FriendsViewProps> = ({
   currentUser,
   friends,
@@ -68,6 +69,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
   const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
+  // Toggles an active garment type filter (e.g. Tops, Bottoms, Outerwear)
   const toggleTypeFilter = (typeName: string) => {
     setSelectedTypes(prev => {
       const next = new Set(prev);
@@ -77,6 +79,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     });
   };
 
+  // Toggles an active garment color filter
   const toggleColorFilter = (colorName: string) => {
     setSelectedColors(prev => {
       const next = new Set(prev);
@@ -86,6 +89,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     });
   };
 
+  // Resets all active clothing type and color filters
   const clearAllFilters = () => {
     setSelectedTypes(new Set());
     setSelectedColors(new Set());
@@ -95,6 +99,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
 
   const [detailItem, setDetailItem] = useState<{ item: ClothingItem; owner: User } | null>(null);
 
+  // Copies the current user's unique friend code to the system clipboard
   const handleCopyCode = () => {
     if (currentUser.friend_code) {
       navigator.clipboard.writeText(currentUser.friend_code);
@@ -104,6 +109,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
   };
 
+  // Validates the entered friend code and dispatches a friend request
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = friendCodeInput.trim();
@@ -129,6 +135,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
   };
 
+  // Loads and displays all public wardrobe items for a specific friend
   const handleOpenFriendCloset = async (friend: User) => {
     setViewingFriend(friend);
     setSubView('single-closet');
@@ -143,6 +150,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
   };
 
+  // Fetches and aggregates public garments across all connected friends' closets
   const handleOpenAllClosets = async () => {
     setSubView('all-closets');
     clearAllFilters();
@@ -165,6 +173,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     }
   };
 
+  // Filters and sorts garments in the currently viewed friend's closet
   const filteredSingleGarments = useMemo(() => {
     let result = friendGarments.filter(item => {
 
@@ -193,6 +202,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     return result;
   }, [friendGarments, selectedTypes, selectedColors, sortOrder]);
 
+  // Filters and sorts combined garments across all friends' closets
   const filteredAllGarments = useMemo(() => {
     let result = allFriendsGarments.filter(item => {
 
@@ -221,6 +231,7 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     return result;
   }, [allFriendsGarments, selectedTypes, selectedColors, sortOrder]);
 
+  // Filters the friend list by search query (name or friend code)
   const filteredFriends = useMemo(() => {
     const q = searchFriendsQuery.trim().toLowerCase();
     if (!q) return friends;
@@ -231,14 +242,17 @@ export const FriendsView: React.FC<FriendsViewProps> = ({
     );
   }, [friends, searchFriendsQuery]);
 
+  // Identifies pending friend requests sent to the current user
   const incomingRequests = friendRequests.filter(
     r => r.receiver_id === currentUser.user_id && r.status === 'pending'
   );
 
+  // Identifies pending friend requests sent by the current user
   const outgoingRequests = friendRequests.filter(
     r => r.sender_id === currentUser.user_id && r.status === 'pending'
   );
 
+  // Renders filter chips for garment category, color, and alphabet sorting
   const renderFilterBar = () => (
     <div style={{
       display: 'flex',

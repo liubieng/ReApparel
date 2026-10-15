@@ -2,22 +2,27 @@ import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, isSameUser, 
 import { User, FriendRequest, Borrow, ClothingItem } from '../../shared/types/database';
 
 export const friendsService = {
+  // Returns the currently active authenticated or guest user
   getCurrentUser(): User | null {
     return mockDatabase.getCurrentUser();
   },
 
+  // Returns all user profiles in the local database for friend lookup
   getAllUsers(): User[] {
     return mockDatabase.getAllUsers();
   },
 
+  // Switches the active user session context in local storage
   switchCurrentUser(userId: string) {
     mockDatabase.setCurrentUserId(toCanonicalUserId(userId));
   },
 
+  // Fetches all friend requests stored in local state
   getFriendRequests(): FriendRequest[] {
     return mockDatabase.getFriendRequests();
   },
 
+  // Dispatches a new friend request using the recipient's friend code
   async sendFriendRequest(friendCode: string): Promise<{ success: boolean; message: string }> {
     const cleanCode = friendCode.trim().toUpperCase();
     const currentUser = mockDatabase.getCurrentUser();
@@ -138,6 +143,7 @@ export const friendsService = {
     return res;
   },
 
+  // Syncs incoming and outgoing friend requests with remote Supabase
   async fetchFriendRequestsFromSupabase(userId?: string): Promise<FriendRequest[]> {
     const supabase = getSupabase();
     const uid = userId || mockDatabase.getCurrentUser()?.user_id;
@@ -210,6 +216,7 @@ export const friendsService = {
     return mockDatabase.getFriendRequests();
   },
 
+  // Fetches registered user profiles from Supabase to resolve names and friend codes
   async fetchAndMergeUsersFromSupabase(): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -227,6 +234,7 @@ export const friendsService = {
     }
   },
 
+  // Updates friend request status to accepted or rejected locally and in Supabase
   async respondToRequest(requestId: number, status: 'accepted' | 'rejected'): Promise<void> {
     mockDatabase.respondToFriendRequest(requestId, status);
     const supabase = getSupabase();
@@ -249,6 +257,7 @@ export const friendsService = {
     }
   },
 
+  // Returns all mutual friends who have accepted friend requests
   getConnectedFriends(): User[] {
     const currentUser = mockDatabase.getCurrentUser();
     if (!currentUser) return [];
@@ -270,6 +279,7 @@ export const friendsService = {
     return allUsers.filter(u => friendIds.has(u.user_id));
   },
 
+  // Removes a friend connection and deletes the relationship locally and remotely
   async removeFriend(friendId: string): Promise<void> {
     const currentUser = mockDatabase.getCurrentUser();
     if (!currentUser) return;
@@ -302,14 +312,17 @@ export const friendsService = {
     }
   },
 
+  // Retrieves all clothing items belonging to a specific friend
   getFriendCloset(friendId: string): ClothingItem[] {
     return mockDatabase.getClothingItems(friendId);
   },
 
+  // Returns all borrow transactions stored in local database state
   getBorrows(): Borrow[] {
     return mockDatabase.getBorrows();
   },
 
+  // Returns requests from friends wanting to borrow items owned by the current user
   getIncomingBorrowRequests(): Borrow[] {
     const currentUser = mockDatabase.getCurrentUser();
     if (!currentUser) return [];
@@ -317,6 +330,7 @@ export const friendsService = {
     return allBorrows.filter(b => b.lender?.user_id === currentUser.user_id);
   },
 
+  // Returns borrow requests initiated by the current user
   getMyBorrowRequests(): Borrow[] {
     const currentUser = mockDatabase.getCurrentUser();
     if (!currentUser) return [];
@@ -324,6 +338,7 @@ export const friendsService = {
     return allBorrows.filter(b => b.borrower_id === currentUser.user_id);
   },
 
+  // Creates a new borrow request for a clothing item and syncs it to Supabase
   async requestBorrow(itemId: number, startDate: string, endDate: string): Promise<Borrow> {
     const borrow = mockDatabase.createBorrowRequest(itemId, startDate, endDate);
     const supabase = getSupabase();
@@ -360,6 +375,7 @@ export const friendsService = {
     return borrow;
   },
 
+  // Fetches borrow records from Supabase and merges them into local state
   async fetchBorrowsFromSupabase(userId?: string): Promise<Borrow[]> {
     const supabase = getSupabase();
     const uid = userId || mockDatabase.getCurrentUser()?.user_id;
@@ -429,6 +445,7 @@ export const friendsService = {
     return mockDatabase.getBorrows();
   },
 
+  // Updates the status of a borrow request locally and syncs the update to Supabase
   async updateBorrowStatus(borrowId: number, status: Borrow['status']): Promise<void> {
     mockDatabase.updateBorrowStatus(borrowId, status);
     const supabase = getSupabase();
@@ -448,18 +465,22 @@ export const friendsService = {
     }
   },
 
+  // Retrieves all notifications for the specified user or current active user
   getNotifications(userId?: string) {
     return mockDatabase.getNotifications(userId);
   },
 
+  // Clears all notifications for the specified user
   clearNotifications(userId?: string) {
     mockDatabase.clearNotifications(userId);
   },
 
+  // Marks a specific notification as read by its identifier
   markNotificationAsRead(notificationId: string) {
     mockDatabase.markNotificationAsRead(notificationId);
   },
 
+  // Deletes an individual notification from the user's feed
   deleteNotification(notificationId: string) {
     mockDatabase.deleteNotification(notificationId);
   }

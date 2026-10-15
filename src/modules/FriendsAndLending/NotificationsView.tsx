@@ -19,6 +19,7 @@ interface NotificationsViewProps {
   onMarkNotificationRead?: (id: string) => void;
 }
 
+// Renders the notifications dashboard split into informational updates and actionable requests
 export const NotificationsView: React.FC<NotificationsViewProps> = ({
   currentUser,
   borrows,
@@ -34,6 +35,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
   onMarkNotificationRead
 }) => {
 
+  // Filters pending borrow requests where the current user is the owner/lender awaiting response
   const pendingBorrows = borrows.filter(b =>
     (isSameUser(b.lender?.user_id, currentUser.user_id) ||
      isSameUser(b.item?.user_id, currentUser.user_id) ||
@@ -42,14 +44,17 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
     b.status === 'Pending'
   );
 
+  // Filters incoming friend requests that are waiting for the user to accept or deny
   const pendingFriends = friendRequests.filter(r =>
     r.receiver_id === currentUser.user_id && r.status === 'pending'
   );
 
+  // Retrieves notifications from component props or falls back to friendsService
   const rawNotifications: AppNotification[] = notifications !== undefined
     ? notifications
     : friendsService.getNotifications(currentUser.user_id);
 
+  // Filters out actionable requests so the inbox strictly shows status updates and alerts
   const inboxItems: AppNotification[] = rawNotifications.filter(item => {
     // Actionable requests belong exclusively in the Requests column, not Inbox
     if (item.type === 'borrow_request') return false;
@@ -91,6 +96,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                 {inboxItems.length} {inboxItems.length === 1 ? 'message' : 'messages'}
               </span>
               {inboxItems.length > 0 && onClearNotifications && (
+                // Clears all informational notifications from the inbox
                 <button
                   type="button"
                   onClick={onClearNotifications}
@@ -121,6 +127,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {inboxItems.map(item => (
+                // Marks notification as read when clicked
                 <div
                   key={item.id}
                   onClick={() => onMarkNotificationRead && onMarkNotificationRead(item.id)}
@@ -166,6 +173,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                       />
                     )}
                     {onDeleteNotification && (
+                      // Dismisses an individual notification
                       <button
                         type="button"
                         onClick={(e) => {
@@ -202,6 +210,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
               <ChevronDown className="ico" style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
             </div>
             {onNavigateToRequests && (
+              // Navigates to the dedicated lending request board
               <button
                 type="button"
                 className="btn btn-g"
@@ -249,6 +258,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
                   <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                     {onAcceptBorrow && (
+                      // Approves the friend's borrow request
                       <button
                         type="button"
                         className="btn btn-p"
@@ -259,6 +269,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                       </button>
                     )}
                     {onDenyBorrow && (
+                      // Declines the friend's borrow request
                       <button
                         type="button"
                         className="btn btn-g"
@@ -269,6 +280,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                       </button>
                     )}
                     {onNavigateToRequests && (
+                      // Navigates to the request board for item and date details
                       <button
                         type="button"
                         className="btn btn-g"
@@ -315,6 +327,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
 
                     <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                       {onAcceptFriend && (
+                        // Accepts the friend request to connect closets
                         <button
                           type="button"
                           className="btn btn-p"
@@ -325,6 +338,7 @@ export const NotificationsView: React.FC<NotificationsViewProps> = ({
                         </button>
                       )}
                       {onDenyFriend && (
+                        // Declines the incoming friend request
                         <button
                           type="button"
                           className="btn btn-g"
