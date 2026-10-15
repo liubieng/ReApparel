@@ -93,7 +93,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
 
       const matchType = closetSelectedTypes.size === 0 || Array.from(closetSelectedTypes).some(sel => {
         return (g.category && g.category.toLowerCase() === sel.toLowerCase()) ||
-               (g.type_tag && g.type_tag.toLowerCase() === sel.toLowerCase());
+          (g.type_tag && g.type_tag.toLowerCase() === sel.toLowerCase());
       });
       if (!matchType) return false;
 
@@ -802,9 +802,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
           </div>
         </>
       ) : (
-        /* ====================================================================
-         * CHRONOLOGICAL DAILY WEAR LOGS HISTORY (TC_EDIT_01 - TC_EDIT_04)
-         * ==================================================================== */
+        /* CHRONOLOGICAL DAILY WEAR LOGS HISTORY*/
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <div>
