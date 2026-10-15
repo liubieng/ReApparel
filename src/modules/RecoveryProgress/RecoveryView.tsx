@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { BSASAssessment, ClothingItem, Borrow, User } from '../../shared/types/database';
 import { deduplicateAssessments } from '../VirtualCloset';
-import { isSameUser, mockDatabase, getStoredAssessmentBreakdown } from '../../shared/services/supabaseClient';
+import { isSameUser, mockDatabase, getStoredAssessmentBreakdown, saveAssessmentBreakdown, createBSASBreakdownFromScore } from '../../shared/services/supabaseClient';
 
 interface RecoveryViewProps {
   currentUser?: User | null;
@@ -209,15 +209,24 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     if (!currentAssessment) return undefined;
     const activeUser = currentUser || mockDatabase.getCurrentUser();
     const uid = currentAssessment.user_id || activeUser?.user_id;
-    if (!uid) return undefined;
-    const stored = getStoredAssessmentBreakdown(uid, currentAssessment.assessment_id) ||
-                   getStoredAssessmentBreakdown(uid, 'latest');
-    if (stored) return stored;
-    const local = mockDatabase.getAssessments(uid).find(a =>
-      a.assessment_id === currentAssessment.assessment_id ||
-      Math.abs(new Date(a.taken_at).getTime() - new Date(currentAssessment.taken_at).getTime()) < 60000
-    );
-    return local?.breakdown;
+    if (uid) {
+      const stored = getStoredAssessmentBreakdown(uid, currentAssessment.assessment_id) ||
+                     getStoredAssessmentBreakdown(uid, 'latest');
+      if (stored) return stored;
+      const local = mockDatabase.getAssessments(uid).find(a =>
+        a.assessment_id === currentAssessment.assessment_id ||
+        Math.abs(new Date(a.taken_at).getTime() - new Date(currentAssessment.taken_at).getTime()) < 60000
+      );
+      if (local?.breakdown) return local.breakdown;
+    }
+    if (typeof currentAssessment.score === 'number') {
+      const synthesized = createBSASBreakdownFromScore(currentAssessment.score);
+      if (uid) {
+        saveAssessmentBreakdown(uid, currentAssessment.assessment_id, synthesized);
+      }
+      return synthesized;
+    }
+    return undefined;
   }, [currentAssessment, currentUser]);
 
   const previousBreakdown = useMemo(() => {
@@ -225,14 +234,23 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     if (!previousAssessment) return undefined;
     const activeUser = currentUser || mockDatabase.getCurrentUser();
     const uid = previousAssessment.user_id || activeUser?.user_id;
-    if (!uid) return undefined;
-    const stored = getStoredAssessmentBreakdown(uid, previousAssessment.assessment_id);
-    if (stored) return stored;
-    const local = mockDatabase.getAssessments(uid).find(a =>
-      a.assessment_id === previousAssessment.assessment_id ||
-      Math.abs(new Date(a.taken_at).getTime() - new Date(previousAssessment.taken_at).getTime()) < 60000
-    );
-    return local?.breakdown;
+    if (uid) {
+      const stored = getStoredAssessmentBreakdown(uid, previousAssessment.assessment_id);
+      if (stored) return stored;
+      const local = mockDatabase.getAssessments(uid).find(a =>
+        a.assessment_id === previousAssessment.assessment_id ||
+        Math.abs(new Date(a.taken_at).getTime() - new Date(previousAssessment.taken_at).getTime()) < 60000
+      );
+      if (local?.breakdown) return local.breakdown;
+    }
+    if (typeof previousAssessment.score === 'number') {
+      const synthesized = createBSASBreakdownFromScore(previousAssessment.score);
+      if (uid) {
+        saveAssessmentBreakdown(uid, previousAssessment.assessment_id, synthesized);
+      }
+      return synthesized;
+    }
+    return undefined;
   }, [previousAssessment, currentUser]);
 
   return (
@@ -411,8 +429,12 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {BSAS_DIMENSIONS.map((dim) => {
                 const isExpanded = expandedDimension === dim.key;
-                const activeBreakdown = currentBreakdown || latestAssessment?.breakdown;
-                const isEndorsed = Boolean(activeBreakdown && (activeBreakdown as any)[dim.key] === 1);
+                const activeBreakdown = currentBreakdown || currentAssessment?.breakdown || latestAssessment?.breakdown;
+                const hasAssessment = Boolean(currentAssessment || latestAssessment);
+                const isEndorsed = Boolean(
+                  activeBreakdown &&
+                  (Number((activeBreakdown as any)[dim.key]) === 1 || (activeBreakdown as any)[dim.key] === true)
+                );
 
                 return (
                   <div
@@ -434,34 +456,55 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '10px 14px',
+                        padding: '11px 14px',
                         background: 'transparent',
                         border: 'none',
                         cursor: 'pointer',
                         textAlign: 'left'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
                           {dim.name}
                         </span>
-                        {isEndorsed && (
-                          <span style={{
-                            fontSize: 9.5,
-                            fontWeight: 700,
-                            padding: '1px 6px',
-                            borderRadius: 10,
-                            background: 'var(--danger-soft, #fee2e2)',
-                            color: 'var(--danger, #dc2626)'
-                          }}>
-                            Endorsed
-                          </span>
+                        {hasAssessment && (
+                          isEndorsed ? (
+                            <span style={{
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: 'var(--danger-soft, #fee2e2)',
+                              color: 'var(--danger, #dc2626)',
+                              border: '1px solid rgba(220, 38, 38, 0.25)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              letterSpacing: '0.02em'
+                            }}>
+                              Endorsed
+                            </span>
+                          ) : (
+                            <span style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: 'var(--surface)',
+                              color: 'var(--text-muted)',
+                              border: '1px solid var(--border)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              letterSpacing: '0.02em'
+                            }}>
+                              Not Endorsed
+                            </span>
+                          )
                         )}
                       </div>
                       {isExpanded ? (
-                        <ChevronUp style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
+                        <ChevronUp style={{ width: 16, height: 16, color: 'var(--text-muted)', flexShrink: 0 }} />
                       ) : (
-                        <ChevronDown style={{ width: 16, height: 16, color: 'var(--text-muted)' }} />
+                        <ChevronDown style={{ width: 16, height: 16, color: 'var(--text-muted)', flexShrink: 0 }} />
                       )}
                     </button>
 
@@ -479,6 +522,28 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
                         }}>
                           "{dim.questionExample}"
                         </div>
+                        {hasAssessment && (
+                          <div style={{
+                            marginTop: 8,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: isEndorsed ? 'var(--danger, #dc2626)' : 'var(--text-muted)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}>
+                            <span>Status in check-in:</span>
+                            <span style={{
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: 8,
+                              background: isEndorsed ? 'var(--danger-soft, #fee2e2)' : 'var(--surface)',
+                              border: isEndorsed ? '1px solid rgba(220, 38, 38, 0.25)' : '1px solid var(--border)'
+                            }}>
+                              {isEndorsed ? 'Endorsed (Criterion Met)' : 'Not Endorsed'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

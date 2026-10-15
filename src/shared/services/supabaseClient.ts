@@ -338,6 +338,26 @@ export const SPAM_ASSESSMENT_IDS = new Set<number>([72, 73, 74, 75, 76, 77]);
 
 export const STORAGE_KEY_BSAS_BREAKDOWNS = 'reapparel_bsas_breakdowns_v2';
 
+export function createBSASBreakdownFromScore(score: number): NonNullable<BSASAssessment['breakdown']> {
+  const clampedScore = Math.max(0, Math.min(7, Math.round(Number(score) || 0)));
+  const dimensionKeys = [
+    'salience',
+    'mood_modification',
+    'conflict',
+    'tolerance',
+    'relapse',
+    'withdrawal',
+    'problems'
+  ] as const;
+
+  const breakdown: any = {};
+  dimensionKeys.forEach((key, index) => {
+    breakdown[key] = index < clampedScore ? 1 : 0;
+  });
+
+  return breakdown;
+}
+
 export function saveAssessmentBreakdown(userId: string, assessmentId: string | number, breakdown?: BSASAssessment['breakdown']) {
   if (!breakdown || !userId) return;
   try {
@@ -345,20 +365,31 @@ export function saveAssessmentBreakdown(userId: string, assessmentId: string | n
     const map = raw ? JSON.parse(raw) : {};
     map[`${userId}_${assessmentId}`] = breakdown;
     map[`${userId}_latest`] = breakdown;
+    if (assessmentId !== undefined) {
+      map[`assessment_${assessmentId}`] = breakdown;
+    }
+    map['latest'] = breakdown;
     safeStorage.setItem(STORAGE_KEY_BSAS_BREAKDOWNS, JSON.stringify(map));
   } catch {}
 }
 
-export function getStoredAssessmentBreakdown(userId: string, assessmentId?: string | number): BSASAssessment['breakdown'] | undefined {
-  if (!userId) return undefined;
+export function getStoredAssessmentBreakdown(userId?: string, assessmentId?: string | number): BSASAssessment['breakdown'] | undefined {
   try {
     const raw = safeStorage.getItem(STORAGE_KEY_BSAS_BREAKDOWNS);
     if (!raw) return undefined;
     const map = JSON.parse(raw);
-    if (assessmentId !== undefined && map[`${userId}_${assessmentId}`]) {
-      return map[`${userId}_${assessmentId}`];
+    if (userId) {
+      if (assessmentId !== undefined && map[`${userId}_${assessmentId}`]) {
+        return map[`${userId}_${assessmentId}`];
+      }
+      if (map[`${userId}_latest`]) {
+        return map[`${userId}_latest`];
+      }
     }
-    return map[`${userId}_latest`];
+    if (assessmentId !== undefined && map[`assessment_${assessmentId}`]) {
+      return map[`assessment_${assessmentId}`];
+    }
+    return map['latest'];
   } catch {
     return undefined;
   }
@@ -378,6 +409,12 @@ export function deduplicateAssessments(assessments: BSASAssessment[]): BSASAsses
     let itemBreakdown = item.breakdown;
     if (!itemBreakdown && item.user_id) {
       itemBreakdown = getStoredAssessmentBreakdown(item.user_id, item.assessment_id);
+    }
+    if (!itemBreakdown && typeof item.score === 'number') {
+      itemBreakdown = createBSASBreakdownFromScore(item.score);
+      if (item.user_id) {
+        saveAssessmentBreakdown(item.user_id, item.assessment_id, itemBreakdown);
+      }
     }
     const itemWithBreakdown = itemBreakdown ? { ...item, breakdown: itemBreakdown } : item;
 
@@ -1671,14 +1708,25 @@ class MockDatabaseEngine {
           existing.breakdown = r.breakdown;
           changed = true;
         }
+        if (!existing.breakdown && !r.breakdown && typeof r.score === 'number') {
+          const bd = createBSASBreakdownFromScore(r.score);
+          existing.breakdown = bd;
+          r.breakdown = bd;
+          if (r.user_id) saveAssessmentBreakdown(r.user_id, r.assessment_id, bd);
+          changed = true;
+        }
         if (r.assessment_id && existing.assessment_id !== r.assessment_id) {
           existing.assessment_id = r.assessment_id;
           changed = true;
         }
       } else {
-        if (!r.breakdown && r.user_id) {
-          const stored = getStoredAssessmentBreakdown(r.user_id, r.assessment_id);
-          if (stored) r.breakdown = stored;
+        if (!r.breakdown) {
+          let bd = r.user_id ? getStoredAssessmentBreakdown(r.user_id, r.assessment_id) : undefined;
+          if (!bd && typeof r.score === 'number') {
+            bd = createBSASBreakdownFromScore(r.score);
+            if (r.user_id) saveAssessmentBreakdown(r.user_id, r.assessment_id, bd);
+          }
+          if (bd) r.breakdown = bd;
         }
         this.state.bsas_assessments.push(r);
         changed = true;

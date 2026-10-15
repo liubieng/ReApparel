@@ -1,4 +1,4 @@
-import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, isSameUser, ensureUserSyncedToSupabase } from '../../shared/services/supabaseClient';
+import { mockDatabase, getSupabase, toCanonicalUserId, withTimeout, deduplicateAssessments, getLocalDateString, getStoredAssessmentBreakdown, saveAssessmentBreakdown, createBSASBreakdownFromScore, isSameUser, ensureUserSyncedToSupabase } from '../../shared/services/supabaseClient';
 import { ClothingItem, Tag, BSASAssessment, DailyClothingLog } from '../../shared/types/database';
 import { CURATED_COLOR_FAMILIES } from '../../shared/data/seedData';
 
@@ -367,7 +367,11 @@ export const closetService = {
               (isSameUser(loc.user_id, rem.user_id) &&
                Math.abs(new Date(loc.taken_at).getTime() - new Date(rem.taken_at).getTime()) < 60000)
             );
-            const breakdown = matchingLocal?.breakdown || getStoredAssessmentBreakdown(rem.user_id, rem.assessment_id);
+            let breakdown = matchingLocal?.breakdown || getStoredAssessmentBreakdown(rem.user_id, rem.assessment_id);
+            if (!breakdown && typeof rem.score === 'number') {
+              breakdown = createBSASBreakdownFromScore(rem.score);
+              if (rem.user_id) saveAssessmentBreakdown(rem.user_id, rem.assessment_id, breakdown);
+            }
             return breakdown ? { ...rem, breakdown } : rem;
           });
 
