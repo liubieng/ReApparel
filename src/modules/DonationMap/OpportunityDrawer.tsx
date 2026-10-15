@@ -10,6 +10,7 @@ interface OpportunityDrawerProps {
   onDelete?: (opp: DonationOpportunity) => void;
 }
 
+// Renders comprehensive detail panel for an active donation site with navigation links
 export const OpportunityDrawer: React.FC<OpportunityDrawerProps> = ({
   opportunity,
   onClose,

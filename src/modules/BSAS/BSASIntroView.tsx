@@ -5,6 +5,7 @@ interface BSASIntroViewProps {
   onStartAssessment: () => void;
 }
 
+// Renders the introductory onboarding splash explaining the purpose of the BSAS questionnaire
 export const BSASIntroView: React.FC<BSASIntroViewProps> = ({
   onStartAssessment
 }) => {

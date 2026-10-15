@@ -17,6 +17,7 @@ interface AddItemModalProps {
   toast: (msg: string) => void;
 }
 
+// Modal dialog for capturing or uploading garment photos with background isolation
 export const AddItemModal: React.FC<AddItemModalProps> = ({
   isOpen,
   onClose,
@@ -47,6 +48,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
+  // Halts active webcam video tracks and cleans up media streams
   const stopCameraStream = () => {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
@@ -69,6 +71,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     };
   }, [isOpen]);
 
+  // Requests camera permissions and binds video stream for live photo capture
   const handleStartCamera = async () => {
     setInputMode('camera');
     setCameraError(null);
@@ -90,6 +93,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  // Captures still photo from live video canvas and queues background removal
   const handleCapturePhoto = async () => {
     if (images.length >= 3) {
       toast('Maximum 3 photos allowed per garment.');
@@ -151,6 +155,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  // Triggers hidden native file input dialog for image upload
   const handleUploadClick = () => {
     stopCameraStream();
     setInputMode('upload');
@@ -162,6 +167,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     fileInputRef.current?.click();
   };
 
+  // Validates uploaded image format and applies background isolation filter
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -228,6 +234,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }
   };
 
+  // Debounces slider adjustments to re-render background isolation tolerance
   const handleIsolationChange = (newVal: number) => {
     setIsolationLevel(newVal);
     if (rawImageElementsRef.current.length === 0 && rawImagesRef.current.length === 0) return;
@@ -279,6 +286,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     }, 40);
   };
 
+  // Removes a photo from the garment image gallery array
   const handleRemoveImage = (index: number) => {
     rawImagesRef.current = rawImagesRef.current.filter((_, i) => i !== index);
     rawImageElementsRef.current = rawImageElementsRef.current.filter((_, i) => i !== index);
@@ -286,17 +294,20 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     setActiveImageIdx(prev => Math.max(0, prev >= index ? prev - 1 : prev));
   };
 
+  // Toggles selected clothing category classification
   const handleSelectCategory = (cat: string) => {
     setCategory(prev => prev === cat ? '' : cat);
     setFormWarning(null);
   };
 
+  // Assigns curated color family and corresponding hex value to the garment
   const handleSelectColorFamily = (family: CuratedColorFamily) => {
     setSelectedColor(prev => prev === family.name ? '' : family.name);
     setSelectedColorHex(family.hex);
     setFormWarning(null);
   };
 
+  // Validates required garment metadata and saves the new clothing item
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormWarning(null);

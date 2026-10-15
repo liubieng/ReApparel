@@ -10,6 +10,7 @@ import {
 import { MapPin } from 'lucide-react';
 import { DonationOpportunity } from '../../shared/types/database';
 
+// Listens to coordinate updates and pans/zooms the Google Map camera
 function MapRecenterHandler({
   centerTarget
 }: {
@@ -39,6 +40,7 @@ interface MapContainerProps {
   selectedLocationLabel: string;
 }
 
+// Renders Google Maps API canvas with custom pins, user location marker, and info window
 export const MapContainer: React.FC<MapContainerProps> = ({
   apiKey,
   opportunities,

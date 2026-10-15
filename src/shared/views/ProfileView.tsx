@@ -30,6 +30,7 @@ interface ProfileViewProps {
   toast: (msg: string) => void;
 }
 
+// Renders user profile management, habit streak statistics, and account settings
 export const ProfileView: React.FC<ProfileViewProps> = ({
   currentUser,
   garments,
@@ -51,14 +52,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [editLastName, setEditLastName] = useState(currentUser.last_name);
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // Calculates consecutive daily outfit logging streak days
   const streakDays = useMemo(() => {
     return Math.max(1, garments.reduce((acc, g) => acc + (g.worn_count ? 1 : 0), 0) % 15);
   }, [garments]);
 
+  // Sorts historical BSAS assessments chronologically for profile timeline
   const sortedAsc = useMemo(() => {
     return deduplicateAssessments(assessments).sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
   }, [assessments]);
 
+  // Copies user's unique friend code to system clipboard
   const handleCopyFriendCode = () => {
     if (currentUser.friend_code) {
       navigator.clipboard.writeText(currentUser.friend_code);
@@ -68,6 +72,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
+  // Saves edited user profile names locally and syncs to Supabase
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editFirstName.trim()) {

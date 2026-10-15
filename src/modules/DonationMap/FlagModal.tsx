@@ -8,6 +8,7 @@ interface FlagModalProps {
   onSubmitFlag: (flagType: DonationFlagType, notes?: string) => Promise<void>;
 }
 
+// Modal dialog allowing users to flag incorrect, relocated, or expired donation drives
 export const FlagModal: React.FC<FlagModalProps> = ({
   opportunity,
   isOpen,
@@ -21,6 +22,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
 
   if (!isOpen || !opportunity) return null;
 
+  // Resets reporting state and closes the flag modal
   const handleClose = () => {
     setFlagType(null);
     setFlagNotes('');
@@ -28,6 +30,7 @@ export const FlagModal: React.FC<FlagModalProps> = ({
     onClose();
   };
 
+  // Validates reporting reason and explanation before submitting flag to database
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);

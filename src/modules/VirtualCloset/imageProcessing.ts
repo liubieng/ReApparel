@@ -12,6 +12,7 @@ interface ColorRGB {
   b: number;
 }
 
+// Calculates human-perceived Euclidean color distance using weighted redmean formula
 export function perceptualColorDistance(
   r1: number, g1: number, b1: number,
   r2: number, g2: number, b2: number
@@ -28,6 +29,7 @@ export function perceptualColorDistance(
   return dist / 3;
 }
 
+// Samples border pixels to identify dominant background color clusters
 function extractBackgroundPalette(
   data: Uint8ClampedArray,
   width: number,
@@ -84,6 +86,7 @@ function extractBackgroundPalette(
   return clusters;
 }
 
+// Samples central image pixels to protect foreground garment colors from erasure
 function extractGarmentPalette(
   data: Uint8ClampedArray,
   width: number,
@@ -115,6 +118,7 @@ function extractGarmentPalette(
   return garmentClusters;
 }
 
+// Performs client-side background removal using flood fill and color clustering
 export async function removeBackgroundClientSide(
   imageSource: string | HTMLImageElement,
   options: RemovalOptions = {}

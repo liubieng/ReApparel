@@ -32,6 +32,7 @@ interface DonationMapProps {
   currentUser?: User | null;
 }
 
+// Renders the interactive donation map, geolocated drop-off hubs, and donation drive directory
 export const DonationMapSection: React.FC<DonationMapProps> = ({
   opportunities,
   onRefreshData,
@@ -103,6 +104,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   }, []);
 
+  // Queries browser Geolocation API to center map around the user's current GPS coordinates
   const handleLocateMe = () => {
     if (!('geolocation' in navigator)) {
       toast('Geolocation is not supported by your browser.');
@@ -125,6 +127,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     );
   };
 
+  // Sets maximum radius filter and centers the map view if coordinates are available
   const handleDistanceChange = (dist: number | 'all') => {
     setMaxDistanceKm(dist);
     if (dist !== 'all' && !userLocation && 'geolocation' in navigator) {
@@ -151,6 +154,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   }, [maxDistanceKm, userLocation]);
 
+  // Filters donation opportunities by geographical hierarchy, query, distance radius, and expiry
   const filteredOpportunities = useMemo(() => {
     return opportunities.map(opp => {
       let dist = opp.distance_km;
@@ -209,6 +213,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     });
   }, [opportunities, selectedRegion, selectedBarangay, selectedCountry, selectedProvince, selectedCity, searchQuery, selectedCategory, maxDistanceKm, onlyActiveDrives, userLocation]);
 
+  // Filters social drives sourced or linked from Facebook
   const facebookPosts = useMemo(() => {
     return filteredOpportunities.filter(o => {
       const url = o.post_url?.trim().toLowerCase() || '';
@@ -217,6 +222,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     });
   }, [filteredOpportunities]);
 
+  // Filters social drives sourced or linked from Instagram
   const instagramPosts = useMemo(() => {
     return filteredOpportunities.filter(o => {
       const url = o.post_url?.trim().toLowerCase() || '';
@@ -225,6 +231,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     });
   }, [filteredOpportunities]);
 
+  // Filters non-social community bulletin drives and municipal drop-offs
   const otherPosts = useMemo(() => {
     return filteredOpportunities.filter(o => {
       const url = o.post_url?.trim().toLowerCase() || '';
@@ -253,12 +260,14 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   }, [opportunities, selectedOpp]);
 
+  // Focuses and pans map camera to selected donation site coordinates
   const handleSelectOpp = (opp: DonationOpportunity) => {
     setSelectedOpp(opp);
     setHighlightId(opp.donation_id);
     setMapCenterTarget({ lat: opp.latitude, lng: opp.longitude, zoom: 15 });
   };
 
+  // Submits a user report flagging an inactive or closed donation site
   const handleSubmitFlag = async (flagType: DonationFlagType, notes?: string) => {
     if (!flagModalOpp) return;
     try {
@@ -270,6 +279,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   };
 
+  // Creates and pins a new donation drive to the map and database
   const handleAddDriveSubmit = async (data: Omit<DonationOpportunity, 'donation_id'>) => {
     try {
       const created = await mapsService.addDonationOpportunity(data);
@@ -284,6 +294,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     }
   };
 
+  // Validates ownership before opening confirmation dialog to delete a donation drive
   const handleDeleteOpportunity = (opp: DonationOpportunity) => {
     const isCreator = Boolean(
       currentUser &&
@@ -297,6 +308,7 @@ export const DonationMapSection: React.FC<DonationMapProps> = ({
     setDeleteConfirmOpp(opp);
   };
 
+  // Deletes an uploaded donation opportunity from local state and remote Supabase
   const handleConfirmDelete = async () => {
     if (!deleteConfirmOpp) return;
     setIsDeleting(true);

@@ -15,6 +15,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 let dailyLogSyncChain: Promise<void> = Promise.resolve();
 
+// Syncs clothing item tags (category, color, and custom tags) to remote Supabase database
 async function syncItemTagsToSupabase(
   supabase: any,
   itemId: number,
@@ -60,6 +61,7 @@ async function syncItemTagsToSupabase(
   }
 }
 
+// Pushes local daily clothing log records for a given date to remote Supabase storage
 async function pushDateToRemote(userId: string, logDate: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
@@ -127,6 +129,7 @@ function queueDateSync(userId: string, logDate: string): Promise<void> {
 
 export const closetService = {
 
+  // Retrieves wardrobe garments for a user, synchronizing local cache with Supabase
   async getItems(userId?: string): Promise<ClothingItem[]> {
 
     const localItems = mockDatabase.getClothingItems(userId);
@@ -233,6 +236,7 @@ export const closetService = {
     return localItems;
   },
 
+  // Adds a new clothing item to the user's wardrobe and synchronizes to Supabase
   async addItem(item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>): Promise<ClothingItem> {
     const canonicalUid = toCanonicalUserId(item.user_id);
     const itemWithCanonicalUser = { ...item, user_id: canonicalUid };
@@ -283,6 +287,7 @@ export const closetService = {
     return localItem;
   },
 
+  // Updates garment metadata such as name, image, tags, and wear count
   async updateItem(itemId: number, updates: Partial<ClothingItem>): Promise<ClothingItem | null> {
     const localUpdated = mockDatabase.updateClothingItem(itemId, updates);
     const supabase = getSupabase();
@@ -310,6 +315,7 @@ export const closetService = {
     return localUpdated;
   },
 
+  // Deletes a clothing item and removes associated relations from the database
   async deleteItem(itemId: number): Promise<boolean> {
     const localResult = mockDatabase.deleteClothingItem(itemId);
     const supabase = getSupabase();
@@ -326,6 +332,7 @@ export const closetService = {
     return localResult;
   },
 
+  // Fetches all garment categorization, color, and aesthetic tags
   async getTags(): Promise<Tag[]> {
     const supabase = getSupabase();
     if (supabase) {
@@ -337,6 +344,7 @@ export const closetService = {
     return mockDatabase.getTags();
   },
 
+  // Retrieves historical BSAS assessments with score breakdowns
   async getAssessments(userId?: string): Promise<BSASAssessment[]> {
 
     const localAssessments = deduplicateAssessments(mockDatabase.getAssessments(userId));
@@ -396,6 +404,7 @@ export const closetService = {
     return deduplicateAssessments(localAssessments);
   },
 
+  // Saves a completed BSAS shopping addiction assessment locally and remotely
   async submitAssessment(score: number, breakdown?: BSASAssessment['breakdown'], userId?: string): Promise<BSASAssessment> {
     const currentUser = mockDatabase.getCurrentUser();
     const targetUid = toCanonicalUserId(userId || currentUser?.user_id);
@@ -434,6 +443,7 @@ export const closetService = {
     return localAssessment;
   },
 
+  // Computes cooldown duration and retake eligibility for the 30-day assessment cycle
   getBSASCooldown(assessments: BSASAssessment[]): BSASCooldownInfo {
     if (!assessments || assessments.length === 0) {
       return {
@@ -469,11 +479,13 @@ export const closetService = {
     };
   },
 
+  // Retrieves today's active outfit logging session
   async getTodayLog(): Promise<DailyClothingLog> {
     const today = getLocalDateString();
     return mockDatabase.getTodayLog(today);
   },
 
+  // Fetches historical daily clothing logs with populated garment details
   async getDailyLogs(userId?: string): Promise<DailyClothingLog[]> {
     const localLogs = mockDatabase.getDailyLogs(userId);
 
@@ -539,10 +551,12 @@ export const closetService = {
     return localLogs;
   },
 
+  // Creates a new daily outfit entry for logging garment wears
   async createDailyLog(dateString: string, title?: string, userId?: string): Promise<DailyClothingLog> {
     return mockDatabase.createDailyLog(dateString, title, userId);
   },
 
+  // Updates the garments assigned to today's outfit session
   async updateTodayItems(logId: number, items: ClothingItem[]): Promise<DailyClothingLog | null> {
 
     const localLog = mockDatabase.updateTodayLogItems(logId, items);
@@ -554,6 +568,7 @@ export const closetService = {
     return localLog;
   },
 
+  // Locks the daily outfit log and increments lifetime wear counts on worn garments
   async finalizeDailyLog(logId: number): Promise<DailyClothingLog | null> {
     const localLog = mockDatabase.finalizeDailyLog(logId);
     const supabase = getSupabase();
@@ -585,6 +600,7 @@ export const closetService = {
     return localLog;
   },
 
+  // Unlocks a finalized outfit log for editing and temporarily reverts wear counts
   async unlockDailyLogForEditing(logId: number): Promise<boolean> {
     const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(getLocalDateString());
     const wasFinalized = logBefore?.is_finalized;
@@ -614,6 +630,7 @@ export const closetService = {
     return result;
   },
 
+  // Deletes a daily outfit log and adjusts affected garment wear counts
   async deleteDailyLog(logId: number): Promise<boolean> {
     const logBefore = mockDatabase.getDailyLogs().find(l => l.log_id === logId) || mockDatabase.getTodayLog(getLocalDateString());
     const wasFinalized = logBefore?.is_finalized;
@@ -639,6 +656,7 @@ export const closetService = {
     return result;
   },
 
+  // Triggers midnight finalization to auto-lock unfinalized daily logs
   async simulateMidnightFinalization(): Promise<DailyClothingLog | null> {
     const today = getLocalDateString();
     const log = mockDatabase.getTodayLog(today);
@@ -648,6 +666,7 @@ export const closetService = {
     return log;
   },
 
+  // Computes wardrobe utilization rates, most/least worn garments, and averted carbon/water footprint
   calculateClosetAnalytics(items: ClothingItem[]) {
     const totalItems = items.length;
     if (totalItems === 0) {
@@ -697,6 +716,7 @@ export const closetService = {
     };
   },
 
+  // Purges all user data across closet items, logs, requests, and credentials
   async deleteUserAccount(userId: string, email?: string): Promise<boolean> {
 
     let deleted = mockDatabase.deleteUser(userId);
@@ -748,6 +768,7 @@ export const closetService = {
     return true;
   },
 
+  // Syncs all local offline wardrobe items, logs, and assessments up to Supabase
   async syncLocalDataToSupabase(userId?: string): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) return;

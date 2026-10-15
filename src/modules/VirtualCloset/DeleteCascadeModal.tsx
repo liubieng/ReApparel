@@ -9,6 +9,7 @@ interface DeleteCascadeModalProps {
   onConfirmDelete: (itemId: number) => Promise<void>;
 }
 
+// Modal dialog confirming permanent garment deletion and cascading cleanup
 export const DeleteCascadeModal: React.FC<DeleteCascadeModalProps> = ({
   garment,
   isOpen,
@@ -19,6 +20,7 @@ export const DeleteCascadeModal: React.FC<DeleteCascadeModalProps> = ({
 
   if (!isOpen || !garment) return null;
 
+  // Dispatches garment deletion to remove item and dependent records
   const handleDelete = async () => {
     setIsDeleting(true);
     try {

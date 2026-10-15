@@ -12,6 +12,7 @@ interface EditItemModalProps {
   toast: (msg: string) => void;
 }
 
+// Modal dialog for updating existing clothing item category, color, and photos
 export const EditItemModal: React.FC<EditItemModalProps> = ({
   garment,
   isOpen,
@@ -40,6 +41,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
     }
   }, [garment]);
 
+  // Reads uploaded photo replacement and applies client-side background removal
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -78,10 +80,12 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Clears form submission errors to allow saving changes again
   const handleRetry = () => {
     setUpdateError(null);
   };
 
+  // Submits updated garment attributes and imagery to the database
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 

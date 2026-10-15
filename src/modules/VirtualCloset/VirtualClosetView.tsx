@@ -28,6 +28,7 @@ interface VirtualClosetViewProps {
   toast?: (msg: string) => void;
 }
 
+// Renders the virtual wardrobe grid with filtering, searching, and garment management
 export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   garments,
   onOpenAddModal,
@@ -42,6 +43,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
   const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [wearFilter, setWearFilter] = useState<'all' | 'unworn' | 'low' | 'active'>('all');
 
+  // Aggregates distinct garment categories present in the user's closet with counts
   const wardrobeCategories = useMemo(() => {
     const map = new Map<string, { name: string; count: number }>();
     garments.forEach(g => {
@@ -56,6 +58,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [garments]);
 
+  // Maps wardrobe garments into curated color families with swatch hex values
   const wardrobeColors = useMemo(() => {
     const map = new Map<string, { name: string; hex: string; count: number }>();
     garments.forEach(g => {
@@ -82,6 +85,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [garments]);
 
+  // Filters closet garments by selected category, color, wear frequency, and search term
   const filteredGarments = useMemo(() => {
     return garments.filter(g => {
       const type = g.type_tag || g.category || '';
@@ -118,6 +122,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
     });
   }, [garments, selectedTypes, selectedColors, wearFilter, searchQuery]);
 
+  // Toggles garment category filter for the wardrobe grid
   const toggleTypeFilter = (typeName: string) => {
     setSelectedTypes(prev => {
       const next = new Set(prev);
@@ -127,6 +132,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
     });
   };
 
+  // Toggles garment color swatch filter for the wardrobe grid
   const toggleColorFilter = (colorName: string) => {
     setSelectedColors(prev => {
       const next = new Set(prev);
@@ -136,6 +142,7 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
     });
   };
 
+  // Resets all active category, color, wear level, and search filters
   const clearAllFilters = () => {
     setSelectedTypes(new Set());
     setSelectedColors(new Set());
@@ -145,10 +152,12 @@ export const VirtualClosetView: React.FC<VirtualClosetViewProps> = ({
 
   const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0 || wearFilter !== 'all' || searchQuery.trim().length > 0;
 
+  // Calculates total number of garments with 0 logged lifetime wears
   const unwornTotal = useMemo(() => {
     return garments.filter(g => (g.worn_count ?? g.wear_count ?? 0) === 0).length;
   }, [garments]);
 
+  // Calculates total number of underutilized garments with 1-2 lifetime wears
   const leastWornTotal = useMemo(() => {
     return garments.filter(g => {
       const w = g.worn_count ?? g.wear_count ?? 0;

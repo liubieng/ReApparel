@@ -81,6 +81,7 @@ const VALID_VIEWS = new Set([
   'bsas'
 ]);
 
+// Root application component coordinating state, realtime listeners, and modular routing
 export default function App() {
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -181,10 +182,12 @@ export default function App() {
     }
   }, [view, currentUser]);
 
+  // Toggles UI theme between light and dark modes
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  // Synchronizes React state with local mock database snapshots
   const syncLocalState = useCallback(() => {
     const user = mockDatabase.getCurrentUser();
     setCurrentUser(user);
@@ -208,6 +211,7 @@ export default function App() {
     }
   }, []);
 
+  // Hydrates application data from Supabase backend or local database cache
   const loadData = useCallback(async (options?: { forceDonations?: boolean }) => {
     let user = mockDatabase.getCurrentUser();
     if (!user && safeStorage.getItem(STORAGE_KEY_ACTIVE_USER)) {
@@ -528,6 +532,7 @@ export default function App() {
     } catch { }
   }, [loadData, toast]);
 
+  // Initializes authenticated user session and navigates to appropriate view
   const handleLoginSuccess = (user: User, isNewUser: boolean) => {
     setCurrentUser(user);
     loadData();
@@ -541,6 +546,7 @@ export default function App() {
     }
   };
 
+  // Switches active user profile in local testing environment
   const handleSwitchUser = async (userId: string) => {
     mockDatabase.setCurrentUserId(userId);
     await loadData();
@@ -548,6 +554,7 @@ export default function App() {
     toast(`Active profile switched to ${user?.first_name} ${user?.last_name}`);
   };
 
+  // Signs out user, clears stored tokens, and redirects to login screen
   const handleLogout = async () => {
     try {
       const supabase = getSupabase();
@@ -570,6 +577,7 @@ export default function App() {
     toast('Logged out successfully.');
   };
 
+  // Records completed BSAS assessment results and navigates to wardrobe or recovery
   const handleCompleteBSAS = async (score: number, breakdown: NonNullable<BSASAssessment['breakdown']>, targetView: 'closet' | 'recovery' = 'closet') => {
     const activeUid = currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
 
@@ -586,6 +594,7 @@ export default function App() {
     loadData().catch(() => { });
   };
 
+  // Persists new garment to user's virtual closet
   const handleAddGarment = async (item: Omit<ClothingItem, 'item_id' | 'wear_count' | 'date_added'>) => {
     const activeUid = item.user_id || currentUser?.user_id || mockDatabase.getCurrentUser()?.user_id || mockDatabase.getAllUsers()[0]?.user_id || '';
     await closetService.addItem({
@@ -595,11 +604,13 @@ export default function App() {
     await loadData();
   };
 
+  // Updates existing garment attributes and refreshes closet view
   const handleUpdateGarment = async (itemId: number, updates: Partial<ClothingItem>) => {
     await closetService.updateItem(itemId, updates);
     await loadData();
   };
 
+  // Permanently removes a garment and triggers cascading database cleanup
   const handleConfirmDeleteGarment = async (itemId: number) => {
     await closetService.deleteItem(itemId);
     setDeletingGarment(null);
@@ -607,6 +618,7 @@ export default function App() {
     toast('Clothing item deleted from your closet.');
   };
 
+  // Toggles inclusion of a garment within the current outfit logging session
   const handleToggleGarmentInOutfit = async (garment: ClothingItem, targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
 
@@ -638,6 +650,7 @@ export default function App() {
     }
   };
 
+  // Locks the daily outfit log and increments lifetime wear counts
   const handleFinalizeDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     const res = await closetService.finalizeDailyLog(targetId);
@@ -650,6 +663,7 @@ export default function App() {
     toast("Outfit finalized! Cumulative wear counts updated.");
   };
 
+  // Unlocks a finalized outfit log for editing and temporarily reverts wear counts
   const handleEditDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.unlockDailyLogForEditing(targetId);
@@ -660,6 +674,7 @@ export default function App() {
     toast("Outfit opened for editing. You can adjust your garments and re-finalize.");
   };
 
+  // Removes an outfit log entry and adjusts garment wear counts
   const handleDeleteDailyLog = async (targetLogId?: number) => {
     const targetId = targetLogId || todayLog.log_id;
     await closetService.deleteDailyLog(targetId);
@@ -667,6 +682,7 @@ export default function App() {
     toast("Outfit record cleared.");
   };
 
+  // Initializes an additional outfit logging entry for today's date
   const handleCreateDailyLog = async (dateStr: string, title: string) => {
     const activeUid = currentUser?.user_id;
     const newLog = await closetService.createDailyLog(dateStr, title, activeUid);
@@ -675,23 +691,27 @@ export default function App() {
     return newLog;
   };
 
+  // Triggers midnight cron job simulation to auto-finalize daily logs
   const handleSimulateMidnight = async () => {
     await closetService.simulateMidnightFinalization();
     toast("🕛 00:00 Midnight Job Simulated: Outfit locked & wear counts incremented!");
   };
 
+  // Accepts peer friend request and updates connected friend lists
   const handleAcceptFriendRequest = async (requestId: number, senderName?: string) => {
     await friendsService.respondToRequest(requestId, 'accepted');
     toast(`Connected with ${senderName || 'friend'}!`);
     await loadData();
   };
 
+  // Declines an incoming peer friend request
   const handleRejectFriendRequest = async (requestId: number) => {
     await friendsService.respondToRequest(requestId, 'rejected');
     toast('Friend request declined.');
     await loadData();
   };
 
+  // Prompts confirmation and severs friendship connection locally and in Supabase
   const handleRemoveFriend = (friendId: string, friendName?: string) => {
     setConfirmDialog({
       isOpen: true,
@@ -707,6 +727,7 @@ export default function App() {
     });
   };
 
+  // Dispatches a garment loan request to friend with chosen start and end dates
   const handleSubmitBorrow = async (itemId: number, fromDate: string, toDate: string) => {
     if (borrowContext?.garment) {
       mockDatabase.upsertClothingItem(borrowContext.garment);
@@ -718,6 +739,7 @@ export default function App() {
     toast('Borrow request sent to lender!');
   };
 
+  // Cancels an active or upcoming borrow reservation
   const handleCancelBorrow = (borrowId: number, startDate: string) => {
     const doCancel = async () => {
       await friendsService.updateBorrowStatus(borrowId, 'Rejected');
@@ -738,6 +760,7 @@ export default function App() {
     }
   };
 
+  // Updates borrow transaction status (Accepted, Rejected, or Returned)
   const handleRespondBorrow = async (borrowId: number, newStatus: 'Accepted' | 'Rejected' | 'Returned') => {
     await friendsService.updateBorrowStatus(borrowId, newStatus);
     if (newStatus === 'Accepted') {
@@ -750,6 +773,7 @@ export default function App() {
     await loadData();
   };
 
+  // Executes complete account deletion and purges all user data across modules
   const handleDeleteAccount = () => {
     if (!currentUser) return;
     const targetUser = currentUser;

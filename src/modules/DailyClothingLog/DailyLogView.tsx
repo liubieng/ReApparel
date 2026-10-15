@@ -36,6 +36,7 @@ interface DailyLogViewProps {
   toast: (msg: string) => void;
 }
 
+// Renders the daily clothing log tracker, outfit logger, and wear history journal
 export const DailyLogView: React.FC<DailyLogViewProps> = ({
   todayLog,
   dailyLogs = [],
@@ -58,6 +59,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
   const [closetSelectedTypes, setClosetSelectedTypes] = useState<Set<string>>(new Set());
   const [closetSelectedColors, setClosetSelectedColors] = useState<Set<string>>(new Set());
 
+  // Toggles garment category filter for selecting closet items
   const toggleClosetType = (typeName: string) => {
     setClosetSelectedTypes(prev => {
       const next = new Set(prev);
@@ -67,6 +69,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     });
   };
 
+  // Toggles garment color filter for selecting closet items
   const toggleClosetColor = (colorName: string) => {
     setClosetSelectedColors(prev => {
       const next = new Set(prev);
@@ -76,6 +79,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     });
   };
 
+  // Clears all active category and color garment filters
   const clearClosetFilters = () => {
     setClosetSelectedTypes(new Set());
     setClosetSelectedColors(new Set());
@@ -83,6 +87,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
 
   const hasActiveClosetFilters = closetSelectedTypes.size > 0 || closetSelectedColors.size > 0;
 
+  // Filters closet garments by selected category types and color chips
   const filteredClosetGarments = useMemo(() => {
     return closetGarments.filter(g => {
 
@@ -104,6 +109,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     });
   }, [closetGarments, closetSelectedTypes, closetSelectedColors]);
 
+  // Aggregates all outfit log sessions recorded for today's date
   const todayOutfits = useMemo(() => {
     const map = new Map<number, DailyClothingLog>();
     if (todayLog && todayLog.log_id) {
@@ -118,6 +124,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     return list.length > 0 ? list : [todayLog];
   }, [dailyLogs, todayLog]);
 
+  // Resolves the currently active outfit log record being viewed or edited
   const activeLog = useMemo(() => {
     const found = todayOutfits.find(l => l.log_id === activeLogId)
       || dailyLogs.find(l => l.log_id === activeLogId);
@@ -146,12 +153,14 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     'Eighth Outfit'
   ];
 
+  // Formats human-readable ordinal labels for multiple outfits logged in a single day
   const activeOutfitTitle = useMemo(() => {
     if (isEditingHistorical) return activeLog.title || 'Historical Outfit';
     const idx = todayOutfits.findIndex(l => l.log_id === activeLog.log_id);
     return OUTFIT_ORDINALS[idx] || activeLog.title || `Outfit #${idx + 1}`;
   }, [activeLog, todayOutfits, isEditingHistorical]);
 
+  // Sorts historical wear logs chronologically by log date
   const allLogsSorted = useMemo(() => {
     const logs = dailyLogs.filter(l => l.is_finalized || (l.items && l.items.length > 0));
     return [...logs].sort((a, b) => {
@@ -161,6 +170,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     });
   }, [dailyLogs, sortOrder]);
 
+  // Finalizes the current outfit log and commits wear counts to the database
   const handleFinalize = async () => {
     if (selectedItems.length === 0) {
       toast('Please select at least one garment you wore.');
@@ -174,6 +184,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     }
   };
 
+  // Simulates the midnight cron job to finalize open outfits and recalculate utilization
   const handleMidnight = async () => {
     if (selectedItems.length === 0) {
       toast('Select at least one garment before running the midnight simulation.');
@@ -189,6 +200,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     }
   };
 
+  // Unlocks or opens a finalized historical outfit record for modifications
   const handleEditActiveLog = async () => {
     const logId = activeLog.log_id;
     if (onEditLog) {
@@ -198,12 +210,14 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     }
   };
 
+  // Deletes the active outfit record and reverts wear count increments
   const handleDeleteActiveLog = async () => {
     const logId = activeLog.log_id;
     await onDeleteLog(logId);
     setActiveLogId(todayLog.log_id);
   };
 
+  // Deletes an individual outfit entry from today's multi-outfit list
   const handleDeleteOutfit = async (logId: number, e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -218,6 +232,7 @@ export const DailyLogView: React.FC<DailyLogViewProps> = ({
     }
   };
 
+  // Creates an additional outfit log entry for multiple outfit changes in a single day
   const handleAddNextOutfit = async () => {
     const nextIdx = todayOutfits.length;
     const title = OUTFIT_ORDINALS[nextIdx] || `Outfit #${nextIdx + 1}`;

@@ -31,6 +31,7 @@ interface CascadingFiltersProps {
   availableCities?: string[];
 }
 
+// Renders multi-tiered search, distance radius, and categorization filters for donation hubs
 export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
   searchQuery,
   setSearchQuery,
@@ -56,6 +57,7 @@ export const CascadingFilters: React.FC<CascadingFiltersProps> = ({
     onlyActiveDrives
   );
 
+  // Resets all location hierarchy, category, and radius filters to default
   const handleReset = () => {
     if (setSelectedRegion) setSelectedRegion('all');
     if (setSelectedBarangay) setSelectedBarangay('all');

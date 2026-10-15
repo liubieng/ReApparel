@@ -1,6 +1,7 @@
 import { mockDatabase, getSupabase, withTimeout, ensureUserSyncedToSupabase } from '../../shared/services/supabaseClient';
 import { DonationOpportunity, DonationFlag } from '../../shared/types/database';
 
+// Checks if a donation drive campaign has passed its expiration end date
 export function isOpportunityExpired(opp: DonationOpportunity): boolean {
   if (opp.end_date) {
     const end = new Date(`${opp.end_date}T23:59:59`).getTime();
@@ -14,10 +15,12 @@ export function isOpportunityExpired(opp: DonationOpportunity): boolean {
 export const mapsService = {
   isOpportunityExpired,
 
+  // Retrieves all cached donation opportunities and drop-off hubs
   getDonationOpportunities(): DonationOpportunity[] {
     return mockDatabase.getDonationOpportunities();
   },
 
+  // Flags an inaccurate or inactive donation opportunity and persists to Supabase
   async addFlag(donationId: number, flagType: DonationFlag['flag_type'], notes?: string): Promise<DonationFlag> {
     const flag = mockDatabase.addDonationFlag(donationId, flagType, notes);
     const supabase = getSupabase();
@@ -50,6 +53,7 @@ export const mapsService = {
     return flag;
   },
 
+  // Saves a new community donation drive and syncs location details to Supabase
   async addDonationOpportunity(opp: Omit<DonationOpportunity, 'donation_id'>): Promise<DonationOpportunity> {
     const currentUser = mockDatabase.getCurrentUser();
     if (currentUser) {
@@ -143,18 +147,22 @@ export const mapsService = {
     return created;
   },
 
+  // Overwrites in-memory donation opportunities collection
   setDonationOpportunities(opps: DonationOpportunity[]): void {
     mockDatabase.setDonationOpportunities(opps);
   },
 
+  // Merges an array of donation opportunities into the local database
   addMultipleDonationOpportunities(opps: DonationOpportunity[]): void {
     mockDatabase.addMultipleDonationOpportunities(opps);
   },
 
+  // Clears all donation opportunities from local storage
   clearDonationOpportunities(): void {
     mockDatabase.clearDonationOpportunities();
   },
 
+  // Fetches remote donation opportunities and community flags from Supabase
   async fetchAndMergeFromSupabase(): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -215,6 +223,7 @@ export const mapsService = {
     }
   },
 
+  // Deserializes and merges Supabase rows and flags into donation opportunities
   mergeRemoteRows(rows: any[]): void {
     const remote = rows
       .filter(r => r && r.name && r.name !== 'Test Drive')
@@ -268,10 +277,12 @@ export const mapsService = {
     if (remote.length > 0) mockDatabase.addMultipleDonationOpportunities(remote);
   },
 
+  // Removes a donation opportunity from local state
   removeDonationOpportunity(donationId: number): void {
     mockDatabase.deleteDonationOpportunity(donationId);
   },
 
+  // Authorizes and deletes a donation opportunity locally and from Supabase
   async deleteDonationOpportunity(donationId: number, currentUserId?: string): Promise<boolean> {
     const opp = mockDatabase.getDonationOpportunities().find(o => o.donation_id === donationId);
     if (opp && opp.created_by && currentUserId && opp.created_by !== currentUserId) {
@@ -294,6 +305,7 @@ export const mapsService = {
     return true;
   },
 
+  // Computes great-circle distance between two GPS coordinates using the Haversine formula
   calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371;
     const dLat = (lat2 - lat1) * (Math.PI / 180);

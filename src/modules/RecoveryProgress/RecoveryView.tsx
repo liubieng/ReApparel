@@ -82,6 +82,7 @@ const BSAS_DIMENSIONS: BSASDimensionDef[] = [
   }
 ];
 
+// Renders the BSAS recovery dashboard, shopping addiction metrics, and closet utilization insights
 export const RecoveryView: React.FC<RecoveryViewProps> = ({
   currentUser,
   assessments,
@@ -95,6 +96,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
 
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
 
+  // Deduplicates historical assessments for the active user
   const deduplicatedAssessments = useMemo(() => {
     const activeUser = currentUser || mockDatabase.getCurrentUser();
     const currentUid = activeUser?.user_id;
@@ -102,16 +104,19 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     return deduplicateAssessments(scoped);
   }, [assessments, currentUser]);
 
+  // Sorts assessments chronologically to render progress trends
   const sortedAsc = useMemo(() => {
     return [...deduplicatedAssessments].sort((a, b) => new Date(a.taken_at).getTime() - new Date(b.taken_at).getTime());
   }, [deduplicatedAssessments]);
 
+  // Sorts assessments in reverse chronological order to display recent results first
   const sortedDesc = useMemo(() => {
     return [...deduplicatedAssessments].sort((a, b) => new Date(b.taken_at).getTime() - new Date(a.taken_at).getTime());
   }, [deduplicatedAssessments]);
 
   const latestAssessment = sortedAsc[sortedAsc.length - 1];
 
+  // Calculates 30-day retake cooldown status and days remaining
   const cooldownInfo = useMemo(() => {
     if (!latestAssessment) return { canTake: true, daysRemaining: 0, nextDueDate: null };
     const lastDate = new Date(latestAssessment.taken_at);
@@ -130,6 +135,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     };
   }, [latestAssessment, simulatedDaysOffset]);
 
+  // Identifies the least-worn garment across each core clothing category
   const leastWornByCategory = useMemo(() => {
     const categories = ['Tops', 'Bottoms', 'Dresses', 'Shoes', 'Outerwear'];
     const results: ClothingItem[] = [];
@@ -157,6 +163,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     return results;
   }, [garments]);
 
+  // Curates unworn and low-wear garments by category for the "Shop Your Closet" intervention
   const shopYourClosetByCategory = useMemo(() => {
     const categories = ['Tops', 'Bottoms', 'Dresses', 'Shoes', 'Outerwear'];
     return categories.map(cat => {
@@ -187,6 +194,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     }[];
   }, [garments]);
 
+  // Filters accepted garments currently borrowed by the user
   const activeBorrows = useMemo(() => {
     const activeUser = currentUser || mockDatabase.getCurrentUser();
     const currentUid = activeUser?.user_id;
@@ -204,6 +212,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   const currentAssessment = sortedDesc[0] || null;
   const previousAssessment = sortedDesc[1] || null;
 
+  // Resolves the 7-factor BSAS dimension breakdown for the most recent assessment
   const currentBreakdown = useMemo(() => {
     if (currentAssessment?.breakdown) return currentAssessment.breakdown;
     if (!currentAssessment) return undefined;
@@ -229,6 +238,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     return undefined;
   }, [currentAssessment, currentUser]);
 
+  // Resolves the 7-factor BSAS dimension breakdown for the comparative prior assessment
   const previousBreakdown = useMemo(() => {
     if (previousAssessment?.breakdown) return previousAssessment.breakdown;
     if (!previousAssessment) return undefined;

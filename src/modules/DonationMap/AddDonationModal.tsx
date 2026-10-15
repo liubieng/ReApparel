@@ -36,6 +36,7 @@ interface AddDonationModalProps {
   currentUserId?: string;
 }
 
+// Modal dialog for uploading a new community donation drive with draggable Leaflet map pin
 export const AddDonationModal: React.FC<AddDonationModalProps> = ({
   isOpen,
   onClose,
@@ -142,6 +143,7 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
     }
   }, [latitude, longitude]);
 
+  // Uses device GPS coordinates to center the pin on the user's current location
   const handleUseCurrentLocation = () => {
     if (userLocation) {
       const lat = Number(userLocation.lat.toFixed(5));
@@ -174,6 +176,7 @@ export const AddDonationModal: React.FC<AddDonationModalProps> = ({
     }
   };
 
+  // Validates location coordinates, campaign dates, and submits new donation drive
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {

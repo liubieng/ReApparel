@@ -9,6 +9,7 @@ interface ClosetStatisticsViewProps {
   onNavigateToCloset?: () => void;
 }
 
+// Renders granular garment utilization rankings with wear frequency filters
 export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
   garments,
   onNavigateToRecovery,
@@ -18,6 +19,7 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
   const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
+  // Toggles garment category filter for the statistics view
   const toggleTypeFilter = (typeName: string) => {
     setSelectedTypes(prev => {
       const next = new Set(prev);
@@ -27,6 +29,7 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
     });
   };
 
+  // Toggles garment color filter for the statistics view
   const toggleColorFilter = (colorName: string) => {
     setSelectedColors(prev => {
       const next = new Set(prev);
@@ -36,6 +39,7 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
     });
   };
 
+  // Clears all active garment category and color filters
   const clearAllFilters = () => {
     setSelectedTypes(new Set());
     setSelectedColors(new Set());
@@ -43,6 +47,7 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
 
   const hasActiveFilters = selectedTypes.size > 0 || selectedColors.size > 0;
 
+  // Filters and sorts wardrobe garments by total wear counts
   const filteredSortedItems = useMemo(() => {
     let result = garments.filter(g => {
 
@@ -72,6 +77,7 @@ export const ClosetStatisticsView: React.FC<ClosetStatisticsViewProps> = ({
     return result;
   }, [garments, selectedTypes, selectedColors, sortOrder]);
 
+  // Toggles garment wear count sorting between descending and ascending
   const toggleSort = () => {
     setSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'));
   };

@@ -16,6 +16,7 @@ interface BSASAssessmentModalProps {
   onCancel?: () => void;
 }
 
+// Interactive 28-item Bergen Shopping Addiction Scale (BSAS) questionnaire modal
 export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
   onComplete,
   onCancel
@@ -38,6 +39,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
     breakdown: NonNullable<BSASAssessment['breakdown']>;
   } | null>(null);
 
+  // Completes assessment workflow and navigates user to wardrobe or recovery tab
   const handleFinish = async (targetView: 'closet' | 'recovery' = 'closet') => {
     if (!completedResult || isFinishing) return;
     setIsFinishing(true);
@@ -55,6 +57,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
   const answeredCount = Object.keys(answers).length;
   const progressPercent = Math.round((answeredCount / BSAS_28_ITEMS.length) * 100);
 
+  // Computes 7-factor endorsement scores and determines shopping addiction risk level
   const finalizeAssessment = (finalAnswers: Record<number, number>) => {
     setIsSubmitting(true);
     if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
@@ -100,11 +103,13 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
     }, 240);
   };
 
+  // Sets Likert response score for an individual questionnaire item
   const handleSelectAnswerForIndex = (index: number, score: number) => {
     setUnansweredError(null);
     setAnswers(prev => ({ ...prev, [index]: score }));
   };
 
+  // Records answer and automatically transitions to the next item in stepper mode
   const handleSelectAnswer = (score: number) => {
     handleSelectAnswerForIndex(currentIndex, score);
 
@@ -129,6 +134,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
     }, autoAdvanceDelay);
   };
 
+  // Validates all 28 items are answered before calculating final BSAS results
   const handleSubmitAssessment = () => {
     if (isSubmitting || isFinishing) return;
     const unansweredIndices = BSAS_28_ITEMS.map((_, idx) => idx).filter(idx => answers[idx] === undefined);
@@ -140,6 +146,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
     finalizeAssessment(answers);
   };
 
+  // Slides forward to the next questionnaire item with transition animation
   const handleNext = () => {
     if (isTransitioning || isSubmitting) return;
 
@@ -161,6 +168,7 @@ export const BSASAssessmentModal: React.FC<BSASAssessmentModalProps> = ({
     handleSubmitAssessment();
   };
 
+  // Slides backward to the previous questionnaire item with transition animation
   const handlePrevious = () => {
     if (currentIndex === 0 || isTransitioning || isSubmitting) return;
     setUnansweredError(null);

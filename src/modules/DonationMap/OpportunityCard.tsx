@@ -11,6 +11,7 @@ interface OpportunityCardProps {
   onDelete?: (opportunity: DonationOpportunity) => void;
 }
 
+// Renders a summary card for a community donation hub with distance and status badges
 export const OpportunityCard: React.FC<OpportunityCardProps> = ({
   opportunity,
   isSelected,
